@@ -27,6 +27,7 @@
 
 #if PLATFORM(MAC)
 
+#import "Helpers/cocoa/HTTPServer.h"
 #import "Helpers/mac/AppKitSPI.h"
 #import "InstanceMethodSwizzler.h"
 #import "Helpers/cocoa/PasteboardUtilities.h"
@@ -39,6 +40,7 @@
 #import <WebKit/WKMenuItemIdentifiersPrivate.h>
 #import <WebKit/WKUIDelegatePrivate.h>
 #import <WebKit/WKWebViewConfigurationPrivate.h>
+#import <WebKit/WKWebViewPrivate.h>
 #import <WebKit/WKWebViewPrivateForTesting.h>
 #import <WebKit/_WKContextMenuElementInfo.h>
 #import <WebKit/_WKHitTestResult.h>
@@ -140,6 +142,38 @@ TEST(ContextMenuTests, ProposedMenuContainsSpellingMenu)
     EXPECT_NOT_NULL([spellingSubmenu itemWithIdentifier:_WKMenuItemIdentifierCheckSpelling]);
     EXPECT_NOT_NULL([spellingSubmenu itemWithIdentifier:_WKMenuItemIdentifierCheckSpellingWhileTyping]);
     EXPECT_NOT_NULL([spellingSubmenu itemWithIdentifier:_WKMenuItemIdentifierCheckGrammarWithSpelling]);
+}
+
+TEST(ContextMenuTests, ProposedMenuContainsSubstitutionsMenu)
+{
+    RetainPtr delegate = adoptNS([[TestUIDelegate alloc] init]);
+
+    __block RetainPtr<NSMenu> proposedMenu;
+    __block bool gotProposedMenu = false;
+    [delegate setGetContextMenuFromProposedMenu:^(NSMenu *menu, _WKContextMenuElementInfo *, id<NSSecureCoding>, void (^completion)(NSMenu *)) {
+        proposedMenu = menu;
+        completion(nil);
+        gotProposedMenu = true;
+    }];
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)]);
+    [webView setUIDelegate:delegate];
+    [webView _setEditable:YES];
+    [webView synchronouslyLoadTestPageNamed:@"simple"];
+    [webView mouseDownAtPoint:NSMakePoint(10, 10) simulatePressure:NO withFlags:0 eventType:NSEventTypeRightMouseDown];
+    [webView mouseUpAtPoint:NSMakePoint(10, 10) withFlags:0 eventType:NSEventTypeRightMouseUp];
+    Util::run(&gotProposedMenu);
+
+    RetainPtr substitutionsMenuItem = [proposedMenu itemWithIdentifier:_WKMenuItemIdentifierSubstitutionsMenu];
+    EXPECT_NOT_NULL(substitutionsMenuItem.get());
+
+    RetainPtr substitutionsSubmenu = [substitutionsMenuItem submenu];
+    EXPECT_NOT_NULL([substitutionsSubmenu itemWithIdentifier:_WKMenuItemIdentifierShowSubstitutions]);
+    EXPECT_NOT_NULL([substitutionsSubmenu itemWithIdentifier:_WKMenuItemIdentifierSmartCopyPaste]);
+    EXPECT_NOT_NULL([substitutionsSubmenu itemWithIdentifier:_WKMenuItemIdentifierSmartQuotes]);
+    EXPECT_NOT_NULL([substitutionsSubmenu itemWithIdentifier:_WKMenuItemIdentifierSmartDashes]);
+    EXPECT_NOT_NULL([substitutionsSubmenu itemWithIdentifier:_WKMenuItemIdentifierSmartLinks]);
+    EXPECT_NOT_NULL([substitutionsSubmenu itemWithIdentifier:_WKMenuItemIdentifierTextReplacement]);
 }
 
 TEST(ContextMenuTests, NavigationTypeWhenOpeningLink)
@@ -305,6 +339,30 @@ TEST(ContextMenuTests, HitTestResultDoesNotContainEmptyURLs)
     [webView synchronouslyLoadTestPageNamed:@"simple"];
     [webView mouseDownAtPoint:NSMakePoint(10, 10) simulatePressure:NO withFlags:0 eventType:NSEventTypeRightMouseDown];
     [webView mouseUpAtPoint:NSMakePoint(10, 10) withFlags:0 eventType:NSEventTypeRightMouseUp];
+    Util::run(&gotProposedMenu);
+}
+
+TEST(ContextMenuTests, HitTestResultImageURLNotDoubleEncoded)
+{
+    RetainPtr delegate = adoptNS([[TestUIDelegate alloc] init]);
+
+    __block bool gotProposedMenu = false;
+    [delegate setGetContextMenuFromProposedMenu:^(NSMenu *menu, _WKContextMenuElementInfo *elementInfo, id<NSSecureCoding>, void (^completion)(NSMenu *)) {
+        _WKHitTestResult *hitTestResult = elementInfo.hitTestResult;
+        EXPECT_NOT_NULL(hitTestResult);
+        EXPECT_WK_STREQ(@"file:///flower%20%5BA%5D.jpg", hitTestResult.absoluteImageURL.absoluteString);
+        completion(nil);
+        gotProposedMenu = true;
+    }];
+
+    NSString *html = @"<body style='margin:0'><img src='flower [A].jpg' width='400' height='400'>";
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)]);
+    [webView setUIDelegate:delegate.get()];
+    [webView synchronouslyLoadHTMLString:html baseURL:[NSURL URLWithString:@"file:///"]];
+    [webView waitForNextPresentationUpdate];
+
+    [webView mouseDownAtPoint:NSMakePoint(200, 200) simulatePressure:NO withFlags:0 eventType:NSEventTypeRightMouseDown];
+    [webView mouseUpAtPoint:NSMakePoint(200, 200) withFlags:0 eventType:NSEventTypeRightMouseUp];
     Util::run(&gotProposedMenu);
 }
 
@@ -734,6 +792,66 @@ TEST(ContextMenuTests, HitTestResultImageSuggestedFilename)
     Util::run(&gotProposedMenu);
 }
 
+static RetainPtr<NSString> imageSuggestedFilenameFromCollidingImageURL(Vector<WTF::KeyValuePair<String, String>> imageResponseHeaders)
+{
+    using namespace TestWebKitAPI;
+
+    RetainPtr imageData = [NSData dataWithContentsOfFile:[NSBundle.test_resourcesBundle pathForResource:@"sunset-in-cupertino-200px" ofType:@"png"]];
+
+    HTTPServer server([imageData, imageResponseHeaders](Connection connection) {
+        connection.receiveHTTPRequest([connection, imageData, imageResponseHeaders](Vector<char>&&) {
+            connection.send(HTTPResponse({ { "Content-Type"_s, "text/html"_s } },
+                "<img id='collision' src='collision.gifv' style='width:300px;height:300px'>"_s).serialize(), [connection, imageData, imageResponseHeaders] {
+                connection.receiveHTTPRequest([connection, imageData, imageResponseHeaders](Vector<char>&&) {
+                    Vector<WTF::KeyValuePair<String, String>> headers = imageResponseHeaders;
+                    connection.send(HTTPResponse(WTF::move(headers), imageData).serialize());
+                });
+            });
+        });
+    });
+
+    RetainPtr delegate = adoptNS([[TestUIDelegate alloc] init]);
+    __block bool gotProposedMenu = false;
+    __block RetainPtr<NSString> capturedFilename;
+    [delegate setGetContextMenuFromProposedMenu:^(NSMenu *menu, _WKContextMenuElementInfo *elementInfo, id<NSSecureCoding>, void (^completion)(NSMenu *)) {
+        EXPECT_NOT_NULL(elementInfo.hitTestResult);
+        capturedFilename = elementInfo.hitTestResult.imageSuggestedFilename;
+        completion(nil);
+        gotProposedMenu = true;
+    }];
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)]);
+    [webView setUIDelegate:delegate];
+    RetainPtr collisionURL = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/collision.gifv", server.port()]];
+    [webView synchronouslyLoadRequest:[NSURLRequest requestWithURL:collisionURL]];
+
+    auto midpoint = [webView getElementMidpoint:@"#collision"].value();
+    [webView mouseDownAtPoint:midpoint simulatePressure:NO withFlags:0 eventType:NSEventTypeRightMouseDown];
+    [webView mouseUpAtPoint:midpoint withFlags:0 eventType:NSEventTypeRightMouseUp];
+    Util::run(&gotProposedMenu);
+
+    return capturedFilename;
+}
+
+TEST(ContextMenuTests, HitTestResultImageSuggestedFilenameWhenURLCollidesWithMainResource)
+{
+    RetainPtr filename = imageSuggestedFilenameFromCollidingImageURL({
+        { "Content-Type"_s, "image/png"_s },
+        { "Content-Disposition"_s, "inline; filename=\"collision.png\""_s },
+    });
+    EXPECT_FALSE([filename hasSuffix:@".html"]);
+    EXPECT_TRUE([filename hasSuffix:@".png"]);
+}
+
+TEST(ContextMenuTests, HitTestResultImageSuggestedFilenameWhenURLCollidesAndNoContentDisposition)
+{
+    RetainPtr filename = imageSuggestedFilenameFromCollidingImageURL({
+        { "Content-Type"_s, "image/png"_s },
+    });
+    EXPECT_FALSE([filename hasSuffix:@".html"]);
+    EXPECT_GT([filename length], 0u);
+}
+
 TEST(ContextMenuTests, HitTestResultLinkWithInvalidURL)
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)]);
@@ -841,6 +959,110 @@ TEST(ContextMenuTests, CopyLinkUsesPathComponentAsTitleForLinkWithPath)
         TestWebKitAPI::Util::runFor(0.1_s);
 
     EXPECT_WK_STREQ(@"something-cool", readTitleFromPasteboard());
+}
+
+TEST(ContextMenuTests, MenuTrackingCancelledWhenPageCloses)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)]);
+    [webView synchronouslyLoadTestPageNamed:@"simple"];
+
+    __block bool didEndTracking = false;
+    RetainPtr observer = [NSNotificationCenter.defaultCenter addObserverForName:NSMenuDidEndTrackingNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+        didEndTracking = true;
+    }];
+
+    bool didClosePage = false;
+    bool menuStayedOpenAfterPageClose = false;
+    RetainPtr<NSTimer> menuWatchdogTimer;
+    RetainPtr closePageTimer = [NSTimer timerWithTimeInterval:0.25 repeats:YES block:[&didClosePage, &menuStayedOpenAfterPageClose, &menuWatchdogTimer, strongWebView = webView](NSTimer *timer) {
+        // This timer only fires while AppKit is tracking the context menu.
+        RetainPtr activeMenu = [strongWebView _activeMenu];
+        if (!activeMenu)
+            return;
+
+        [timer invalidate];
+        [strongWebView _close];
+        didClosePage = true;
+
+        // This timer only fires if AppKit is still tracking the menu long after the page was closed.
+        // Dismiss the menu ourselves so the test fails instead of hanging.
+        menuWatchdogTimer = [NSTimer timerWithTimeInterval:2 repeats:NO block:[&menuStayedOpenAfterPageClose, activeMenu](NSTimer *) {
+            menuStayedOpenAfterPageClose = true;
+            [activeMenu cancelTrackingWithoutAnimation];
+        }];
+        [NSRunLoop.mainRunLoop addTimer:menuWatchdogTimer.get() forMode:NSEventTrackingRunLoopMode];
+    }];
+
+    [NSRunLoop.mainRunLoop addTimer:closePageTimer.get() forMode:NSEventTrackingRunLoopMode];
+    [[webView window] orderFrontRegardless];
+    [webView rightClickAtPoint:NSMakePoint(200, 200)];
+    Util::run(&didEndTracking);
+    [closePageTimer invalidate];
+    [menuWatchdogTimer invalidate];
+
+    EXPECT_TRUE(didClosePage);
+    EXPECT_FALSE(menuStayedOpenAfterPageClose);
+    EXPECT_NULL([webView _activeMenu]);
+
+    [NSNotificationCenter.defaultCenter removeObserver:observer.get()];
+}
+
+static NSString *svgImageURL(NSString *rootAttributes)
+{
+    NSString *svg = [NSString stringWithFormat:@"<svg xmlns='http://www.w3.org/2000/svg' %@><rect width='100%%' height='100%%' fill='green'/></svg>", rootAttributes];
+    return [@"data:image/svg+xml;base64," stringByAppendingString:[[svg dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0]];
+}
+
+static NSSize copiedImageTIFFSize(NSString *source, NSString *style)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400)]);
+    NSString *markup = [NSString stringWithFormat:@"<body style='margin: 0'><img style='display: block; %@' src='%@'></body>", style, source];
+    [webView synchronouslyLoadHTMLString:markup];
+
+    clearPasteboard();
+
+    [webView rightClick:NSMakePoint(10, 10) andSelectItemMatching:^BOOL(NSMenuItem *item) {
+        return [item.identifier isEqualToString:_WKMenuItemIdentifierCopyImage];
+    }];
+
+    NSData *tiff = nil;
+    for (unsigned i = 0; i < 100 && !tiff; ++i) {
+        Util::runFor(0.05_s);
+        tiff = [NSPasteboard.generalPasteboard dataForType:NSPasteboardTypeTIFF];
+    }
+
+    NSBitmapImageRep *representation = tiff ? [NSBitmapImageRep imageRepWithData:tiff] : nil;
+    if (!representation)
+        return NSZeroSize;
+    return NSMakeSize(representation.pixelsWide, representation.pixelsHigh);
+}
+
+TEST(ContextMenuTests, CopyImageTIFFForSVGWithNaturalSize)
+{
+    auto size = copiedImageTIFFSize(svgImageURL(@"width='200' height='100'"), @"width: 300px; height: 300px");
+    EXPECT_EQ(size.width, 200);
+    EXPECT_EQ(size.height, 100);
+}
+
+TEST(ContextMenuTests, CopyImageTIFFForSVGWithOnlyWidth)
+{
+    auto size = copiedImageTIFFSize(svgImageURL(@"width='200'"), @"");
+    EXPECT_EQ(size.width, 200);
+    EXPECT_EQ(size.height, 150); // The missing height comes from the used size of 200x150.
+}
+
+TEST(ContextMenuTests, CopyImageTIFFForSVGWithoutNaturalSize)
+{
+    auto size = copiedImageTIFFSize(svgImageURL(@""), @"width: 120px; height: 120px");
+    EXPECT_EQ(size.width, 120);
+    EXPECT_EQ(size.height, 120);
+}
+
+TEST(ContextMenuTests, CopyImageTIFFForHugeSVGIsCapped)
+{
+    auto size = copiedImageTIFFSize(svgImageURL(@"width='10000' height='5000'"), @"width: 200px; height: 100px");
+    EXPECT_EQ(size.width, 4096);
+    EXPECT_EQ(size.height, 2048);
 }
 
 } // namespace TestWebKitAPI

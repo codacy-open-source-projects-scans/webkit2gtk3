@@ -25,6 +25,10 @@
 #include "config.h"
 #include "CSSStringValue.h"
 
+#include "CSSValuePool.h"
+#include "CSSValueTypes+DeprecatedCSSOMValueCreation.h"
+#include <wtf/Hasher.h>
+
 namespace WebCore {
 
 Ref<CSSStringValue> CSSStringValue::create(CSS::String string)
@@ -48,14 +52,20 @@ bool CSSStringValue::equals(const CSSStringValue& other) const
     return m_string == other.m_string;
 }
 
-IterationStatus CSSStringValue::customVisitChildren(const Function<IterationStatus(CSSValue&)>& func) const
+IterationStatus CSSStringValue::customVisitChildren(NOESCAPE const Function<IterationStatus(CSSValue&)>& func) const
 {
     return CSS::visitCSSValueChildren(func, m_string);
 }
 
-String CSSStringValue::stringValue() const
+bool CSSStringValue::addDerivedHash(Hasher& hasher) const
 {
-    return m_string.value;
+    add(hasher, m_string);
+    return true;
+}
+
+Ref<DeprecatedCSSOMValue> CSSStringValue::customCreateDeprecatedCSSOMWrapper(CSSStyleDeclaration& owner) const
+{
+    return CSS::createDeprecatedCSSOMValue(CSSValuePool::singleton(), owner, m_string);
 }
 
 } // namespace WebCore

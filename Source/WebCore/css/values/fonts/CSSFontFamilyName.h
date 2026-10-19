@@ -41,6 +41,7 @@ template<> struct Serialize<FontFamilyName> { void operator()(StringBuilder&, co
 template<> struct ComputedStyleDependenciesCollector<FontFamilyName> { constexpr void operator()(ComputedStyleDependencies&, const FontFamilyName&) { } };
 template<> struct CSSValueChildrenVisitor<FontFamilyName> { constexpr IterationStatus operator()(NOESCAPE const Function<IterationStatus(CSSValue&)>&, const FontFamilyName&) { return IterationStatus::Continue; } };
 template<> struct CSSValueCreation<FontFamilyName> { Ref<CSSValue> operator()(CSSValuePool&, const FontFamilyName&); };
+template<> struct DeprecatedCSSOMValueCreation<FontFamilyName> { Ref<DeprecatedCSSOMValue> operator()(CSSValuePool&, CSSStyleDeclaration&, const FontFamilyName&); };
 
 // MARK: - Logging
 
@@ -48,7 +49,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, const FontFamilyName&);
 
 // MARK: - Hashing
 
-void NODELETE add(Hasher&, const FontFamilyName&);
+void LEGACY_NODELETE add(Hasher&, const FontFamilyName&);
 
 } // namespace CSS
 } // namespace WebCore

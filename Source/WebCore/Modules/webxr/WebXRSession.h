@@ -37,6 +37,7 @@
 #include "WebXRInputSourceArray.h"
 #include "WebXRRenderState.h"
 #include "WebXRSessionListener.h"
+#include "WebXRView.h"
 #include "XREnvironmentBlendMode.h"
 #include "XRInteractionMode.h"
 #include "XRReferenceSpaceType.h"
@@ -83,7 +84,7 @@ public:
     XREnvironmentBlendMode environmentBlendMode() const;
     XRInteractionMode interactionMode() const;
     XRVisibilityState visibilityState() const;
-    const WebXRRenderState& NODELETE renderState() const;
+    const WebXRRenderState& LEGACY_NODELETE renderState() const;
     const WebXRInputSourceArray& inputSources() const LIFETIME_BOUND { return m_inputSources; }
     RefPtr<PlatformXR::Device> device() const { return m_device; }
 
@@ -117,7 +118,10 @@ public:
 
     XRSessionMode mode() const { return m_mode; }
 
-    const Vector<PlatformXR::Device::ViewData>& views() const LIFETIME_BOUND { return m_views; }
+    struct View : PlatformXR::Device::ViewData {
+        Ref<UnderlyingView> underlyingView;
+    };
+    const Vector<View>& views() const LIFETIME_BOUND { return m_views; }
     const PlatformXR::FrameData& frameData() const LIFETIME_BOUND { return m_frameData; }
     const WebXRReferenceSpace& viewerReferenceSpace() const { return m_viewerReferenceSpace; }
     bool posesCanBeReported(const Document&) const;
@@ -141,6 +145,13 @@ public:
 
     void initializeTrackingAndRendering(std::optional<XRCanvasConfiguration>&&);
 
+    struct InitialRenderingDimensions {
+        uint32_t width { 0 };
+        uint32_t height { 0 };
+        uint32_t arrayLength { 0 };
+    };
+    std::optional<InitialRenderingDimensions> initialRenderingDimensions() const { return m_initialRenderingDimensions; }
+
 private:
     WebXRSession(Document&, XRSessionMode, PlatformXR::Device&, FeatureList&&);
 
@@ -156,6 +167,7 @@ private:
     void sessionDidInitializeInputSources(Vector<PlatformXR::FrameData::InputSource>&&) final;
     void sessionDidEnd() final;
     void updateSessionVisibilityState(PlatformXR::VisibilityState) final;
+    void sessionDidInitializeRendering(uint32_t width, uint32_t height, uint32_t arrayLength) final;
 
     // VisibilityChangeClient
     void visibilityStateChanged() final;
@@ -196,9 +208,10 @@ private:
     Vector<Ref<XRFrameRequestCallback>> m_callbacks;
     bool m_isDeviceFrameRequestPending { false };
 
-    Vector<PlatformXR::Device::ViewData> m_views;
+    Vector<View> m_views;
     PlatformXR::FrameData m_frameData;
     std::optional<PlatformXR::RequestData> m_requestData;
+    std::optional<InitialRenderingDimensions> m_initialRenderingDimensions;
 
     double m_minimumInlineFOV { 0.0 };
     double m_maximumInlineFOV { std::numbers::pi };

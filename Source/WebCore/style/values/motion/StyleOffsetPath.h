@@ -65,7 +65,7 @@ struct OffsetPath {
     bool affectedByTransformOrigin() const { return !isNone(); }
 
     template<typename> bool holdsAlternative() const;
-    template<typename... F> decltype(auto) switchOn(F&&...) const;
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&...) const;
 
     bool operator==(const OffsetPath& other) const
     {
@@ -97,7 +97,7 @@ template<typename T> bool OffsetPath::holdsAlternative() const
     else if constexpr (std::same_as<T, BoxPath>)                            return isBox();
 }
 
-template<typename... F> decltype(auto) OffsetPath::switchOn(F&&... f) const
+template<typename... F> decltype(auto) OffsetPath::switchOn(NOESCAPE F&&... f) const
 {
     auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -148,11 +148,11 @@ inline std::optional<BoxPath> OffsetPath::tryBox() const
 // MARK: - Conversion
 
 template<> struct CSSValueConversion<OffsetPath> { OffsetPath operator()(BuilderState&, const CSSValue&); };
-template<> struct CSSValueCreation<OffsetPath> { Ref<CSSValue> operator()(CSSValuePool&, const RenderStyle&, const OffsetPath&); };
+template<> struct CSSValueCreation<OffsetPath> { Ref<CSSValue> operator()(CSSValuePool&, const Style::ComputedStyle&, const OffsetPath&); };
 
 // MARK: - Serialization
 
-template<> struct Serialize<OffsetPath> { void operator()(StringBuilder&, const CSS::SerializationContext&, const RenderStyle&, const OffsetPath&); };
+template<> struct Serialize<OffsetPath> { void operator()(StringBuilder&, const CSS::SerializationContext&, const Style::ComputedStyle&, const OffsetPath&); };
 
 // MARK: - Blending
 
@@ -163,7 +163,7 @@ template<> struct Blending<OffsetPath> {
 
 // MARK: - Platform
 
-template<> struct ToPlatform<OffsetPath> { RefPtr<PathOperation> NODELETE operator()(const OffsetPath&); };
+template<> struct ToPlatform<OffsetPath> { RefPtr<PathOperation> LEGACY_NODELETE operator()(const OffsetPath&); };
 
 // MARK: - Evaluation
 

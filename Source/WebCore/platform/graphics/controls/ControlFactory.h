@@ -25,9 +25,9 @@
 
 #pragma once
 
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
 
@@ -51,12 +51,13 @@ class TextAreaPart;
 class TextFieldPart;
 class ToggleButtonPart;
 
-class ControlFactory : public RefCounted<ControlFactory> {
+// Ensure AppKit objects are always deallocated on the main thread.
+class ControlFactory : public ThreadSafeRefCounted<ControlFactory, WTF::DestructionThread::MainRunLoop> {
     WTF_MAKE_TZONE_ALLOCATED(ControlFactory);
 public:
     virtual ~ControlFactory() = default;
 
-    WEBCORE_EXPORT static Ref<ControlFactory> create();
+    WEBCORE_EXPORT static Ref<ControlFactory> LEGACY_NODELETE create();
     WEBCORE_EXPORT static ControlFactory& singleton();
 
 #if ENABLE(APPLE_PAY)

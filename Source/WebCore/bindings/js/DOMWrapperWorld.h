@@ -22,12 +22,11 @@
 #pragma once
 
 #include <WebCore/JSDOMGlobalObject.h>
-#include <wtf/Compiler.h>
-#include <wtf/Forward.h>
-#include <wtf/WeakPtr.h>
+#include <wtf/WeakHashSet.h>
 
 namespace WebCore {
 
+class JSEventListener;
 class WindowProxy;
 
 typedef HashMap<void*, JSC::Weak<JSC::JSObject>> DOMObjectWrapperMap;
@@ -58,8 +57,8 @@ public:
     bool allowsJSHandleCreation() const { return m_allowsJSHandleCreation; }
     void setAllowsJSHandleCreation() { m_allowsJSHandleCreation = true; }
 
-    void setAllowNodeSerialization() { m_allowNodeSerialization = true; }
-    bool allowNodeSerialization() const { return m_allowNodeSerialization; }
+    void setAllowNodeSnapshotCreation() { m_allowNodeSnapshotCreation = true; }
+    bool allowNodeSnapshotCreation() const { return m_allowNodeSnapshotCreation; }
 
     void setAllowElementUserInfo() { m_allowElementUserInfo = true; }
     bool allowElementUserInfo() const { return m_allowElementUserInfo; }
@@ -85,11 +84,15 @@ public:
 
     Type type() const { return m_type; }
     bool isNormal() const { return m_type == Type::Normal; }
+    bool isNonNormal() const { return m_type != Type::Normal; }
     bool isUser() const { return m_type == Type::User; }
 
     const String& name() const LIFETIME_BOUND { return m_name; }
 
     JSC::VM& vm() const { return m_vm; }
+
+    void addEventListener(JSEventListener&);
+    void removeEventListener(JSEventListener&);
 
 protected:
     DOMWrapperWorld(JSC::VM&, Type, const String& name);
@@ -98,6 +101,8 @@ private:
     JSC::VM& m_vm;
     HashSet<WindowProxy*> m_jsWindowProxies;
     DOMObjectWrapperMap m_wrappers;
+
+    WeakHashSet<JSEventListener> m_eventListeners;
 
     String m_name;
     Type m_type { Type::Internal };
@@ -108,12 +113,12 @@ private:
     bool m_closedShadowRootIsExposedForExtensions : 1 { false };
     bool m_shouldDisableLegacyOverrideBuiltInsBehavior : 1 { false };
     bool m_allowsJSHandleCreation : 1 { false };
-    bool m_allowNodeSerialization : 1 { false };
+    bool m_allowNodeSnapshotCreation : 1 { false };
     bool m_allowPostLegacySynchronousMessage : 1 { false };
     bool m_isMediaControls : 1 { false };
 };
 
-DOMWrapperWorld& NODELETE normalWorld(JSC::VM&);
+DOMWrapperWorld& LEGACY_NODELETE normalWorld(JSC::VM&);
 WEBCORE_EXPORT DOMWrapperWorld& mainThreadNormalWorldSingleton();
 
 inline DOMWrapperWorld& debuggerWorldSingleton() { return mainThreadNormalWorldSingleton(); }

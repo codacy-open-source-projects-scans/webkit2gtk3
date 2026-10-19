@@ -27,6 +27,8 @@
 #include "CSSFontStyleRange.h"
 
 #include "CSSFontStyleRangeValue.h"
+#include "CSSPrimitiveNumericTypes+CSSValueVisitation.h"
+#include "CSSPrimitiveNumericTypes+Serialization.h"
 
 namespace WebCore {
 namespace CSS {
@@ -42,7 +44,7 @@ Ref<CSSValue> CSSValueCreation<FontStyleRange>::operator()(CSSValuePool&, const 
 
 void Serialize<FontStyleRange::Oblique>::operator()(StringBuilder& builder, const SerializationContext& context, const FontStyleRange::Oblique& value)
 {
-    CSS::serializationForCSS(builder, context, SpaceSeparatedTuple { Keyword::Oblique { }, value.first, value.second });
+    CSS::serializationForCSS(builder, context, SpaceSeparatedTuple { Keyword::Oblique { }, value.angle });
 }
 
 } // namespace CSS

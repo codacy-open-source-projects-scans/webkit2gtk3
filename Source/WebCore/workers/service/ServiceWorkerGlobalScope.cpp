@@ -29,7 +29,6 @@
 #include "Document.h"
 #include "EventLoop.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "EventTargetInterfaces.h"
 #include "ExtendableEvent.h"
 #include "FetchEvent.h"
@@ -154,7 +153,7 @@ void ServiceWorkerGlobalScope::skipWaiting(Ref<DeferredPromise>&& promise)
             connection->skipWaiting(identifier, [workerThread = WTF::move(workerThread), requestIdentifier] {
                 workerThread->runLoop().postTask([requestIdentifier](auto& context) {
                     auto& scope = downcast<ServiceWorkerGlobalScope>(context);
-                    scope.eventLoop().queueTask(TaskSource::DOMManipulation, [scope = Ref { scope }, requestIdentifier]() mutable {
+                    protect(scope.eventLoop())->queueTask(TaskSource::DOMManipulation, [scope = Ref { scope }, requestIdentifier]() mutable {
                         if (RefPtr promise = scope->m_pendingSkipWaitingPromises.take(requestIdentifier))
                             promise->resolve();
                     });
@@ -277,7 +276,7 @@ void ServiceWorkerGlobalScope::addConsoleMessage(MessageSource source, MessageLe
 CookieStore& ServiceWorkerGlobalScope::cookieStore()
 {
     if (!m_cookieStore)
-        m_cookieStore = CookieStore::create(this);
+        lazyInitialize(m_cookieStore, CookieStore::create(this));
     return *m_cookieStore;
 }
 

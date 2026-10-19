@@ -47,6 +47,8 @@ public:
     void pauseDisplayRefreshCallbacksForMonotonicAnimations();
     void highImpactMonotonicAnimationsWereRemoved();
 
+    void startForcedDisplayRefreshWindow(Seconds interval, Seconds duration);
+
     UIView *viewWithLayerIDForTesting(WebCore::PlatformLayerIdentifier) const;
 
 private:
@@ -64,6 +66,8 @@ private:
 
     void didRefreshDisplay() override;
 
+    void didCommitLayerTree(IPC::Connection&, const RemoteLayerTreeTransaction&, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>&, const TransactionID&) override;
+
     void windowScreenDidChange(WebCore::PlatformDisplayID) override;
 
     std::optional<WebCore::FramesPerSecond> displayNominalFramesPerSecond() override;
@@ -71,7 +75,7 @@ private:
 
     WKDisplayLinkHandler *displayLinkHandler();
 
-    RetainPtr<WKDisplayLinkHandler> m_displayLinkHandler;
+    const RetainPtr<WKDisplayLinkHandler> m_displayLinkHandler;
 
     bool m_needsDisplayRefreshCallbacksForMonotonicAnimations { false };
     bool m_hasHighImpactMonotonicAnimations { false };

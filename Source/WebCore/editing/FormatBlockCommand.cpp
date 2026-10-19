@@ -35,6 +35,8 @@
 #include "HTMLNames.h"
 #include "MutableStyleProperties.h"
 #include "NodeName.h"
+#include "SimpleRange.h"
+#include "StylePropertiesInlines.h"
 #include "VisibleUnits.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RobinHoodHashSet.h>
@@ -46,7 +48,7 @@ using namespace HTMLNames;
 static RefPtr<Node> enclosingBlockToSplitTreeTo(Node* startNode);
 static bool isElementForFormatBlock(const QualifiedName& tagName);
 
-static inline bool NODELETE isElementForFormatBlock(Node& node)
+static inline bool LEGACY_NODELETE isElementForFormatBlock(Node& node)
 {
     auto* element = dynamicDowncast<Element>(node);
     return element && isElementForFormatBlock(element->tagQName());
@@ -68,9 +70,9 @@ void FormatBlockCommand::formatSelection(const VisiblePosition& startOfSelection
 
 void FormatBlockCommand::formatRange(const Position& start, const Position& end, const Position& endOfSelection, RefPtr<Element>& blockNode)
 {
-    RefPtr nodeToSplitTo = enclosingBlockToSplitTreeTo(start.deprecatedNode());
+    RefPtr nodeToSplitTo = enclosingBlockToSplitTreeTo(protect(start.deprecatedNode()));
     ASSERT(nodeToSplitTo);
-    RefPtr<Node> outerBlock = (start.deprecatedNode() == nodeToSplitTo) ? RefPtr { start.deprecatedNode() } : splitTreeToNode(*start.deprecatedNode(), *nodeToSplitTo);
+    RefPtr<Node> outerBlock = (start.deprecatedNode() == nodeToSplitTo) ? protect(start.deprecatedNode()) : splitTreeToNode(*protect(start.deprecatedNode()), *nodeToSplitTo);
     if (!outerBlock)
         return;
 
@@ -101,11 +103,11 @@ void FormatBlockCommand::formatRange(const Position& start, const Position& end,
         // See: https://bugs.webkit.org/show_bug.cgi?id=47054
         if (RefPtr element = dynamicDowncast<HTMLElement>(nodeAfterInsertionPosition)) {
             if (element->hasAttribute(styleAttr)) {
-                auto style = EditingStyle::create(element->inlineStyle());
+                auto style = EditingStyle::create(protect(element->inlineStyle()));
                 if (RefPtr styledBlockNode = dynamicDowncast<StyledElement>(blockNode))
-                    style->removeStyleFromRulesAndContext(*styledBlockNode, styledBlockNode->parentNode());
+                    style->removeStyleFromRulesAndContext(*styledBlockNode, protect(styledBlockNode->parentNode()));
                 if (!style->isEmpty())
-                    blockNode->setAttribute(styleAttr, AtomString { style->style()->asText(CSS::defaultSerializationContext()) });
+                    blockNode->setAttribute(styleAttr, AtomString { protect(style->style())->asText(CSS::defaultSerializationContext()) });
             }
         }
     }
@@ -133,14 +135,14 @@ RefPtr<Element> FormatBlockCommand::elementForFormatBlockCommand(const std::opti
     if (!commonAncestorElement)
         return nullptr;
 
-    RefPtr rootEditableElement = range->start.container->rootEditableElement();
+    RefPtr rootEditableElement = protect(range->start.container)->rootEditableElement();
     if (!rootEditableElement || commonAncestor->contains(rootEditableElement.get()))
         return nullptr;
 
     return commonAncestorElement;
 }
 
-bool NODELETE isElementForFormatBlock(const QualifiedName& tagName)
+bool LEGACY_NODELETE isElementForFormatBlock(const QualifiedName& tagName)
 {
     using namespace ElementNames;
 

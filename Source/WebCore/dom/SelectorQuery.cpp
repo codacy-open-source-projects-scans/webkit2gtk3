@@ -51,17 +51,17 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(SelectorQueryCache);
 #if ASSERT_ENABLED
 static bool isSingleTagNameSelector(const CSSSelector& selector)
 {
-    return selector.isFirstInComplexSelector() && selector.match() == CSSSelector::Match::Tag;
+    return !selector.precedingInComplexSelector() && selector.match() == CSSSelector::Match::Tag;
 }
 
 static bool isSingleClassNameSelector(const CSSSelector& selector)
 {
-    return selector.isFirstInComplexSelector() && selector.match() == CSSSelector::Match::Class;
+    return !selector.precedingInComplexSelector() && selector.match() == CSSSelector::Match::Class;
 }
 
 static bool isSingleAttributeExactSelector(const CSSSelector& selector)
 {
-    return selector.isFirstInComplexSelector() && selector.match() == CSSSelector::Match::Exact;
+    return !selector.precedingInComplexSelector() && selector.match() == CSSSelector::Match::Exact;
 }
 
 #endif // ASSERT_ENABLED
@@ -81,13 +81,13 @@ template<typename Output> static ALWAYS_INLINE void appendOutputForElement(Outpu
         output.append(element);
 }
 
-static bool NODELETE canBeUsedForIdFastPath(const CSSSelector& selector)
+static bool LEGACY_NODELETE canBeUsedForIdFastPath(const CSSSelector& selector)
 {
     return selector.match() == CSSSelector::Match::Id
-        || (selector.match() == CSSSelector::Match::Exact && selector.attribute() == HTMLNames::idAttr && !selector.attributeValueMatchingIsCaseInsensitive());
+        || (selector.match() == CSSSelector::Match::Exact && selector.attribute() == HTMLNames::idAttr && selector.attributeMatchType() != CSSSelector::AttributeMatchType::CaseInsensitive);
 }
 
-static IdMatchingType NODELETE findIdMatchingType(const CSSSelector& firstSelector)
+static IdMatchingType LEGACY_NODELETE findIdMatchingType(const CSSSelector& firstSelector)
 {
     bool inRightmost = true;
     for (const CSSSelector* selector = &firstSelector; selector; selector = selector->precedingInComplexSelector()) {
@@ -105,7 +105,7 @@ static IdMatchingType NODELETE findIdMatchingType(const CSSSelector& firstSelect
 static bool canOptimizeSingleAttributeExactMatch(const CSSSelector& selector)
 {
     // Bailout if attribute name needs to be definitely case-insensitive.
-    if (selector.attributeValueMatchingIsCaseInsensitive())
+    if (selector.attributeMatchType() == CSSSelector::AttributeMatchType::CaseInsensitive)
         return false;
 
     const auto& attribute = selector.attribute();
@@ -131,49 +131,49 @@ SelectorDataList::SelectorDataList(const CSSSelectorList& selectorList)
 
     if (m_selectors.size() == 1) {
         const CSSSelector& selector = m_selectors.first().selector;
-        if (selector.isFirstInComplexSelector()) {
+        if (!selector.precedingInComplexSelector()) {
             switch (selector.match()) {
             case CSSSelector::Match::Tag:
-                m_matchType = TagNameMatch;
+                m_matchType = MatchType::TagNameMatch;
                 break;
             case CSSSelector::Match::Class:
-                m_matchType = ClassNameMatch;
+                m_matchType = MatchType::ClassNameMatch;
                 break;
             case CSSSelector::Match::Exact:
                 if (canBeUsedForIdFastPath(selector))
-                    m_matchType = RightMostWithIdMatch; // [id="name"] pattern goes here.
+                    m_matchType = MatchType::RightMostWithIdMatch; // [id="name"] pattern goes here.
                 else if (canOptimizeSingleAttributeExactMatch(selector))
-                    m_matchType = AttributeExactMatch;
+                    m_matchType = MatchType::AttributeExactMatch;
                 else
-                    m_matchType = CompilableSingle;
+                    m_matchType = MatchType::CompilableSingle;
                 break;
             default:
                 if (canBeUsedForIdFastPath(selector))
-                    m_matchType = RightMostWithIdMatch;
+                    m_matchType = MatchType::RightMostWithIdMatch;
                 else
-                    m_matchType = CompilableSingle;
+                    m_matchType = MatchType::CompilableSingle;
                 break;
             }
         } else {
             switch (findIdMatchingType(selector)) {
             case IdMatchingType::None:
-                m_matchType = CompilableSingle;
+                m_matchType = MatchType::CompilableSingle;
                 break;
             case IdMatchingType::Rightmost:
-                m_matchType = RightMostWithIdMatch;
+                m_matchType = MatchType::RightMostWithIdMatch;
                 break;
             case IdMatchingType::Filter:
-                m_matchType = CompilableSingleWithRootFilter;
+                m_matchType = MatchType::CompilableSingleWithRootFilter;
                 break;
             }
         }
     } else
-        m_matchType = CompilableMultipleSelectorMatch;
+        m_matchType = MatchType::CompilableMultipleSelectorMatch;
 }
 
 inline bool SelectorDataList::selectorMatches(const SelectorData& selectorData, Element& element, const ContainerNode& rootNode, Style::SelectorMatchingState* selectorMatchingState) const
 {
-    SelectorChecker selectorChecker(element.document());
+    SelectorChecker selectorChecker(protect(element.document()));
     SelectorChecker::CheckingContext selectorCheckingContext(SelectorChecker::Mode::QueryingRules);
     selectorCheckingContext.scope = rootNode.isDocumentNode() ? nullptr : &rootNode;
     // Providing SelectorMatchingState allows cross-element optimizations like caching for :has() matches.
@@ -218,18 +218,16 @@ Element* SelectorDataList::queryFirst(ContainerNode& rootNode) const
     return result;
 }
 
-static const CSSSelector* NODELETE selectorForIdLookup(const ContainerNode& rootNode, const CSSSelector& firstSelector)
+static const CSSSelector* LEGACY_NODELETE selectorForIdLookup(const ContainerNode& rootNode, const CSSSelector& firstSelector)
 {
     if (!rootNode.isConnected())
         return nullptr;
     if (rootNode.document().inQuirksMode())
         return nullptr;
 
-    for (const CSSSelector* selector = &firstSelector; selector; selector = selector->precedingInComplexSelector()) {
+    for (const CSSSelector* selector = &firstSelector; selector; selector = selector->followingInCompound()) {
         if (canBeUsedForIdFastPath(*selector))
             return selector;
-        if (selector->relation() != CSSSelector::Relation::Subselector)
-            break;
     }
 
     return nullptr;
@@ -243,12 +241,12 @@ ALWAYS_INLINE void SelectorDataList::executeFastPathForIdSelector(const Containe
 
     const AtomString& idToMatch = idSelector->value();
     if (rootNode.treeScope().containsMultipleElementsWithId(idToMatch)) [[unlikely]] {
-        auto* elements = rootNode.treeScope().getAllElementsById(idToMatch);
+        auto* elements = protect(rootNode.treeScope())->getAllElementsById(idToMatch);
         ASSERT(elements);
         bool rootNodeIsTreeScopeRoot = rootNode.isTreeScope();
         for (auto& element : *elements) {
-            if ((rootNodeIsTreeScopeRoot || element->isDescendantOf(rootNode)) && selectorMatches(selectorData, element, rootNode)) {
-                appendOutputForElement(output, element);
+            if ((rootNodeIsTreeScopeRoot || element->isDescendantOf(rootNode)) && selectorMatches(selectorData, protect(element), rootNode)) {
+                appendOutputForElement(output, protect(element));
                 if constexpr (std::is_same_v<OutputType, Element*>)
                     return;
             }
@@ -256,7 +254,7 @@ ALWAYS_INLINE void SelectorDataList::executeFastPathForIdSelector(const Containe
         return;
     }
 
-    RefPtr element = rootNode.treeScope().getElementById(idToMatch);
+    RefPtr element = protect(rootNode.treeScope())->getElementById(idToMatch);
     if (!element || !(rootNode.isTreeScope() || element->isDescendantOf(rootNode)))
         return;
     if (selectorMatches(selectorData, *element, rootNode))
@@ -284,7 +282,7 @@ static Ref<ContainerNode> filterRootById(ContainerNode& rootNode, const CSSSelec
     for (; selector; selector = selector->precedingInComplexSelector()) {
         if (canBeUsedForIdFastPath(*selector)) {
             const AtomString& idToMatch = selector->value();
-            if (RefPtr<ContainerNode> searchRoot = rootNode.treeScope().getElementById(idToMatch)) {
+            if (RefPtr<ContainerNode> searchRoot = protect(rootNode.treeScope())->getElementById(idToMatch)) {
                 if (!rootNode.treeScope().containsMultipleElementsWithId(idToMatch)) [[likely]] {
                     if (inAdjacentChain)
                         searchRoot = searchRoot->parentNode();
@@ -300,7 +298,7 @@ static Ref<ContainerNode> filterRootById(ContainerNode& rootNode, const CSSSelec
     return rootNode;
 }
 
-static ALWAYS_INLINE bool NODELETE localNameMatches(const Element& element, const AtomString& localName, const AtomString& lowercaseLocalName)
+static ALWAYS_INLINE bool LEGACY_NODELETE localNameMatches(const Element& element, const AtomString& localName, const AtomString& lowercaseLocalName)
 {
     if (element.isHTMLElement() && element.document().isHTMLDocument())
         return element.localName() == lowercaseLocalName;
@@ -442,7 +440,7 @@ ALWAYS_INLINE void SelectorDataList::executeSingleAttributeExactSelectorData(con
 
             if (!foundFirstMatch && rootNode.isDocumentNode()) {
                 foundFirstMatch = true;
-                rootNode.document().setCachedFirstElementWithAttribute(selectorAttribute, element);
+                protect(rootNode.document())->setCachedFirstElementWithAttribute(selectorAttribute, element);
             }
 
             if (selectorValue == attribute.value()) {
@@ -563,7 +561,7 @@ ALWAYS_INLINE void SelectorDataList::execute(ContainerNode& rootNode, OutputType
 {
     RefPtr<ContainerNode> searchRootNode = &rootNode;
     switch (m_matchType) {
-    case RightMostWithIdMatch:
+    case MatchType::RightMostWithIdMatch:
         {
         const SelectorData& selectorData = m_selectors.first();
         if (const CSSSelector* idSelector = selectorForIdLookup(*searchRootNode, selectorData.selector)) {
@@ -578,39 +576,39 @@ ALWAYS_INLINE void SelectorDataList::execute(ContainerNode& rootNode, OutputType
         ASSERT_NOT_REACHED();
         }
 
-    case CompilableSingleWithRootFilter:
-    case CompilableSingle:
+    case MatchType::CompilableSingleWithRootFilter:
+    case MatchType::CompilableSingle:
         {
 #if ENABLE(CSS_SELECTOR_JIT)
         const SelectorData& selectorData = m_selectors.first();
         ASSERT(selectorData.compiledSelector.status == SelectorCompilationStatus::NotCompiled);
-        ASSERT(m_matchType == CompilableSingle || m_matchType == CompilableSingleWithRootFilter);
+        ASSERT(m_matchType == MatchType::CompilableSingle || m_matchType == MatchType::CompilableSingleWithRootFilter);
         if (compileSelector(selectorData)) {
-            if (m_matchType == CompilableSingle) {
-                m_matchType = CompiledSingle;
+            if (m_matchType == MatchType::CompilableSingle) {
+                m_matchType = MatchType::CompiledSingle;
                 goto CompiledSingleCase;
             }
-            ASSERT(m_matchType == CompilableSingleWithRootFilter);
-            m_matchType = CompiledSingleWithRootFilter;
+            ASSERT(m_matchType == MatchType::CompilableSingleWithRootFilter);
+            m_matchType = MatchType::CompiledSingleWithRootFilter;
             goto CompiledSingleWithRootFilterCase;
         }
 #endif // ENABLE(CSS_SELECTOR_JIT)
-        if (m_matchType == CompilableSingle) {
-            m_matchType = SingleSelector;
+        if (m_matchType == MatchType::CompilableSingle) {
+            m_matchType = MatchType::SingleSelector;
             goto SingleSelectorCase;
         }
-        ASSERT(m_matchType == CompilableSingleWithRootFilter);
-        m_matchType = SingleSelectorWithRootFilter;
+        ASSERT(m_matchType == MatchType::CompilableSingleWithRootFilter);
+        m_matchType = MatchType::SingleSelectorWithRootFilter;
         goto SingleSelectorWithRootFilterCase;
         ASSERT_NOT_REACHED();
         }
 
 #if ENABLE(CSS_SELECTOR_JIT)
-    case CompiledSingleWithRootFilter:
+    case MatchType::CompiledSingleWithRootFilter:
         CompiledSingleWithRootFilterCase:
         searchRootNode = filterRootById(*searchRootNode, m_selectors.first().selector);
         [[fallthrough]];
-    case CompiledSingle:
+    case MatchType::CompiledSingle:
         {
         CompiledSingleCase:
         const SelectorData& selectorData = m_selectors.first();
@@ -627,58 +625,58 @@ ALWAYS_INLINE void SelectorDataList::execute(ContainerNode& rootNode, OutputType
         break;
         }
 #else
-    case CompiledSingleWithRootFilter:
-    case CompiledSingle:
+    case MatchType::CompiledSingleWithRootFilter:
+    case MatchType::CompiledSingle:
         ASSERT_NOT_REACHED();
 #if !ASSERT_ENABLED
         [[fallthrough]];
 #endif
 #endif // ENABLE(CSS_SELECTOR_JIT)
 
-    case SingleSelectorWithRootFilter:
+    case MatchType::SingleSelectorWithRootFilter:
         SingleSelectorWithRootFilterCase:
         searchRootNode = filterRootById(*searchRootNode, m_selectors.first().selector);
         [[fallthrough]];
-    case SingleSelector:
+    case MatchType::SingleSelector:
         SingleSelectorCase:
         executeSingleSelectorData(rootNode, *searchRootNode, m_selectors.first(), output);
         break;
 
-    case TagNameMatch:
+    case MatchType::TagNameMatch:
         executeSingleTagNameSelectorData(*searchRootNode, m_selectors.first(), output);
         break;
-    case ClassNameMatch:
+    case MatchType::ClassNameMatch:
         executeSingleClassNameSelectorData(*searchRootNode, m_selectors.first(), output);
         break;
-    case AttributeExactMatch:
+    case MatchType::AttributeExactMatch:
         executeSingleAttributeExactSelectorData(*searchRootNode, m_selectors.first(), output);
         break;
-    case CompilableMultipleSelectorMatch:
+    case MatchType::CompilableMultipleSelectorMatch:
 #if ENABLE(CSS_SELECTOR_JIT)
         {
         for (auto& selector : m_selectors) {
             if (!compileSelector(selector)) {
-                m_matchType = MultipleSelectorMatch;
-                goto MultipleSelectorMatch;
+                m_matchType = MatchType::MultipleSelectorMatch;
+                goto MultipleSelectorMatchCase;
             }
         }
-        m_matchType = CompiledMultipleSelectorMatch;
-        goto CompiledMultipleSelectorMatch;
+        m_matchType = MatchType::CompiledMultipleSelectorMatch;
+        goto CompiledMultipleSelectorMatchCase;
         }
 #else
         [[fallthrough]];
 #endif // ENABLE(CSS_SELECTOR_JIT)
-    case CompiledMultipleSelectorMatch:
+    case MatchType::CompiledMultipleSelectorMatch:
 #if ENABLE(CSS_SELECTOR_JIT)
-        CompiledMultipleSelectorMatch:
+        CompiledMultipleSelectorMatchCase:
         executeCompiledSingleMultiSelectorData(*searchRootNode, output);
         break;
 #else
         [[fallthrough]];
 #endif // ENABLE(CSS_SELECTOR_JIT)
-    case MultipleSelectorMatch:
+    case MatchType::MultipleSelectorMatch:
 #if ENABLE(CSS_SELECTOR_JIT)
-        MultipleSelectorMatch:
+        MultipleSelectorMatchCase:
 #endif
         executeSingleMultiSelectorData(*searchRootNode, output);
         break;

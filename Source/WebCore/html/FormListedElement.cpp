@@ -60,10 +60,7 @@ private:
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(FormAttributeTargetObserver);
 
-FormListedElement::FormListedElement(HTMLFormElement* form)
-    : FormAssociatedElement(form)
-{
-}
+FormListedElement::FormListedElement() = default;
 
 FormListedElement::~FormListedElement() = default;
 
@@ -283,7 +280,7 @@ String FormListedElement::validationMessage() const
 
 void FormListedElement::setCustomValidity(const String& error)
 {
-    m_customValidationMessage = error;
+    m_customValidationMessage = makeStringBySimplifyingNewLines(error);
 }
 
 void FormListedElement::resetFormAttributeTargetObserver()

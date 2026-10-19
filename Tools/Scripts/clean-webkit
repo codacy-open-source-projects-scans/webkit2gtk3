@@ -60,8 +60,7 @@ def removeDerivedSources(fs):
             if dirname == 'DerivedSources':
                 derived_sources.append(os.path.join(root, dirname))
         for filename in files:
-            # Don't remove build.ninja file for COG
-            if filename.endswith(".ninja") and root.find("cog") == -1:
+            if filename.endswith(".ninja"):
                 path = os.path.join(root, filename)
                 ninja_files.append(path)
     for each in derived_sources:
@@ -72,8 +71,6 @@ def removeDerivedSources(fs):
             fs.remove(each)
 
 def getKeepDirs():
-    if os.environ.get('WEBKIT_FLATPAK') == '1':
-        return ["Toolchains", "UserFlatpak"]
     if os.environ.get('WEBKIT_JHBUILD') == '1':
         return ["DependenciesGTK", "DependenciesWPE"]
     return []

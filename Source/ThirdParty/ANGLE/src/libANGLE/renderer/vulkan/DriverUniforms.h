@@ -10,13 +10,10 @@
 #ifndef LIBANGLE_RENDERER_VULKAN_DRIVER_UNIFORMS_H_
 #define LIBANGLE_RENDERER_VULKAN_DRIVER_UNIFORMS_H_
 
-#ifdef UNSAFE_BUFFERS_BUILD
-#    pragma allow_unsafe_buffers
-#endif
-
 #include "GLSLANG/ShaderLang.h"
 #include "common/PackedEnums.h"
 #include "common/angleutils.h"
+#include "common/unsafe_buffers.h"
 #include "libANGLE/RefCountObject.h"
 #include "libANGLE/angletypes.h"
 #include "libANGLE/renderer/vulkan/vk_renderer.h"
@@ -54,6 +51,7 @@ void UpdateAtomicCounterBufferOffset(vk::Renderer *renderer,
         renderer->getPhysicalDeviceProperties().limits.minStorageBufferOffsetAlignment;
 
     ASSERT(atomicCounterBufferCount <= offsetsOut.size() * 4);
+    std::fill(offsetsOut.begin(), offsetsOut.end(), 0);
 
     for (uint32_t bufferIndex = 0; bufferIndex < atomicCounterBufferCount; ++bufferIndex)
     {
@@ -88,19 +86,24 @@ class GraphicsDriverUniforms
   public:
     GraphicsDriverUniforms(vk::Renderer *renderer)
         : mAllDirtyBits({DIRTY_BIT_ATOMIC_COUNTER_BUFFER, DIRTY_BIT_DEPTH_RANGE,
-                         DIRTY_BIT_RENDER_AREA, DIRTY_BIT_FLIP_XY, DIRTY_BIT_MISC})
+                         DIRTY_BIT_RENDER_AREA, DIRTY_BIT_FLIP_XY, DIRTY_BIT_MISC,
+                         DIRTY_BIT_BASE_INSTANCE}),
+          mPreferPrecomputedVertexTransform(
+              renderer->getFeatures().preferPrecomputedVertexTransform.enabled)
     {
         std::fill(mUniformData.depthRange.begin(), mUniformData.depthRange.end(), 0.0f);
         mUniformData.renderArea = 0;
         mUniformData.flipXY     = 0;
         mUniformData.uint32Misc = 0;
-        mUniformData.dither     = 0;
+        mUniformData.baseInstance = 0;
         std::fill(mUniformData.acbBufferOffsets.begin(), mUniformData.acbBufferOffsets.end(), 0);
+        std::fill(mUniformData.transformXY.begin(), mUniformData.transformXY.end(), 0.0f);
 
-        if (renderer->getFeatures().emulateDithering.enabled)
+        if (mPreferPrecomputedVertexTransform)
         {
-            mAllDirtyBits.set(DIRTY_BIT_EMULATED_DITHER_CONTROL);
+            mAllDirtyBits.set(DIRTY_BIT_TRANSFORM_XY);
         }
+
         if (renderer->getFeatures().emulateTransformFeedback.enabled)
         {
             mAllDirtyBits.set(DIRTY_BIT_EMULATED_TRANSFORM_FEEDBACK);
@@ -112,7 +115,7 @@ class GraphicsDriverUniforms
 
     void copyGraphicsDriverUniformsData(const GraphicsDriverUniforms &other)
     {
-        memcpy(&mUniformData, &other.mUniformData, mMaxUniformDataSize);
+        ANGLE_UNSAFE_TODO(memcpy(&mUniformData, &other.mUniformData, mMaxUniformDataSize));
         // By default we should not need to call pushConstants
         mDirtyBits.reset();
     }
@@ -191,8 +194,8 @@ class GraphicsDriverUniforms
         }
 
         const uint32_t prevUint32Misc = mUniformData.uint32Misc;
-        const uint32_t swapXY = IsRotatedAspectRatio(rotation);
-        SetBitField(mUniformData.misc.swapXY, swapXY);
+        const bool swapXY             = IsRotatedAspectRatio(rotation);
+        SetBitField(mUniformData.misc.swapXY, swapXY ? 1u : 0u);
         SetBitField(mUniformData.misc.numSamples, numSamples);
         SetBitField(mUniformData.misc.layeredFramebuffer, layeredFramebuffer);
 
@@ -200,6 +203,30 @@ class GraphicsDriverUniforms
         {
             mDirtyBits.set(DIRTY_BIT_MISC);
             dirty = true;
+        }
+
+        // Pre-compute the 2x2 XY transformation matrix for the vertex stage.  Only done when the
+        // feature is enabled; otherwise the shader uses the flipXY/swapXY path directly.
+        if (mPreferPrecomputedVertexTransform)
+        {
+            const float fx = ((flipXY >> 16) & 0x80) ? -1.0f : 1.0f;
+            const float fy = ((flipXY >> 24) & 0x80) ? -1.0f : 1.0f;
+
+            // Row vectors for dot-product use in the shader:
+            //   result.x = dot(position.xy, transformXY.xy)
+            //   result.y = dot(position.xy, transformXY.zw)
+            // Not swapped: (fx, 0, 0, fy) -> (fx*x,  fy*y)
+            // Swapped:     (0, fx, fy, 0) -> (fx*y,  fy*x)
+            const std::array<float, 4> newTransformXY =
+                swapXY ? std::array<float, 4>{0.0f, fx, fy, 0.0f}
+                       : std::array<float, 4>{fx, 0.0f, 0.0f, fy};
+
+            if (newTransformXY != mUniformData.transformXY)
+            {
+                mUniformData.transformXY = newTransformXY;
+                mDirtyBits.set(DIRTY_BIT_TRANSFORM_XY);
+                dirty = true;
+            }
         }
 
         return dirty;
@@ -214,10 +241,15 @@ class GraphicsDriverUniforms
         mDirtyBits.set(DIRTY_BIT_ATOMIC_COUNTER_BUFFER);
     }
 
-    void updateEmulatedDitherControl(uint32_t emulatedDitherControl)
+    bool updateBaseInstance(uint32_t baseInstance)
     {
-        mUniformData.dither = emulatedDitherControl;
-        mDirtyBits.set(DIRTY_BIT_EMULATED_DITHER_CONTROL);
+        if (mUniformData.baseInstance != baseInstance)
+        {
+            mUniformData.baseInstance = baseInstance;
+            mDirtyBits.set(DIRTY_BIT_BASE_INSTANCE);
+            return true;
+        }
+        return false;
     }
 
     void updateAdvancedBlendEquation(uint32_t advancedBlendEquation)
@@ -265,7 +297,7 @@ class GraphicsDriverUniforms
         DirtyBitType lastDirtyBit  = mDirtyBits.last();
         uint32_t offset            = kPushConstantOffsets[firstDirtyBit];
         uint32_t size              = kPushConstantOffsets[lastDirtyBit + 1] - offset;
-        void *data                 = reinterpret_cast<uint8_t *>(&mUniformData) + offset;
+        void *data = ANGLE_UNSAFE_TODO(reinterpret_cast<uint8_t *>(&mUniformData) + offset);
 
         commandBuffer->pushConstants(pipelineLayout, renderer->getSupportedVulkanShaderStageMask(),
                                      offset, size, data);
@@ -288,8 +320,9 @@ class GraphicsDriverUniforms
         DIRTY_BIT_RENDER_AREA,
         DIRTY_BIT_FLIP_XY,
         DIRTY_BIT_MISC,
-        DIRTY_BIT_EMULATED_DITHER_CONTROL,
+        DIRTY_BIT_BASE_INSTANCE,
         DIRTY_BIT_ATOMIC_COUNTER_BUFFER,
+        DIRTY_BIT_TRANSFORM_XY,
         DIRTY_BIT_EMULATED_TRANSFORM_FEEDBACK,
 
         EnumCount
@@ -354,18 +387,21 @@ class GraphicsDriverUniforms
             uint32_t uint32Misc;
         };
 
-        // Only the lower 16 bits used
-        uint32_t dither;
+        // Used to implement gl_InstanceID (which is gl_InstanceIndex - baseInstance)
+        uint32_t baseInstance;
 
         // Contain packed 8-bit values for atomic counter buffer offsets.  These offsets are within
         // Vulkan's minStorageBufferOffsetAlignment limit and are used to support unaligned offsets
         // allowed in GL.
         std::array<uint32_t, 2> acbBufferOffsets;
 
+        // Pre-computed 2x2 XY transformation matrix (swap + flip combined).
+        std::array<float, 4> transformXY;
+
         // Only used when transform feedback is emulated.
         std::array<int32_t, 4> xfbBufferOffsets;
         int32_t xfbVerticesPerInstance;
-        int32_t padding[3];
+        int32_t xfbPadding[3];
     } UniformData;
     ANGLE_DISABLE_STRUCT_PADDING_WARNINGS
 
@@ -386,8 +422,9 @@ class GraphicsDriverUniforms
         offsetof(struct UniformData, renderArea),
         offsetof(struct UniformData, flipXY),
         offsetof(struct UniformData, misc),
-        offsetof(struct UniformData, dither),
+        offsetof(struct UniformData, baseInstance),
         offsetof(struct UniformData, acbBufferOffsets),
+        offsetof(struct UniformData, transformXY),
         offsetof(struct UniformData, xfbBufferOffsets),
         sizeof(struct UniformData)};
 
@@ -400,6 +437,9 @@ class GraphicsDriverUniforms
     DirtyBits mAllDirtyBits;
 
     uint32_t mMaxUniformDataSize;
+
+    // Whether the pre-computed XY transform matrix is used.
+    bool mPreferPrecomputedVertexTransform;
 };
 
 struct ComputeDriverUniforms

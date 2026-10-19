@@ -64,9 +64,8 @@ extension WTF.String {
         // string for the duration that we're using it to construct the WTF::String.
         // The WTF::String will take a copy.
         self = unsafe string.utf8CString.span.withUnsafeBufferPointer { ptr in
-            // Warning here is rdar://163018821
             // swift-format-ignore: NeverForceUnwrap
-            let cppspan = unsafe SpanConstChar(ptr.baseAddress!, string.utf8CString.count)
+            let cppspan = unsafe SpanConstChar(UnsafeBufferPointer(start: ptr.baseAddress!, count: string.utf8CString.count))
             return unsafe WTF.String.fromUTF8(cppspan)
         }
     }
@@ -75,7 +74,7 @@ extension WTF.String {
     var description: Swift.String {
         // We could possibly make this quicker by treating a C++ span as
         // a Sequence. For now, we want to avoid unsafe as much as possible.
-        String(utf8(WTF.LenientConversion).toStdString())
+        Swift.String(utf8(WTF.LenientConversion).toStdString())
     }
 }
 
@@ -96,33 +95,6 @@ extension CxxRefVector {
             vec.append(consuming: Element(item))
         }
         self = vec
-    }
-}
-
-// Iterator for WTF::Vectors.
-// rdar://169297366 when fixed will conform WTF::Vector directly to Sequence.
-// We can't do that manually since this would require C++ interop types to be public
-struct CxxVectorIterator<Vec: CxxVector>: Sequence, IteratorProtocol {
-    typealias Element = Vec.Element
-    var vec: Vec
-    var pos: Int
-
-    init(vec: Vec) {
-        self.vec = vec
-        self.pos = 0
-    }
-
-    mutating func next() -> Vec.Element? {
-        if pos >= vec.size() {
-            return nil
-        }
-        // Safety: we'll make a copy of the referent
-        // before the vector goes out of scope. It's guaranteed
-        // to have a valid lifetime, be initialized, and be
-        // within the vector bounds.
-        let item = unsafe vec.__atUnsafe(pos)
-        pos += 1
-        return unsafe item.pointee
     }
 }
 

@@ -29,6 +29,7 @@
 
 #import "Helpers/PlatformUtilities.h"
 #import "Helpers/Test.h"
+#import "Helpers/cocoa/SiteIsolationTestUtilities.h"
 #import "Helpers/cocoa/TestWKWebView.h"
 #import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKWebViewConfigurationPrivate.h>
@@ -46,28 +47,7 @@
 #import <wtf/text/StringHash.h>
 #import <wtf/text/WTFString.h>
 
-SOFT_LINK_PRIVATE_FRAMEWORK(MediaRemote)
-
-SOFT_LINK(MediaRemote, MRMediaRemoteSendCommandToApp, Boolean, (MRMediaRemoteCommand command, CFDictionaryRef options, MROriginRef origin, CFStringRef appDisplayID, MRSendCommandAppOptions appOptions, dispatch_queue_t replyQ, void(^completion)(MRSendCommandError err, CFArrayRef handlerReturnStatuses)), (command, options, origin, appDisplayID, appOptions, replyQ, completion));
-#define MRMediaRemoteSendCommandToApp softLinkMRMediaRemoteSendCommandToApp
-
-SOFT_LINK(MediaRemote, MRMediaRemoteGetLocalOrigin, MROriginRef, (), ());
-#define MRMediaRemoteGetLocalOrigin softLinkMRMediaRemoteGetLocalOrigin
-
-SOFT_LINK(MediaRemote, MRMediaRemoteGetSupportedCommandsForOrigin, void, (MROriginRef origin, dispatch_queue_t queue, void(^completion)(CFArrayRef commands)), (origin, queue, completion));
-#define MRMediaRemoteGetSupportedCommandsForOrigin softLinkMRMediaRemoteGetSupportedCommandsForOrigin
-
-SOFT_LINK(MediaRemote, MRMediaRemoteGetNowPlayingClient, void, (dispatch_queue_t queue, void(^completion)(MRNowPlayingClientRef, CFErrorRef)), (queue, completion))
-#define MRMediaRemoteGetNowPlayingClient softLinkMRMediaRemoteGetNowPlayingClient
-
-SOFT_LINK(MediaRemote, MRNowPlayingClientGetProcessIdentifier, pid_t, (MRNowPlayingClientRef client), (client))
-#define MRNowPlayingClientGetProcessIdentifier softLinkMRNowPlayingClientGetProcessIdentifier
-
-SOFT_LINK_CONSTANT(MediaRemote, kMRMediaRemoteOptionSkipInterval, CFStringRef)
-#define kMRMediaRemoteOptionSkipInterval getkMRMediaRemoteOptionSkipIntervalSingleton()
-
-SOFT_LINK_CONSTANT(MediaRemote, kMRMediaRemoteOptionPlaybackPosition, CFStringRef)
-#define kMRMediaRemoteOptionPlaybackPosition getkMRMediaRemoteOptionPlaybackPositionSingleton()
+#import "Helpers/cocoa/MediaRemoteSoftLink.h"
 
 #if !USE(APPLE_INTERNAL_SDK)
 @interface MRCommandInfo : NSObject
@@ -85,6 +65,8 @@ public:
     {
         _configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
         [_configuration setMediaTypesRequiringUserActionForPlayback:WKAudiovisualMediaTypeAudio];
+        if (siteIsolationEnabled())
+            enableSiteIsolation(_configuration.get());
 
         _webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 300) configuration:_configuration.get() addToWindow:YES]);
 
@@ -98,6 +80,8 @@ public:
     {
         [_webView clearMessageHandlers:_messageHandlers.get()];
     }
+
+    virtual bool siteIsolationEnabled() const { return false; }
 
     TestWKWebView* webView() { return _webView.get(); }
 
@@ -133,6 +117,16 @@ public:
         Util::run(&canplaythrough);
 
         play();
+        // Wait until the GPU process is registered as the now-playing client.
+        // With async session admission, calling pause() immediately after play()
+        // races with in-flight admission and leaves the session in Paused state
+        // without transitioning through Playing — which prevents now-playing
+        // registration (computeNowPlayingInfo's isPlaying flag requires
+        // state==Playing). Polling for the registration to settle keeps the
+        // test deterministic without depending on sync admission timing.
+        EXPECT_TRUE(Util::waitFor([&] {
+            return gpuProcessPID() == getNowPlayingClientPid();
+        }));
         pause();
         ASSERT_EQ(gpuProcessPID(), getNowPlayingClientPid());
     }
@@ -428,6 +422,36 @@ TEST_F(MediaSessionTest, MinimalCommands)
     std::ranges::sort(actualCommands);
 
     EXPECT_EQ(expectedCommands, actualCommands);
+}
+
+class MediaSessionSiteIsolationTest : public MediaSessionTest {
+    bool siteIsolationEnabled() const final { return true; }
+};
+
+TEST_F(MediaSessionSiteIsolationTest, SeekCommandsRegisteredAfterSupportsSeekingChanges)
+{
+    loadPageAndBecomeNowPlaying(@"media-remote");
+
+    Vector<MRMediaRemoteCommand> expectedSeekCommands {
+        MRMediaRemoteCommandSeekToPlaybackPosition,
+        MRMediaRemoteCommandSkipForward,
+        MRMediaRemoteCommandSkipBackward,
+    };
+
+    auto enabledCommands = [&] {
+        return makeVector(getSupportedCommands().get(), [] (MRCommandInfo *command) -> std::optional<MRMediaRemoteCommand> {
+            if (!command.enabled)
+                return std::nullopt;
+            return command.command;
+        });
+    };
+
+    EXPECT_TRUE(Util::waitFor([&] {
+        auto commands = enabledCommands();
+        return std::ranges::all_of(expectedSeekCommands, [&] (auto command) {
+            return commands.contains(command);
+        });
+    }));
 }
 
 } // namespace TestWebKitAPI

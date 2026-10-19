@@ -34,6 +34,7 @@
 #include "DOMImplementation.h"
 #include "DocumentInlines.h"
 #include "DocumentLoader.h"
+#include "DocumentPage.h"
 #include "DocumentView.h"
 #include "FrameLoader.h"
 #include "FrameLoaderStateMachine.h"
@@ -83,7 +84,7 @@ void DocumentWriter::replaceDocumentWithResultOfExecutingJavascriptURL(const Str
     if (frame->documentIsBeingReplaced())
         return;
 
-    begin(frame->document()->url(), true, ownerDocument);
+    begin(protect(frame->document())->url(), true, ownerDocument);
 
     setEncoding("UTF-8"_s, IsEncodingUserChosen::No);
 
@@ -168,18 +169,26 @@ bool DocumentWriter::begin(const URL& urlReference, bool dispatch, Document* own
 
     // FIXME: Do we need to consult the content security policy here about blocked plug-ins?
 
-    bool shouldReuseDefaultView = frameLoader->stateMachine().isDisplayingInitialEmptyDocument()
+    bool mayReuseDefaultView = frameLoader->stateMachine().isDisplayingInitialEmptyDocument()
         && frame->document()->isSecureTransitionTo(url)
         && (frame->window() && !frame->window()->wasWrappedWithoutInitializedSecurityOrigin() && frame->window()->mayReuseForNavigation());
 
-    RefPtr<LocalDOMWindow> previousWindow;
-    if (shouldReuseDefaultView) {
+    bool shouldReuseDefaultView = [&] {
+        if (!mayReuseDefaultView)
+            return false;
+
         ASSERT(frameLoader->documentLoader());
-        if (auto* contentSecurityPolicy = frameLoader->documentLoader()->contentSecurityPolicy())
-            shouldReuseDefaultView = !contentSecurityPolicy->sandboxFlags().contains(SandboxFlag::Origin);
-    } else {
-        previousWindow = frame->window();
-    }
+        Ref documentLoader = *frameLoader->documentLoader();
+        if (auto* contentSecurityPolicy = documentLoader->contentSecurityPolicy(); contentSecurityPolicy && contentSecurityPolicy->sandboxFlags().contains(SandboxFlag::Origin))
+            return false;
+
+        if (!canAccessAgentCluster(protect(protect(frame->document())->securityOrigin()), frame->document()->agentClusterIdentifier(), documentLoader->agentClusterAssignment().identifier))
+            return false;
+
+        return true;
+    }();
+
+    RefPtr previousWindow = mayReuseDefaultView ? nullptr : frame->window();
 
     // Temporarily extend the lifetime of the existing document so that FrameLoader::clear() doesn't destroy it as
     // we need to retain its ongoing set of upgraded requests in new navigation contexts per <http://www.w3.org/TR/upgrade-insecure-requests/>
@@ -207,13 +216,16 @@ bool DocumentWriter::begin(const URL& urlReference, bool dispatch, Document* own
     frameLoader->setOutgoingReferrer(url);
     frame->setDocument(document.copyRef());
 
-    if (RefPtr decoder = m_decoder)
-        document->setDecoder(decoder.get());
+    if (m_decoder)
+        document->setDecoder(m_decoder.copyRef());
     if (ownerDocument) {
         // |document| is the result of evaluating a JavaScript URL.
         document->setCookieURL(ownerDocument->cookieURL());
         document->setSecurityOriginPolicy(ownerDocument->securityOriginPolicy());
         document->setCrossOriginEmbedderPolicy(ownerDocument->crossOriginEmbedderPolicy());
+        document->setDocumentIsolationPolicy(ownerDocument->documentIsolationPolicy());
+        document->setAgentClusterIdentifier(ownerDocument->agentClusterIdentifier());
+        document->setIPAddressSpace(ownerDocument->ipAddressSpace());
 
         document->setContentSecurityPolicy(makeUnique<ContentSecurityPolicy>(URL { url }, document));
         CheckedRef contentSecurityPolicy = *document->contentSecurityPolicy();
@@ -249,9 +261,9 @@ bool DocumentWriter::begin(const URL& urlReference, bool dispatch, Document* own
     }
 
     if (existingDocument && existingDocument->contentSecurityPolicy() && document->contentSecurityPolicy())
-        document->contentSecurityPolicy()->setInsecureNavigationRequestsToUpgrade(existingDocument->contentSecurityPolicy()->takeNavigationRequestsToUpgrade());
+        protect(document->contentSecurityPolicy())->setInsecureNavigationRequestsToUpgrade(existingDocument->contentSecurityPolicy()->takeNavigationRequestsToUpgrade());
 
-    frameLoader->didBeginDocument(dispatch, previousWindow.get());
+    frameLoader->didBeginDocument(dispatch, previousWindow);
 
     document->implicitOpen();
 
@@ -283,11 +295,12 @@ TextResourceDecoder& DocumentWriter::decoder()
         // an attack vector.
         // FIXME: This might be too cautious for non-7bit-encodings and
         // we may consider relaxing this later after testing.
-        if (canReferToParentFrameEncoding(frame.ptr(), parentFrame.get()))
+        if (canReferToParentFrameEncoding(frame.ptr(), parentFrame))
             decoder->setHintEncoding(parentFrame->document()->decoder());
         if (m_encoding.isEmpty()) {
-            if (canReferToParentFrameEncoding(frame.ptr(), parentFrame.get()))
-                decoder->setEncoding(parentFrame->document()->textEncoding(), TextResourceDecoder::EncodingFromParentFrame);
+            // Don't let a non-UTF-8 parent frame override JSON's UTF-8 default (RFC 8259).
+            if (canReferToParentFrameEncoding(frame.ptr(), parentFrame) && decoder->contentType() != TextResourceDecoder::JSON)
+                decoder->setEncoding(protect(parentFrame->document())->textEncoding(), TextResourceDecoder::EncodingFromParentFrame);
         } else {
             decoder->setEncoding(m_encoding,
                 m_encodingWasChosenByUser ? TextResourceDecoder::UserChosenEncoding : TextResourceDecoder::EncodingFromHTTPHeader);

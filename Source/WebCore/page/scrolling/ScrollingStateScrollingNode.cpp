@@ -119,6 +119,8 @@ ScrollingStateScrollingNode::ScrollingStateScrollingNode(const ScrollingStateScr
     , m_scrollPosition(stateNode.scrollPosition())
     , m_scrollOrigin(stateNode.scrollOrigin())
     , m_snapOffsetsInfo(stateNode.m_snapOffsetsInfo)
+    // m_currentHorizontalSnapPointIndex is not currently copied.
+    // m_currentVerticalSnapPointIndex is not currently copied.
 #if PLATFORM(MAC) || USE(COORDINATED_GRAPHICS_ASYNC_SCROLLBAR)
     , m_scrollbarHoverState(stateNode.scrollbarHoverState())
 #endif
@@ -127,8 +129,8 @@ ScrollingStateScrollingNode::ScrollingStateScrollingNode(const ScrollingStateScr
 #endif
 #if PLATFORM(MAC) || USE(COORDINATED_GRAPHICS_ASYNC_SCROLLBAR)
     , m_scrollbarEnabledState(stateNode.scrollbarEnabledState())
-    , m_verticalScrollerImp(stateNode.verticalScrollerImp())
-    , m_horizontalScrollerImp(stateNode.horizontalScrollerImp())
+    , m_verticalScrollerImp(stateNode.m_verticalScrollerImp)
+    , m_horizontalScrollerImp(stateNode.m_horizontalScrollerImp)
 #endif
     , m_scrollbarColor(stateNode.scrollbarColor())
     , m_scrollableAreaParameters(stateNode.scrollableAreaParameters())
@@ -263,7 +265,7 @@ void ScrollingStateScrollingNode::setCurrentVerticalSnapPointIndex(std::optional
 {
     if (m_currentVerticalSnapPointIndex == index)
         return;
-    
+
     m_currentVerticalSnapPointIndex = index;
     setPropertyChanged(Property::CurrentVerticalSnapOffsetIndex);
 }

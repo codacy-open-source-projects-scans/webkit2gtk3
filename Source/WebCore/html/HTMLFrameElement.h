@@ -33,10 +33,10 @@ class HTMLFrameElement final : public HTMLFrameElementBase {
     WTF_MAKE_TZONE_ALLOCATED(HTMLFrameElement);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(HTMLFrameElement);
 public:
-    static Ref<HTMLFrameElement> create(const QualifiedName&, Document&);
+    static Ref<HTMLFrameElement> LEGACY_NODELETE create(const QualifiedName&, Document&);
 
     bool hasFrameBorder() const { return m_frameBorder; }
-    bool NODELETE noResize() const;
+    bool LEGACY_NODELETE noResize() const;
 
     RenderFrame* renderer() const;
 
@@ -44,9 +44,9 @@ private:
     HTMLFrameElement(const QualifiedName&, Document&);
 
     void didAttachRenderers() final;
-    bool rendererIsNeeded(const RenderStyle&) final;
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
-    bool isReplaced(const RenderStyle* = nullptr) const final { return true; }
+    bool rendererIsNeeded(const Style::ComputedStyle&) final;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) final;
+    bool isReplaced(const Style::ComputedStyle* = nullptr) const final { return true; }
     int defaultTabIndex() const final;
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;
 

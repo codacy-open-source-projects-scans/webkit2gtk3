@@ -62,6 +62,7 @@ class MediaSample;
 class MediaSampleAVFObjC;
 class PixelBufferConformerCV;
 class ResourceError;
+class SecurityOrigin;
 class SharedBuffer;
 class TextTrackRepresentation;
 class TrackBuffer;
@@ -91,7 +92,7 @@ private:
     void setPreload(MediaPlayer::Preload) final;
     void doPreload();
     void load(const URL&, const LoadOptions&) final;
-    bool NODELETE needsResourceClient() const;
+    bool LEGACY_NODELETE needsResourceClient() const;
     bool createResourceClientIfNeeded();
 
 #if ENABLE(MEDIA_SOURCE)
@@ -103,6 +104,8 @@ private:
     
     // WebMResourceClientParent
     friend class WebMResourceClient;
+    void responseReceived(PlatformMediaResource&, const ResourceResponse&) final;
+    void redirectReceived(PlatformMediaResource&, const ResourceResponse&) final;
     void dataLengthReceived(size_t) final;
     void dataReceived(const SharedBuffer&) final;
     void loadFailed(const ResourceError&) final;
@@ -110,7 +113,7 @@ private:
 
     void cancelLoad() final;
 
-    PlatformLayer* platformLayer() const final;
+    PlatformLayer* platformLayer() final;
 
     bool supportsPictureInPicture() const final { return true; }
     bool supportsFullscreen() const final { return true; }
@@ -170,7 +173,7 @@ private:
     void paint(GraphicsContext&, const FloatRect&) final;
     void paintCurrentFrameInContext(GraphicsContext&, const FloatRect&) final;
     RefPtr<VideoFrame> videoFrameForCurrentTime() final;
-    DestinationColorSpace colorSpace() final;
+    ColorSpace colorSpace() final;
     Ref<BitmapImagePromise> bitmapImageForCurrentTime() final;
 
     void setNaturalSize(FloatSize);
@@ -199,7 +202,10 @@ private:
         
     String engineDescription() const final;
     MediaPlayer::MovieLoadType movieLoadType() const final { return MediaPlayer::MovieLoadType::Download; }
-        
+
+    bool didPassCORSAccessCheck() const final { return m_didPassCORSAccessCheck; }
+    std::optional<bool> isCrossOrigin(const SecurityOrigin&) const final;
+
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     bool isCurrentPlaybackTargetWireless() const final;
     void setWirelessPlaybackTarget(Ref<MediaPlaybackTarget>&&) final;
@@ -233,7 +239,6 @@ private:
     void didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&&, TrackID, const String& mediaType);
     void didUpdateFormatDescriptionForTrackId(Ref<TrackInfo>&&, TrackID);
 
-    void flush();
     void flushTrack(TrackID);
     void flushVideoIfNeeded();
 
@@ -279,15 +284,16 @@ private:
 #endif
 
     using TrackIdentifier = TracksRendererManager::TrackIdentifier;
-    TrackIdentifier NODELETE trackIdentifierFor(TrackID) const;
-    std::optional<TrackIdentifier> NODELETE maybeTrackIdentifierFor(TrackID) const;
+    TrackIdentifier LEGACY_NODELETE trackIdentifierFor(TrackID) const;
+    std::optional<TrackIdentifier> LEGACY_NODELETE maybeTrackIdentifierFor(TrackID) const;
 
     void setLayerRequiresFlush();
-    void NODELETE setAllTracksForReenqueuing();
-    void NODELETE setTrackForReenqueuing(TrackID);
+    void LEGACY_NODELETE setAllTracksForReenqueuing();
+    void LEGACY_NODELETE setTrackForReenqueuing(TrackID);
 
     // Remote layer support
     WebCore::HostingContext hostingContext() const final;
+    Ref<HostingContextPromise> requestHostingContext() final;
     void setVideoLayerSizeFenced(const WebCore::FloatSize&, WTF::MachSendRightAnnotated&&) final;
     std::optional<MediaPlayerIdentifier> identifier() const final { return m_playerIdentifier; }
 
@@ -347,10 +353,9 @@ private:
     MediaTime m_durationMainThread WTF_GUARDED_BY_CAPABILITY(mainThread) { MediaTime::indefiniteTime() };
     double m_rate WTF_GUARDED_BY_CAPABILITY(mainThread) { 1 };
 
-    bool NODELETE isEnabledVideoTrackID(TrackID) const;
-    bool NODELETE hasSelectedVideo() const;
+    bool LEGACY_NODELETE isEnabledVideoTrackID(TrackID) const;
+    bool LEGACY_NODELETE hasSelectedVideo() const;
     std::optional<TrackID> m_enabledVideoTrackID WTF_GUARDED_BY_CAPABILITY(runningQueue());
-    std::atomic<uint32_t> m_abortCalled { 0 };
     size_t m_contentLength WTF_GUARDED_BY_CAPABILITY(mainThread) { 0 };
     size_t m_contentReceived WTF_GUARDED_BY_CAPABILITY(mainThread) { 0 };
     uint32_t m_pendingAppends WTF_GUARDED_BY_CAPABILITY(runningQueue()) { 0 };
@@ -368,9 +373,13 @@ private:
     std::atomic<bool> m_errored { false };
     std::atomic<bool> m_processingInitializationSegment { false };
 
+    void addSecurityOrigin(const ResourceResponse&);
+    HashSet<Ref<WebCore::SecurityOrigin>> m_origins;
+    bool m_didPassCORSAccessCheck { true };
+
     // Seek logic support
-    void seekToTarget(const SeekTarget&) final;
-    bool seeking() const final;
+    Ref<MediaTimePromise> seekToTarget(const SeekTarget&) final;
+    bool LEGACY_NODELETE seeking() const;
     void seekInternal();
     void cancelPendingSeek(); // Called from destructor or running queue
     void completeSeek(const MediaTime&);
@@ -381,7 +390,7 @@ private:
     // WorkQueue on which the player is running.
     WorkQueue& runningQueue() const { return m_runningQueue.get(); }
     void ensureOnRunningQueue(Function<void()>&&);
-    MediaTime NODELETE durationOnRunningQueue() const;
+    MediaTime LEGACY_NODELETE durationOnRunningQueue() const;
 
     Timer m_seekTimer WTF_GUARDED_BY_CAPABILITY(mainThread);
     MediaTime m_lastSeekTime WTF_GUARDED_BY_CAPABILITY(runningQueue());
@@ -389,7 +398,9 @@ private:
     std::atomic<bool> m_hasPendingSeek { false };
     std::optional<GenericPromise::AutoRejectProducer> m_waitForTimeBufferedPromise WTF_GUARDED_BY_CAPABILITY(runningQueue());
     Ref<NativePromiseRequest> m_rendererSeekRequest;
+    Ref<NativePromiseRequest> m_stallRequest;
     std::atomic<bool> m_seeking { false };
+    std::optional<MediaTimePromise::AutoRejectProducer> m_seekPromise WTF_GUARDED_BY_CAPABILITY(mainThread);
 #if HAVE(SPATIAL_TRACKING_LABEL)
     String m_defaultSpatialTrackingLabel WTF_GUARDED_BY_CAPABILITY(mainThread);
     String m_spatialTrackingLabel WTF_GUARDED_BY_CAPABILITY(mainThread);

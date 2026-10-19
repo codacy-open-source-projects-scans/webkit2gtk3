@@ -47,6 +47,7 @@ my $idlFileNamesList;
 my $generator;
 my @generatorDependency;
 my $defines;
+my $definesFile;
 my $supplementalDependencyFile;
 my @ppExtraOutput;
 my @ppExtraArgs;
@@ -54,6 +55,7 @@ my $numOfJobs;
 my $idlAttributesFile;
 my $showProgress;
 my @exclude;
+my $ignoreStandaloneConstructorAttributes;
 
 GetOptions('outputDir=s' => \$outputDirectory,
            'idlFilesList=s' => \$idlFilesList,
@@ -62,13 +64,25 @@ GetOptions('outputDir=s' => \$outputDirectory,
            'generator=s' => \$generator,
            'generatorDependency=s@' => \@generatorDependency,
            'defines=s' => \$defines,
+           'defines-file=s' => \$definesFile,
            'supplementalDependencyFile=s' => \$supplementalDependencyFile,
            'ppExtraOutput=s@' => \@ppExtraOutput,
            'ppExtraArgs=s@' => \@ppExtraArgs,
            'idlAttributesFile=s' => \$idlAttributesFile,
            'numOfJobs=i' => \$numOfJobs,
            'exclude=s@' => \@exclude,
-           'showProgress' => \$showProgress);
+           'showProgress' => \$showProgress,
+           'ignoreStandaloneConstructorAttributes' => \$ignoreStandaloneConstructorAttributes);
+
+if (defined $definesFile) {
+    open(my $df, '<', $definesFile) or die "Cannot open --defines-file $definesFile: $!";
+    local $/;
+    my $extra = <$df>;
+    close($df);
+    $extra =~ s/^\s+|\s+$//g;
+    $defines = join(' ', grep { length } (defined($defines) ? $defines : ''), $extra);
+    $defines =~ s/\s+/ /g;
+}
 
 if (!defined $numOfJobs) {
     $numOfJobs = `sysctl -n hw.activecpu 2>/dev/null` || `nproc 2>/dev/null` || 4;
@@ -120,9 +134,11 @@ my %directoryCache;
 buildDirectoryCache();
 
 my @idlFilesToUpdate = grep &{sub {
-    if (defined($oldSupplements{$_})
-        && @{$oldSupplements{$_}} ne @{$newSupplements{$_} or []}) {
-        # Re-process the IDL file if its supplemental dependencies were added or removed
+    my $absPath = Cwd::abs_path($_) || $_;
+    my $oldSupplement = $oldSupplements{$absPath};
+    if (defined($oldSupplement)
+        && join("\0", @$oldSupplement) ne join("\0", @{$newSupplements{$absPath} || []})) {
+        # Re-process the IDL file if its supplemental dependencies were added, removed, or changed.
         return 1;
     }
     my ($filename, $dirs, $suffix) = fileparse($_, '.idl');
@@ -133,7 +149,7 @@ my @idlFilesToUpdate = grep &{sub {
     my @deps = ($_,
                 $idlAttributesFile,
                 @generatorDependency,
-                @{$newSupplements{$_} or []},
+                @{$newSupplements{$absPath} or []},
                 implicitDependencies($depFile));
     needsUpdate(\@output, \@deps);
 }}, @idlFiles;
@@ -237,7 +253,7 @@ sub spawnGenerateBindingsIfNeeded
         for my $targetIdlFile (@files) {
             my $targetParser = IDLParser->new($suppressVerboseOutput);
             my $targetDocument = $targetParser->Parse($targetIdlFile, $defines, $idlAttributes);
-            my $codeGen = CodeGenerator->new($generator, $outputDirectory, $outputDirectory, $writeDependencies, $verbose, $targetIdlFile, $idlAttributes, \%supplementalDependencies, $idlFileNamesList);
+            my $codeGen = CodeGenerator->new($generator, $outputDirectory, $outputDirectory, $writeDependencies, $verbose, $targetIdlFile, $idlAttributes, \%supplementalDependencies, $idlFileNamesList, $ignoreStandaloneConstructorAttributes);
             $codeGen->ProcessDocument($targetDocument, $defines);
         }
         exit 0;
@@ -297,7 +313,7 @@ sub readSupplementalDependencyFile
     open(my $fh, '<', $filename) or die "Cannot open $filename";
     while (<$fh>) {
         my ($idlFile, @followingIdlFiles) = split(/\s+/);
-        $supplements->{$idlFile} = [sort @followingIdlFiles];
+        $supplements->{Cwd::abs_path($idlFile) || $idlFile} = [sort @followingIdlFiles];
     }
     close($fh) or die;
 }

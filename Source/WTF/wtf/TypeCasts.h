@@ -29,6 +29,7 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
+#include <wtf/Assertions.h>
 #include <wtf/Compiler.h>
 
 namespace WTF {
@@ -108,7 +109,7 @@ inline match_constness_t<Source, Target>& downcast(Source& source LIFETIME_BOUND
 {
     static_assert(!std::is_same_v<Source, Target>, "Unnecessary cast to same type");
     static_assert(std::is_base_of_v<Source, Target>, "Should be a downcast");
-    RELEASE_ASSERT(is<Target>(source));
+    RELEASE_ASSERT_WITH_UNQUALIFIED_FUNCTION_NAME(is<Target>(source));
     SUPPRESS_MEMORY_UNSAFE_CAST return static_cast<match_constness_t<Source, Target>&>(source);
 }
 
@@ -117,7 +118,7 @@ inline match_constness_t<Source, Target>* downcast(Source* source LIFETIME_BOUND
 {
     static_assert(!std::is_same_v<Source, Target>, "Unnecessary cast to same type");
     static_assert(std::is_base_of_v<Source, Target>, "Should be a downcast");
-    RELEASE_ASSERT(!source || is<Target>(*source));
+    RELEASE_ASSERT_WITH_UNQUALIFIED_FUNCTION_NAME(!source || is<Target>(*source));
     SUPPRESS_MEMORY_UNSAFE_CAST return static_cast<match_constness_t<Source, Target>*>(source);
 }
 
@@ -175,6 +176,47 @@ inline bool isAnyOf(const std::unique_ptr<ArgType, Deleter>& source)
 {
     return isAnyOf<ExpectedTypes...>(source.get());
 }
+
+template<typename Target, typename Source, typename Deleter>
+inline match_constness_t<Source, Target>* uncheckedDowncast(std::unique_ptr<Source, Deleter>& source LIFETIME_BOUND)
+{
+    return uncheckedDowncast<Target>(source.get());
+}
+
+template<typename Target, typename Source, typename Deleter>
+inline match_constness_t<Source, Target>* uncheckedDowncast(const std::unique_ptr<Source, Deleter>& source LIFETIME_BOUND)
+{
+    return uncheckedDowncast<Target>(source.get());
+}
+
+template<typename Target, typename Source, typename Deleter>
+inline match_constness_t<Source, Target>* downcast(std::unique_ptr<Source, Deleter>& source LIFETIME_BOUND)
+{
+    return downcast<Target>(source.get());
+}
+
+template<typename Target, typename Source, typename Deleter>
+inline match_constness_t<Source, Target>* downcast(const std::unique_ptr<Source, Deleter>& source LIFETIME_BOUND)
+{
+    return downcast<Target>(source.get());
+}
+
+template<typename Target, typename Source, typename Deleter>
+inline match_constness_t<Source, Target>* dynamicDowncast(std::unique_ptr<Source, Deleter>& source LIFETIME_BOUND)
+{
+    return dynamicDowncast<Target>(source.get());
+}
+
+template<typename Target, typename Source, typename Deleter>
+inline match_constness_t<Source, Target>* dynamicDowncast(const std::unique_ptr<Source, Deleter>& source LIFETIME_BOUND)
+{
+    return dynamicDowncast<Target>(source.get());
+}
+
+// The cast result doesn't own the object, so it can't take over from an rvalue.
+template<typename Target, typename Source, typename Deleter> void uncheckedDowncast(std::unique_ptr<Source, Deleter>&&) = delete;
+template<typename Target, typename Source, typename Deleter> void downcast(std::unique_ptr<Source, Deleter>&&) = delete;
+template<typename Target, typename Source, typename Deleter> void dynamicDowncast(std::unique_ptr<Source, Deleter>&&) = delete;
 
 } // namespace WTF
 

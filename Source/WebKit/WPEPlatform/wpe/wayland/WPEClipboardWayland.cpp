@@ -34,12 +34,18 @@
 #include <glib-unix.h>
 #include <wayland-client.h>
 #include <wtf/glib/GRefPtr.h>
+#include <wtf/glib/GSpanExtras.h>
 #include <wtf/glib/GWeakPtr.h>
 #include <wtf/glib/WTFGType.h>
 
 /**
  * WPEClipboardWayland:
  *
+ * A [class@WPEPlatform.Clipboard] implementation for Wayland.
+ *
+ * [class@ClipboardWayland] is the [class@WPEPlatform.Clipboard] implementation
+ * used by [class@DisplayWayland]. It integrates with the Wayland data device
+ * protocol to share clipboard contents with other Wayland clients.
  */
 struct _WPEClipboardWaylandPrivate {
     struct wl_data_device* wlDataDevice;
@@ -220,8 +226,8 @@ static void wpeClipboardWaylandChanged(WPEClipboard* clipboard, GPtrArray* forma
         wl_data_source_add_listener(priv->source, &wlDataSourceListener, clipboard);
 
         if (formats) {
-            for (unsigned i = 0; formats->pdata[i]; ++i)
-                wl_data_source_offer(priv->source, static_cast<const char*>(formats->pdata[i]));
+            for (const char* format : span(reinterpret_cast<char**>(formats->pdata)))
+                wl_data_source_offer(priv->source, format);
         }
 
         auto* seat = wpeDisplayWaylandGetSeat(display);

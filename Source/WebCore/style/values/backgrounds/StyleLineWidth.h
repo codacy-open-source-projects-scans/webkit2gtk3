@@ -46,11 +46,13 @@ struct LineWidth {
     constexpr LineWidth(Length length) : value { length } { }
     constexpr LineWidth(CSS::ValueLiteral<CSS::LengthUnit::Px> literal) : value { literal } { }
 
-    static Length snapLengthAsBorderWidth(float, float deviceScaleFactor);
-    static Length snapLengthAsBorderWidth(Length, float deviceScaleFactor);
+    constexpr LineWidth(CSS::Keyword::Thin) : value { 1 } { }
+    constexpr LineWidth(CSS::Keyword::Medium) : value { 3 } { }
+    constexpr LineWidth(CSS::Keyword::Thick) : value { 5 } { }
+
+    constexpr auto unresolvedValue() const { return value.unresolvedValue(); }
 
     constexpr bool isZero() const { return value.isZero(); }
-    constexpr bool isPositive() const { return value.isPositive(); }
 
     constexpr explicit operator bool() const { return !isZero(); }
 
@@ -68,23 +70,23 @@ template<> struct CSSValueConversion<LineWidth> { LineWidth operator()(BuilderSt
 // MARK: - Blending
 
 template<> struct Blending<LineWidth> {
-    auto blend(const LineWidth&, const LineWidth&, const RenderStyle&, const RenderStyle&, const Interpolation::Context&) -> LineWidth;
+    auto blend(const LineWidth&, const LineWidth&, const Style::ComputedStyle&, const Style::ComputedStyle&, const Interpolation::Context&) -> LineWidth;
 };
 
-// MARK: - Evaluate
+// MARK: - Evaluation
 
-template<typename Result> struct Evaluation<LineWidth, Result> {
-    constexpr auto operator()(const LineWidth& value, ZoomNeeded zoom) -> Result
-    {
-        return Result(value.value.resolveZoom(zoom));
-    }
+template<> struct Evaluation<LineWidth, float> {
+    WEBCORE_EXPORT float LEGACY_NODELETE operator()(const LineWidth&, ZoomFactor, float deviceScaleFactor);
+};
+template<> struct Evaluation<LineWidth, LayoutUnit> {
+    WEBCORE_EXPORT LayoutUnit LEGACY_NODELETE operator()(const LineWidth&, ZoomFactor, float deviceScaleFactor);
 };
 
 template<> struct Evaluation<LineWidthBox, FloatBoxExtent> {
-    FloatBoxExtent NODELETE operator()(const LineWidthBox&, ZoomNeeded);
+    FloatBoxExtent LEGACY_NODELETE operator()(const LineWidthBox&, ZoomFactor, float deviceScaleFactor);
 };
 template<> struct Evaluation<LineWidthBox, LayoutBoxExtent> {
-    LayoutBoxExtent NODELETE operator()(const LineWidthBox&, ZoomNeeded);
+    LayoutBoxExtent LEGACY_NODELETE operator()(const LineWidthBox&, ZoomFactor, float deviceScaleFactor);
 };
 
 } // namespace Style

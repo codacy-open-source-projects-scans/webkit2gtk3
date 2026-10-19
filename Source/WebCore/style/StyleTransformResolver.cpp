@@ -30,7 +30,6 @@
 #include "FloatPoint3D.h"
 #include "FloatRect.h"
 #include "MotionPath.h"
-#include "RenderStyle.h"
 #include "StyleComputedStyle+GettersInlines.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
 #include "TransformOperationData.h"
@@ -45,9 +44,9 @@ TransformResolver::TransformResolver(TransformationMatrix& transform, const Comp
 {
 }
 
-TransformResolver::TransformResolver(TransformationMatrix& transform, const RenderStyle& style)
-    : TransformResolver { transform, style.computedStyle() }
+bool TransformResolver::hasTransformRelatedProperty(const ComputedStyle& style)
 {
+    return style.hasTransformRelatedProperty();
 }
 
 bool TransformResolver::affectedByTransformOrigin(const ComputedStyle& style)
@@ -56,12 +55,6 @@ bool TransformResolver::affectedByTransformOrigin(const ComputedStyle& style)
         || style.scale().affectedByTransformOrigin()
         || style.transform().affectedByTransformOrigin()
         || style.offsetPath().affectedByTransformOrigin();
-}
-
-bool TransformResolver::affectedByTransformOrigin(const RenderStyle& style)
-{
-    CheckedRef computedStyle = style.computedStyle();
-    return affectedByTransformOrigin(computedStyle);
 }
 
 bool TransformResolver::affectedByTransformOrigin() const
@@ -79,12 +72,6 @@ FloatPoint3D TransformResolver::computeTransformOrigin(const ComputedStyle& styl
     return originTranslate;
 }
 
-FloatPoint3D TransformResolver::computeTransformOrigin(const RenderStyle& style, const FloatRect& boundingBox)
-{
-    CheckedRef computedStyle = style.computedStyle();
-    return computeTransformOrigin(computedStyle, boundingBox);
-}
-
 FloatPoint3D TransformResolver::computeTransformOrigin(const FloatRect& boundingBox) const
 {
     return computeTransformOrigin(m_style, boundingBox);
@@ -93,12 +80,6 @@ FloatPoint3D TransformResolver::computeTransformOrigin(const FloatRect& bounding
 FloatPoint TransformResolver::computePerspectiveOrigin(const ComputedStyle& style, const FloatRect& boundingBox)
 {
     return boundingBox.location() + evaluate<FloatPoint>(style.perspectiveOrigin(), boundingBox.size(), style.usedZoomForLength());
-}
-
-FloatPoint TransformResolver::computePerspectiveOrigin(const RenderStyle& style, const FloatRect& boundingBox)
-{
-    CheckedRef computedStyle = style.computedStyle();
-    return computePerspectiveOrigin(computedStyle, boundingBox);
 }
 
 FloatPoint TransformResolver::computePerspectiveOrigin(const FloatRect& boundingBox) const
@@ -116,7 +97,7 @@ void TransformResolver::applyPerspective(const FloatPoint& originTranslate)
     m_transform.translate(originTranslate.x(), originTranslate.y());
 
     // 3. Multiply by the matrix that would be obtained from the perspective() transform function, where the length is provided by the value of the perspective property
-    m_transform.applyPerspective(m_style->perspective().usedPerspective());
+    m_transform.applyPerspective(Style::evaluate<float>(m_style->perspective(), m_style->usedZoomForLength()));
 
     // 4. Translate by the negated computed X and Y values of perspective-origin
     m_transform.translate(-originTranslate.x(), -originTranslate.y());
@@ -143,25 +124,26 @@ void TransformResolver::applyCSSTransform(const TransformOperationData& transfor
     // 2. Translate by the computed X, Y, and Z values of transform-origin.
     // (implemented in applyTransformOrigin)
     auto& boundingBox = transformData.boundingBox;
+    auto zoom = m_style->usedZoomForLength();
 
     // 3. Translate by the computed X, Y, and Z values of translate.
     if (options.contains(Option::Translate))
-        m_style->translate().apply(m_transform, boundingBox.size());
+        m_style->translate().apply(m_transform, boundingBox.size(), zoom);
 
     // 4. Rotate by the computed <angle> about the specified axis of rotate.
     if (options.contains(Option::Rotate))
-        m_style->rotate().apply(m_transform, boundingBox.size());
+        m_style->rotate().apply(m_transform, boundingBox.size(), zoom);
 
     // 5. Scale by the computed X, Y, and Z values of scale.
     if (options.contains(Option::Scale))
-        m_style->scale().apply(m_transform, boundingBox.size());
+        m_style->scale().apply(m_transform, boundingBox.size(), zoom);
 
     // 6. Translate and rotate by the transform specified by offset.
     if (options.contains(Option::Offset))
-        applyMotionPathTransform(transformData, m_style->usedZoomForLength());
+        applyMotionPathTransform(transformData, zoom);
 
     // 7. Multiply by each of the transform functions in transform from left to right.
-    m_style->transform().apply(m_transform, boundingBox.size());
+    m_style->transform().apply(m_transform, boundingBox.size(), zoom);
 
     // 8. Translate by the negated computed X, Y and Z values of transform-origin.
     // (implemented in unapplyTransformOrigin)
@@ -185,23 +167,11 @@ void TransformResolver::applyTransform(TransformationMatrix& transform, const Co
     TransformResolver { transform, style }.applyTransform(transformData, options);
 }
 
-void TransformResolver::applyTransform(TransformationMatrix& transform, const RenderStyle& style, const TransformOperationData& transformData, OptionSet<Option> options)
-{
-    CheckedRef computedStyle = style.computedStyle();
-    applyTransform(transform, computedStyle, transformData, options);
-}
-
 TransformationMatrix TransformResolver::computeTransform(const ComputedStyle& style, const TransformOperationData& transformData, OptionSet<Option> options)
 {
     TransformationMatrix transform;
     TransformResolver::applyTransform(transform, style, transformData, options);
     return transform;
-}
-
-TransformationMatrix TransformResolver::computeTransform(const RenderStyle& style, const TransformOperationData& transformData, OptionSet<Option> options)
-{
-    CheckedRef computedStyle = style.computedStyle();
-    return computeTransform(computedStyle, transformData, options);
 }
 
 void TransformResolver::applyMotionPathTransform(const TransformOperationData& transformData, ZoomFactor zoom)

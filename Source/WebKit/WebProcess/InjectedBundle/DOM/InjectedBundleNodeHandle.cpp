@@ -70,7 +70,7 @@ using namespace HTMLNames;
 
 using DOMNodeHandleCache = WeakHashMap<Node, WeakRef<InjectedBundleNodeHandle>, WeakPtrImplWithEventTargetData>;
 
-static DOMNodeHandleCache& NODELETE domNodeHandleCache()
+static DOMNodeHandleCache& LEGACY_NODELETE domNodeHandleCache()
 {
     static NeverDestroyed<DOMNodeHandleCache> cache;
     return cache;
@@ -109,7 +109,7 @@ Ref<InjectedBundleNodeHandle> InjectedBundleNodeHandle::create(Node& node)
 }
 
 InjectedBundleNodeHandle::InjectedBundleNodeHandle(Node& node)
-    : ActiveDOMObject(node.document())
+    : ActiveDOMObject(protect(node.document()))
     , m_node(&node)
 {
 }
@@ -153,7 +153,7 @@ IntRect InjectedBundleNodeHandle::absoluteBoundingRect(bool* isReplaced)
     return protect(coreNode())->pixelSnappedAbsoluteBoundingRect(isReplaced);
 }
 
-static RefPtr<WebImage> imageForRect(LocalFrameView* frameView, const IntRect& paintingRect, const std::optional<float>& bitmapWidth, SnapshotOptions options)
+static RefPtr<WebImage> imageForRect(LocalFrameView* frameView, Node* nodeToDraw, const IntRect& paintingRect, const std::optional<float>& bitmapWidth, SnapshotOptions options)
 {
     if (paintingRect.isEmpty())
         return nullptr;
@@ -174,7 +174,7 @@ static RefPtr<WebImage> imageForRect(LocalFrameView* frameView, const IntRect& p
     if (bitmapSize.isEmpty())
         return nullptr;
 
-    auto snapshot = WebImage::create(bitmapSize, snapshotOptionsToImageOptions(options), DestinationColorSpace::SRGB());
+    auto snapshot = WebImage::create(bitmapSize, snapshotOptionsToImageOptions(options), ColorSpace::SRGB());
     if (!snapshot->context())
         return nullptr;
 
@@ -197,7 +197,7 @@ static RefPtr<WebImage> imageForRect(LocalFrameView* frameView, const IntRect& p
 
     auto oldPaintBehavior = frameView->paintBehavior();
     frameView->setPaintBehavior(paintBehavior);
-    frameView->paintContentsForSnapshot(graphicsContext, paintingRect, shouldPaintSelection, LocalFrameView::DocumentCoordinates);
+    frameView->paintContentsForSnapshot(graphicsContext, paintingRect, nodeToDraw, shouldPaintSelection, LocalFrameView::DocumentCoordinates);
     frameView->setPaintBehavior(oldPaintBehavior);
 
     return snapshot;
@@ -227,14 +227,10 @@ RefPtr<WebImage> InjectedBundleNodeHandle::renderedImage(SnapshotOptions options
         paintingRect = renderer->absoluteBoundingBoxRectIgnoringTransforms();
     else {
         LayoutRect topLevelRect;
-        paintingRect = snappedIntRect(renderer->paintingRootRect(topLevelRect));
+        paintingRect = snappedIntRect(renderer->subtreePaintRootRect(topLevelRect));
     }
 
-    frameView->setNodeToDraw(m_node.get());
-    RefPtr image = imageForRect(frameView.get(), paintingRect, bitmapWidth, options);
-    frameView->setNodeToDraw(0);
-
-    return image;
+    return imageForRect(frameView.get(), protect(m_node), paintingRect, bitmapWidth, options);
 }
 
 RefPtr<InjectedBundleRangeHandle> InjectedBundleNodeHandle::visibleRange()
@@ -245,24 +241,6 @@ RefPtr<InjectedBundleRangeHandle> InjectedBundleNodeHandle::visibleRange()
     VisiblePosition start = firstPositionInNode(node);
     VisiblePosition end = lastPositionInNode(node);
     return createHandle(makeSimpleRange(start, end));
-}
-
-void InjectedBundleNodeHandle::setHTMLInputElementValueForUser(const String& value)
-{
-    RefPtr input = dynamicDowncast<HTMLInputElement>(m_node);
-    if (!input)
-        return;
-
-    input->setValueForUser(value);
-}
-
-void InjectedBundleNodeHandle::setHTMLInputElementSpellcheckEnabled(bool enabled)
-{
-    RefPtr input = dynamicDowncast<HTMLInputElement>(m_node);
-    if (!input)
-        return;
-
-    input->setSpellcheckDisabledExceptTextReplacement(!enabled);
 }
 
 bool InjectedBundleNodeHandle::isHTMLInputElementAutoFilled() const
@@ -362,15 +340,6 @@ bool InjectedBundleNodeHandle::isAutoFillAvailable() const
         return false;
 
     return input->autofillAvailable();
-}
-
-void InjectedBundleNodeHandle::setAutoFillAvailable(bool autoFillAvailable)
-{
-    RefPtr input = dynamicDowncast<HTMLInputElement>(m_node);
-    if (!input)
-        return;
-
-    input->setAutofillAvailable(autoFillAvailable);
 }
 
 IntRect InjectedBundleNodeHandle::htmlInputElementAutoFillButtonBounds()

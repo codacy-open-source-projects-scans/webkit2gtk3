@@ -47,6 +47,7 @@
 #include "CrossOriginOpenerPolicy.h"
 #include "Crypto.h"
 #include "CustomElementRegistry.h"
+#include "DOMRect.h"
 #include "DOMSelection.h"
 #include "DOMStringList.h"
 #include "DOMTimer.h"
@@ -73,7 +74,6 @@
 #include "EventLoop.h"
 #include "EventNames.h"
 #include "EventPath.h"
-#include "EventTargetInlines.h"
 #include "FloatRect.h"
 #include "FocusController.h"
 #include "FrameConsoleClient.h"
@@ -112,6 +112,7 @@
 #include "Navigation.h"
 #include "NavigationScheduler.h"
 #include "Navigator.h"
+#include "NodeInlinesLight.h"
 #include "OriginAccessPatterns.h"
 #include "Page.h"
 #include "PageTransitionEvent.h"
@@ -142,12 +143,13 @@
 #include "StorageArea.h"
 #include "StorageNamespace.h"
 #include "StorageNamespaceProvider.h"
+#include "StyleDocumentScope.h"
 #include "StyleMedia.h"
 #include "StyleResolver.h"
-#include "StyleScope.h"
 #include "SuddenTermination.h"
 #include "UserContentProvider.h"
 #include "UserGestureIndicator.h"
+#include "Viewport.h"
 #include "VisualViewport.h"
 #include "WebCoreOpaqueRoot.h"
 #include "WebKitPoint.h"
@@ -199,7 +201,7 @@ using namespace Inspector;
 
 static constexpr Seconds defaultTransientActivationDuration { 5_s };
 
-static WeakHashSet<LocalDOMWindow, WeakPtrImplWithEventTargetData>& NODELETE windowsInterestedInStorageEvents()
+static WeakHashSet<LocalDOMWindow, WeakPtrImplWithEventTargetData>& LEGACY_NODELETE windowsInterestedInStorageEvents()
 {
     static MainThreadNeverDestroyed<WeakHashSet<LocalDOMWindow, WeakPtrImplWithEventTargetData>> set;
     return set;
@@ -211,7 +213,7 @@ void LocalDOMWindow::forEachWindowInterestedInStorageEvents(NOESCAPE const Funct
         apply(window);
 }
 
-static std::optional<Seconds>& NODELETE transientActivationDurationOverrideForTesting()
+static std::optional<Seconds>& LEGACY_NODELETE transientActivationDurationOverrideForTesting()
 {
     static NeverDestroyed<std::optional<Seconds>> overrideForTesting;
     return overrideForTesting;
@@ -228,13 +230,13 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(LocalDOMWindow);
 
 typedef HashCountedSet<LocalDOMWindow*> LocalDOMWindowSet;
 
-static LocalDOMWindowSet& NODELETE windowsWithUnloadEventListeners()
+static LocalDOMWindowSet& LEGACY_NODELETE windowsWithUnloadEventListeners()
 {
     static NeverDestroyed<LocalDOMWindowSet> windowsWithUnloadEventListeners;
     return windowsWithUnloadEventListeners;
 }
 
-static LocalDOMWindowSet& NODELETE windowsWithBeforeUnloadEventListeners()
+static LocalDOMWindowSet& LEGACY_NODELETE windowsWithBeforeUnloadEventListeners()
 {
     static NeverDestroyed<LocalDOMWindowSet> windowsWithBeforeUnloadEventListeners;
     return windowsWithBeforeUnloadEventListeners;
@@ -276,7 +278,7 @@ static void removeAllBeforeUnloadEventListeners(LocalDOMWindow* domWindow)
         domWindow->enableSuddenTermination();
 }
 
-static bool NODELETE allowsBeforeUnloadListeners(LocalDOMWindow* window)
+static bool LEGACY_NODELETE allowsBeforeUnloadListeners(LocalDOMWindow* window)
 {
     ASSERT_ARG(window, window);
     auto* frame = window->frame();
@@ -322,7 +324,8 @@ bool LocalDOMWindow::dispatchAllPendingBeforeUnloadEvents()
 
 unsigned LocalDOMWindow::pendingUnloadEventListeners() const
 {
-    return windowsWithUnloadEventListeners().count(const_cast<LocalDOMWindow*>(this));
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return windowsWithUnloadEventListeners().count(const_cast<LocalDOMWindow*>(this));
 }
 
 void LocalDOMWindow::dispatchAllPendingUnloadEvents()
@@ -364,7 +367,7 @@ void LocalDOMWindow::dispatchAllPendingUnloadEvents()
 // 5) Translate the window rect coordinates to be within the coordinate space of the screen.
 FloatRect LocalDOMWindow::adjustWindowRect(Page& page, const FloatRect& pendingChanges)
 {
-    FloatRect screen = screenAvailableRect(page.mainFrame().virtualView());
+    FloatRect screen = screenAvailableRect(protect(protect(page.mainFrame())->virtualView()));
     FloatRect window = page.chrome().windowRect();
 
     // Make sure we're in a valid state before adjusting dimensions.
@@ -529,7 +532,7 @@ LocalDOMWindow::~LocalDOMWindow()
 RefPtr<MediaQueryList> LocalDOMWindow::matchMedia(const String& media)
 {
     if (RefPtr document = this->document())
-        return document->mediaQueryMatcher().matchMedia(media);
+        return protect(document->mediaQueryMatcher())->matchMedia(media);
     return nullptr;
 }
 
@@ -587,6 +590,16 @@ void LocalDOMWindow::willDetachDocumentFromFrame()
     InspectorInstrumentation::frameWindowDiscarded(*protect(frame()), this);
 }
 
+JSDOMGlobalObject* LocalDOMWindow::cachedMainWorldGlobalObject() const
+{
+    return m_cachedMainWorldGlobalObject.get();
+}
+
+void LocalDOMWindow::setCachedMainWorldGlobalObject(JSDOMGlobalObject* globalObject)
+{
+    m_cachedMainWorldGlobalObject = JSC::Weak<JSDOMGlobalObject> { globalObject };
+}
+
 #if ENABLE(GAMEPAD)
 
 void LocalDOMWindow::incrementGamepadEventListenerCount()
@@ -633,6 +646,9 @@ void LocalDOMWindow::suspendForBackForwardCache()
     SetForScope isSuspendingObservers(m_isSuspendingObservers, true);
     RELEASE_ASSERT(frame());
 
+    if (RefPtr navigation = m_navigation)
+        navigation->discardOngoingNavigationForBackForwardCache();
+
     m_observers.forEach([](auto& observer) {
         Ref { observer }->suspendForBackForwardCache();
     });
@@ -653,13 +669,14 @@ void LocalDOMWindow::resumeFromBackForwardCache()
 CustomElementRegistry& LocalDOMWindow::ensureCustomElementRegistry()
 {
     if (!m_customElementRegistry) {
-        m_customElementRegistry = CustomElementRegistry::create(*scriptExecutionContext(), *this);
+        m_customElementRegistry = CustomElementRegistry::create(protect(*scriptExecutionContext()), *this);
         for (Ref shadowRoot : document()->inDocumentShadowRoots()) {
             if (shadowRoot->mode() == ShadowRootMode::UserAgent || shadowRoot->hasScopedCustomElementRegistry())
                 continue;
-            const_cast<ShadowRoot&>(shadowRoot.get()).setCustomElementRegistry(*m_customElementRegistry);
+            // FIXME: Remove suppression once rdar://189998365 is fixed.
+            SUPPRESS_MEMORY_UNSAFE_CAST const_cast<ShadowRoot&>(shadowRoot.get()).setCustomElementRegistry(*m_customElementRegistry);
         }
-        document()->setCustomElementRegistry(*m_customElementRegistry);
+        protect(document())->setCustomElementRegistry(*m_customElementRegistry);
     }
     ASSERT(!m_customElementRegistry->isScoped());
     ASSERT(m_customElementRegistry->scriptExecutionContext() == document());
@@ -680,7 +697,7 @@ static ExceptionOr<SelectorQuery&> selectorQueryInFrame(LocalFrame* frame, const
 
 ExceptionOr<Ref<NodeList>> LocalDOMWindow::collectMatchingElementsInFlatTree(Node& scope, const String& selectors)
 {
-    auto queryOrException = selectorQueryInFrame(frame(), selectors);
+    auto queryOrException = selectorQueryInFrame(protect(frame()), selectors);
     if (queryOrException.hasException())
         return queryOrException.releaseException();
 
@@ -701,7 +718,7 @@ ExceptionOr<Ref<NodeList>> LocalDOMWindow::collectMatchingElementsInFlatTree(Nod
 
 ExceptionOr<RefPtr<Element>> LocalDOMWindow::matchingElementInFlatTree(Node& scope, const String& selectors)
 {
-    auto queryOrException = selectorQueryInFrame(frame(), selectors);
+    auto queryOrException = selectorQueryInFrame(protect(frame()), selectors);
     if (queryOrException.hasException())
         return queryOrException.releaseException();
 
@@ -719,10 +736,28 @@ ExceptionOr<RefPtr<Element>> LocalDOMWindow::matchingElementInFlatTree(Node& sco
     return RefPtr<Element> { nullptr };
 }
 
+ExceptionOr<Ref<DOMRect>> LocalDOMWindow::convertRectToMainFrameCoordinates(const DOMRectInit& rect)
+{
+    RefPtr document = this->document();
+    if (!document)
+        return Exception { ExceptionCode::InvalidStateError };
+
+    RefPtr view = document->view();
+    if (!view)
+        return Exception { ExceptionCode::InvalidStateError };
+
+    // Unlike other callers of contentsToMainFrameView, this rect comes from JS
+    // and it is CSS pixels that have not had zoom taken into account.
+    FloatRect contentsRect(rect.x, rect.y, rect.width, rect.height);
+    Ref frame = view->frame();
+    contentsRect.scale(frame->pageZoomFactor() * frame->frameScaleFactor());
+    return DOMRect::create(view->contentsToMainFrameView(enclosingIntRect(contentsRect)));
+}
+
 #if ENABLE(ORIENTATION_EVENTS)
 IntDegrees LocalDOMWindow::orientation() const
 {
-    auto* frame = this->frame();
+    RefPtr frame = this->frame();
     if (!frame)
         return 0;
     return frame->orientation();
@@ -743,7 +778,7 @@ History& LocalDOMWindow::history()
     return *m_history;
 }
 
-Navigation& LocalDOMWindow::navigation()
+SUPPRESS_NODELETE Navigation& LocalDOMWindow::navigation()
 {
     if (!m_navigation)
         m_navigation = Navigation::create(*this);
@@ -822,7 +857,7 @@ Performance& LocalDOMWindow::performance() const
 
 ReducedResolutionSeconds LocalDOMWindow::nowTimestamp() const
 {
-    return performance().nowInReducedResolutionSeconds();
+    return protect(performance())->nowInReducedResolutionSeconds();
 }
 
 void LocalDOMWindow::freezeNowTimestamp()
@@ -840,6 +875,13 @@ ReducedResolutionSeconds LocalDOMWindow::frozenNowTimestamp() const
     return m_frozenNowTimestamp.value_or(nowTimestamp());
 }
 
+Viewport& LocalDOMWindow::viewport()
+{
+    if (!m_viewport)
+        m_viewport = Viewport::create(*this);
+    return *m_viewport;
+}
+
 VisualViewport& LocalDOMWindow::visualViewport()
 {
     if (!m_visualViewport)
@@ -851,10 +893,10 @@ VisualViewport& LocalDOMWindow::visualViewport()
 
 bool LocalDOMWindow::shouldHaveWebKitNamespaceForWorld(DOMWrapperWorld& world, JSC::JSGlobalObject* globalObject)
 {
-    if (world.allowNodeSerialization())
+    if (world.allowNodeSnapshotCreation())
         return true;
 
-    if (uncheckedDowncast<JSDOMGlobalObject>(globalObject)->allowsJSHandleCreation())
+    if (downcast<JSDOMGlobalObject>(globalObject)->allowsJSHandleCreation())
         return true;
 
     RefPtr frame = this->frame();
@@ -969,7 +1011,7 @@ void LocalDOMWindow::processPostMessage(JSC::JSGlobalObject& lexicalGlobalObject
     if (InspectorInstrumentation::consoleAgentEnabled(document.get()))
         stackTrace = createScriptCallStack(JSExecState::currentState());
 
-    auto postMessageIdentifier = InspectorInstrumentation::willPostMessage(*frame());
+    auto postMessageIdentifier = InspectorInstrumentation::willPostMessage(protect(*frame()));
 
     auto userGestureToForward = UserGestureIndicator::currentUserGesture();
 
@@ -983,7 +1025,7 @@ void LocalDOMWindow::processPostMessage(JSC::JSGlobalObject& lexicalGlobalObject
             // Check target origin now since the target document may have changed since the timer was scheduled.
             if (!targetOrigin->isSameSchemeHostPort(protect(document->securityOrigin()))) {
                 if (CheckedPtr frameConsole = console()) {
-                    auto message = makeString("Unable to post message to "_s, targetOrigin->toString(), ". Recipient has origin "_s, document->securityOrigin().toString(), ".\n"_s);
+                    auto message = makeString("Unable to post message to "_s, targetOrigin->toString(), ". Recipient has origin "_s, protect(document->securityOrigin())->toString(), ".\n"_s);
                     if (stackTrace)
                         frameConsole->addMessage(MessageSource::Security, MessageLevel::Error, message, *stackTrace);
                     else
@@ -1001,6 +1043,9 @@ void LocalDOMWindow::processPostMessage(JSC::JSGlobalObject& lexicalGlobalObject
 
         auto& vm = globalObject->vm();
         auto scope = DECLARE_TOP_EXCEPTION_SCOPE(vm);
+
+        if (userGestureToForward && userGestureToForward->hasExpired(UserGestureToken::maximumIntervalForUserGestureForwarding))
+            userGestureToForward = nullptr;
 
         UserGestureIndicator userGestureIndicator(userGestureToForward);
         InspectorInstrumentation::willDispatchPostMessage(frame, postMessageIdentifier);
@@ -1035,7 +1080,7 @@ ExceptionOr<void> LocalDOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobal
         return targetSecurityOrigin.releaseException();
 
     Vector<Ref<MessagePort>> ports;
-    auto messageData = SerializedScriptValue::create(lexicalGlobalObject, messageValue, WTF::move(options.transfer), ports, SerializationForStorage::No, SerializationContext::WindowPostMessage);
+    auto messageData = SerializedScriptValue::create(lexicalGlobalObject, messageValue, WTF::move(options.transfer), ports, SerializationForStorage::No);
     if (messageData.hasException())
         return messageData.releaseException();
 
@@ -1054,7 +1099,7 @@ ExceptionOr<void> LocalDOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobal
     return { };
 }
 
-void LocalDOMWindow::postMessageFromRemoteFrame(JSC::JSGlobalObject& lexicalGlobalObject, RefPtr<WindowProxy>&& source, const WebCore::SecurityOriginData& sourceOrigin, std::optional<WebCore::SecurityOriginData>&& targetOriginData, const WebCore::MessageWithMessagePorts& message)
+void LocalDOMWindow::postMessageFromRemoteFrame(JSC::JSGlobalObject& lexicalGlobalObject, RefPtr<WindowProxy>&& source, const WebCore::SecurityOriginData& sourceOrigin, std::optional<WebCore::SecurityOriginData>&& targetOriginData, const WebCore::MessageWithMessagePorts& message, std::optional<UserGestureTokenData>&& userGestureToForward)
 {
     if (!frame())
         return;
@@ -1062,6 +1107,11 @@ void LocalDOMWindow::postMessageFromRemoteFrame(JSC::JSGlobalObject& lexicalGlob
     RefPtr<SecurityOrigin> targetOrigin;
     if (targetOriginData)
         targetOrigin = targetOriginData->securityOrigin();
+
+    if (userGestureToForward && userGestureToForward->hasExpired(UserGestureToken::maximumIntervalForUserGestureForwarding))
+        userGestureToForward = std::nullopt;
+
+    auto userGestureIndicator = userGestureToForward ? UserGestureIndicator(*userGestureToForward, protect(frame()->document())) : UserGestureIndicator(std::nullopt);
 
     processPostMessage(lexicalGlobalObject, sourceOrigin.securityOrigin(), message, WTF::move(source), WTF::move(targetOrigin));
 }
@@ -1187,7 +1237,7 @@ void LocalDOMWindow::stop()
     SetForScope isStopping { m_isStopping, true };
     // We must check whether the load is complete asynchronously, because we might still be parsing
     // the document until the callstack unwinds.
-    frame->loader().stopForUserCancel(true);
+    frame->loader().stopForUserCancel(DeferCheckLoadComplete::Yes);
 }
 
 void LocalDOMWindow::alert(const String& message)
@@ -1297,7 +1347,7 @@ bool LocalDOMWindow::find(const String& string, bool caseSensitive, bool backwar
         options.add(FindOption::CaseInsensitive);
     if (wrap)
         options.add(FindOption::WrapAround);
-    return frame()->editor().findString(string, options).has_value();
+    return protect(protect(frame())->editor())->findString(string, options).has_value();
 }
 
 bool LocalDOMWindow::offscreenBuffering() const
@@ -1524,7 +1574,7 @@ void LocalDOMWindow::disownOpener()
 String LocalDOMWindow::origin() const
 {
     RefPtr document = this->document();
-    return document ? document->securityOrigin().toString() : emptyString();
+    return document ? protect(document->securityOrigin())->toString() : emptyString();
 }
 
 SecurityOrigin* LocalDOMWindow::securityOrigin() const
@@ -1549,23 +1599,37 @@ void LocalDOMWindow::overrideTransientActivationDurationForTesting(std::optional
 bool LocalDOMWindow::hasTransientActivation() const
 {
     auto now = MonotonicTime::now();
-    return now >= m_lastActivationTimestamp && now < (m_lastActivationTimestamp + transientActivationDuration());
+    auto lastActivationTimestamp = this->lastActivationTimestamp();
+    return now >= lastActivationTimestamp && now < (lastActivationTimestamp + transientActivationDuration());
 }
 
-// When the current high resolution time given W is greater than or equal to the last activation timestamp in W,
-// W is said to have sticky activation. (https://html.spec.whatwg.org/multipage/interaction.html#sticky-activation)
+MonotonicTime LocalDOMWindow::lastActivationTimestamp() const
+{
+    auto timestamp = m_lastActivationTimestamp;
+    for (auto& forcedActivation : m_forcedActivations) {
+        // Per spec, positive infinity means that the window has never been activated.
+        if (timestamp == MonotonicTime::infinity() || forcedActivation.timestamp > timestamp)
+            timestamp = forcedActivation.timestamp;
+    }
+    return timestamp;
+}
+
+// https://html.spec.whatwg.org/multipage/interaction.html#sticky-activation
+// The published spec still derives sticky activation from the last activation
+// timestamp; we track it as an explicit boolean per the proposed
+// whatwg/html#11454 (https://github.com/whatwg/html/pull/11454).
 bool LocalDOMWindow::hasStickyActivation() const
 {
-    auto now = MonotonicTime::now();
-    return now >= m_lastActivationTimestamp;
+    return m_hasStickyActivation;
 }
 
-// When the last history-action activation timestamp of W is not equal to the last activation timestamp of W,
-// then W is said to have history-action activation.
-// (https://html.spec.whatwg.org/multipage/interaction.html#history-action-activation)
+// https://html.spec.whatwg.org/multipage/interaction.html#history-action-activation
+// Tracked as an explicit boolean per the proposed whatwg/html#11454
+// (https://github.com/whatwg/html/pull/11454); the published spec still derives
+// it by comparing the history-action and last activation timestamps.
 bool LocalDOMWindow::hasHistoryActionActivation() const
 {
-    return m_lastHistoryActionActivationTimestamp != m_lastActivationTimestamp;
+    return m_hasHistoryActionActivation;
 }
 
 // https://html.spec.whatwg.org/multipage/interaction.html#consume-user-activation
@@ -1574,21 +1638,54 @@ bool LocalDOMWindow::consumeTransientActivation()
     if (!hasTransientActivation())
         return false;
 
-    for (auto* frame = this->frame() ? &this->frame()->tree().top() : nullptr; frame; frame = frame->tree().traverseNext()) {
-        auto* localFrame = dynamicDowncast<LocalFrame>(frame);
+    RefPtr thisFrame = this->frame();
+    for (RefPtr frame = thisFrame ? &thisFrame->tree().top() : nullptr; frame; frame = frame->tree().traverseNext()) {
+        RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
         if (!localFrame)
             continue;
-        if (auto* window = localFrame->window())
+        if (RefPtr window = localFrame->window())
             window->consumeLastActivationIfNecessary();
     }
+
+    if (RefPtr page = thisFrame ? thisFrame->page() : nullptr; page && page->mainFrame().tree().containsRemoteFrame())
+        thisFrame->loader().client().didConsumeUserActivation();
 
     return true;
 }
 
+void LocalDOMWindow::updateActivation(MonotonicTime activationTime, std::optional<UserGestureTokenIdentifier> forcedActivationToken)
+{
+    // Clean up forced activations that have expired. This can prevent buildup if another process
+    // sent us an UpdateUserActivationState message with a forced user activation without sending us
+    // a corresponding DidRevokeForcedUserActivation message (e.g. due to unexpected process death).
+    if (!m_forcedActivations.isEmpty()) [[unlikely]] {
+        auto now = MonotonicTime::now();
+        m_forcedActivations.removeAllMatching([&](auto& forcedActivation) {
+            return now >= forcedActivation.timestamp + transientActivationDuration();
+        });
+    }
+
+    if (forcedActivationToken)
+        m_forcedActivations.append({ *forcedActivationToken, activationTime });
+    else
+        m_lastActivationTimestamp = activationTime;
+
+    m_hasStickyActivation = true;
+    m_hasHistoryActionActivation = true;
+}
+
 void LocalDOMWindow::consumeLastActivationIfNecessary()
 {
+    m_forcedActivations.clear();
     if (!m_lastActivationTimestamp.isInfinity())
         m_lastActivationTimestamp = -MonotonicTime::infinity();
+}
+
+void LocalDOMWindow::revokeForcedActivation(UserGestureTokenIdentifier grantingToken)
+{
+    m_forcedActivations.removeFirstMatching([&](auto& forcedActivation) {
+        return forcedActivation.grantingToken == grantingToken;
+    });
 }
 
 // https://html.spec.whatwg.org/multipage/interaction.html#consume-history-action-user-activation
@@ -1602,7 +1699,7 @@ bool LocalDOMWindow::consumeHistoryActionUserActivation()
         if (!localFrame)
             continue;
         if (auto* window = localFrame->window())
-            window->m_lastHistoryActionActivationTimestamp = window->m_lastActivationTimestamp;
+            window->consumeHistoryActionActivation();
     }
 
     return true;
@@ -1621,22 +1718,29 @@ std::optional<LocalDOMWindow::ClickEventData> LocalDOMWindow::consumeLastUserCli
     return std::exchange(m_lastUserClickEvent, std::nullopt);
 }
 
-// https://html.spec.whatwg.org/multipage/interaction.html#activation-notification
-void LocalDOMWindow::notifyActivated(MonotonicTime activationTime)
+static void updateActivationTimestampAndNotify(LocalDOMWindow& window, UserGestureToken& token, bool closeWatcherEnabled)
 {
-    setLastActivationTimestamp(activationTime);
+    if (token.removesTransientActivation()) {
+        window.updateActivation(token.startTime(), token.identifier());
+        token.didGrantForcedActivation(window);
+    } else
+        window.updateActivation(token.startTime());
+    if (closeWatcherEnabled)
+        window.closeWatcherManager().notifyAboutUserActivation();
+}
+
+// https://html.spec.whatwg.org/multipage/interaction.html#activation-notification
+void LocalDOMWindow::notifyActivated(UserGestureToken& token)
+{
     RefPtr frame = this->frame();
+    bool closeWatcherEnabled = frame && frame->settings().closeWatcherEnabled();
+    updateActivationTimestampAndNotify(*this, token, closeWatcherEnabled);
     if (!frame)
         return;
-    if (frame->settings().closeWatcherEnabled())
-        closeWatcherManager().notifyAboutUserActivation();
 
-    for (auto* ancestor = frame->tree().parent(); ancestor; ancestor = ancestor->tree().parent()) {
-        auto* localAncestor = dynamicDowncast<LocalFrame>(ancestor);
-        if (!localAncestor)
-            continue;
-        if (auto* window = localAncestor->window())
-            window->setLastActivationTimestamp(activationTime);
+    for (Ref localAncestor : ancestorFrames<LocalFrame>(*frame)) {
+        if (RefPtr window = localAncestor->window())
+            updateActivationTimestampAndNotify(*window, token, closeWatcherEnabled);
     }
 
     RefPtr securityOrigin = this->securityOrigin();
@@ -1644,7 +1748,7 @@ void LocalDOMWindow::notifyActivated(MonotonicTime activationTime)
         return;
 
     RefPtr<Frame> descendant = frame;
-    while ((descendant = descendant->tree().traverseNext(frame))) {
+    while ((descendant = descendant->tree().traverseNext(frame.get()))) {
         RefPtr localDescendant = dynamicDowncast<LocalFrame>(descendant.get());
         if (!localDescendant)
             continue;
@@ -1656,7 +1760,15 @@ void LocalDOMWindow::notifyActivated(MonotonicTime activationTime)
         if (!descendantSecurityOrigin || !descendantSecurityOrigin->isSameOriginAs(*securityOrigin))
             continue;
 
-        descendantWindow->setLastActivationTimestamp(activationTime);
+        updateActivationTimestampAndNotify(*descendantWindow, token, closeWatcherEnabled);
+    }
+
+    if (RefPtr page = frame->page(); page && page->mainFrame().tree().containsRemoteFrame()) {
+        if (token.removesTransientActivation()) {
+            frame->loader().client().didNotifyUserActivation(token.startTime(), token.identifier());
+            token.didGrantForcedActivationInOtherProcesses(*frame);
+        } else
+            frame->loader().client().didNotifyUserActivation(token.startTime(), std::nullopt);
     }
 }
 
@@ -1697,7 +1809,7 @@ RefPtr<CSSRuleList> LocalDOMWindow::getMatchedCSSRules(Element* element, const S
     if (!authorOnly)
         rulesToInclude |= Style::Resolver::UAAndUserCSSRules;
 
-    auto matchedRules = document->styleScope().resolver().pseudoStyleRulesForElement(element, pseudoElementIdentifier, rulesToInclude);
+    auto matchedRules = protect(protect(document->styleScope())->resolver())->pseudoStyleRulesForElement(element, pseudoElementIdentifier, rulesToInclude);
     if (matchedRules.isEmpty())
         return nullptr;
 
@@ -1941,13 +2053,13 @@ void LocalDOMWindow::clearInterval(int timeoutId)
         DOMTimer::removeById(*context, timeoutId);
 }
 
-int LocalDOMWindow::requestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callback)
+unsigned LocalDOMWindow::requestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callback)
 {
     RefPtr document = this->document();
     return document ? document->requestAnimationFrame(WTF::move(callback)) : 0;
 }
 
-int LocalDOMWindow::webkitRequestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callback)
+unsigned LocalDOMWindow::webkitRequestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callback)
 {
     static bool firstTime = true;
     if (firstTime && document()) {
@@ -1957,19 +2069,19 @@ int LocalDOMWindow::webkitRequestAnimationFrame(Ref<RequestAnimationFrameCallbac
     return requestAnimationFrame(WTF::move(callback));
 }
 
-void LocalDOMWindow::cancelAnimationFrame(int id)
+void LocalDOMWindow::cancelAnimationFrame(unsigned id)
 {
     if (RefPtr document = this->document())
         document->cancelAnimationFrame(id);
 }
 
-int LocalDOMWindow::requestIdleCallback(Ref<IdleRequestCallback>&& callback, const IdleRequestOptions& options)
+unsigned LocalDOMWindow::requestIdleCallback(Ref<IdleRequestCallback>&& callback, const IdleRequestOptions& options)
 {
     RefPtr document = this->document();
     return document ? document->requestIdleCallback(WTF::move(callback), Seconds::fromMilliseconds(options.timeout)) : 0;
 }
 
-void LocalDOMWindow::cancelIdleCallback(int id)
+void LocalDOMWindow::cancelIdleCallback(unsigned id)
 {
     if (RefPtr document = this->document())
         document->cancelIdleCallback(id);
@@ -2003,8 +2115,15 @@ bool LocalDOMWindow::isSecureContext() const
 
 bool LocalDOMWindow::crossOriginIsolated() const
 {
-    ASSERT(ScriptExecutionContext::crossOriginMode() == CrossOriginMode::Shared || !document() || !document()->mainFrameDocument() || document()->mainFrameDocument()->crossOriginOpenerPolicy().value == CrossOriginOpenerPolicyValue::SameOriginPlusCOEP);
-    return ScriptExecutionContext::crossOriginMode() == CrossOriginMode::Isolated;
+    RefPtr document = this->document();
+    return document && document->crossOriginIsolated();
+}
+
+// https://html.spec.whatwg.org/multipage/origin.html#dom-originagentcluster
+bool LocalDOMWindow::originAgentCluster() const
+{
+    RefPtr document = this->document();
+    return document && document->originAgentCluster();
 }
 
 static void didAddStorageEventListener(LocalDOMWindow& window)
@@ -2032,7 +2151,7 @@ bool LocalDOMWindow::isSameSecurityOriginAsMainFrame() const
 
     RefPtr mainFrameDocument = localFrame->document();
 
-    if (mainFrameDocument && protect(document()->securityOrigin())->isSameOriginDomain(protect(mainFrameDocument->securityOrigin())))
+    if (mainFrameDocument && protect(protect(document())->securityOrigin())->isSameOriginDomain(protect(mainFrameDocument->securityOrigin())))
         return true;
 
     return false;
@@ -2047,6 +2166,7 @@ bool LocalDOMWindow::addEventListener(const AtomString& eventType, Ref<EventList
     auto& eventNames = WebCore::eventNames();
     auto typeInfo = eventNames.typeInfoForEvent(eventType);
     if (document) {
+        const auto useTouchEventRegions = document->shouldUseTouchEventRegions();
         document->didAddEventListenersOfType(eventType, options.capture ? Document::IsCapture::Yes : Document::IsCapture::No);
         if (typeInfo.isInCategory(EventCategory::Wheel)) {
             document->didAddWheelEventHandler(*document);
@@ -2054,16 +2174,12 @@ bool LocalDOMWindow::addEventListener(const AtomString& eventType, Ref<EventList
         } else if (isTouchRelatedEventType(typeInfo, *document)) {
             document->didAddTouchEventHandler(*document);
 #if ENABLE(TOUCH_EVENT_REGIONS)
-            document->invalidateEventListenerRegions();
+            if (useTouchEventRegions)
+                document->invalidateEventListenerRegions();
 #endif
-        } else if (typeInfo.isInCategory(EventCategory::Gesture)) {
+        } else if (typeInfo.isInCategory(EventCategory::Gesture) && useTouchEventRegions) {
 #if ENABLE(TOUCH_EVENT_REGIONS)
             document->didAddTouchEventHandler(*document);
-            document->invalidateEventListenerRegions();
-#endif
-        } else if (typeInfo.type() == EventType::dblclick) {
-#if ENABLE(DBLCLICK_EVENT_REGIONS)
-            document->didAddDoubleClickEventHandler(*document);
             document->invalidateEventListenerRegions();
 #endif
         }
@@ -2180,12 +2296,12 @@ bool LocalDOMWindow::isAllowedToUseDeviceOrientation(String& message) const
 bool LocalDOMWindow::hasPermissionToReceiveDeviceMotionOrOrientationEvents(String& message) const
 {
     if (frame()->settings().deviceOrientationPermissionAPIEnabled()) {
-        if (!page()) {
+        RefPtr page = this->page();
+        if (!page) {
             message = "No browsing context"_s;
             return false;
         }
-        Ref document = *this->document();
-        auto accessState = document->deviceOrientationAndMotionAccessController().accessState(document);
+        auto accessState = protect(page->deviceOrientationAndMotionAccessController())->accessState(protect(*this->document()));
         switch (accessState) {
         case DeviceOrientationOrMotionPermissionState::Denied:
             message = "Permission to use the API was denied"_s;
@@ -2265,7 +2381,7 @@ void LocalDOMWindow::failedToRegisterDeviceMotionEventListener()
         return;
 
     // FIXME: This is a quirk for chase.com on iPad (<rdar://problem/48423023>).
-    if (RegistrableDomain::uncheckedCreateFromRegistrableDomainString("chase.com"_s).matches(document()->url())) {
+    if (RegistrableDomain::uncheckedCreateFromRegistrableDomainString("chase.com"_s).matches(protect(document())->url())) {
         // Fire a fake DeviceMotionEvent with acceleration data to unblock the site's login flow.
         protect(document())->postTask([](auto& context) {
             if (RefPtr window = downcast<Document>(context).window()) {
@@ -2322,6 +2438,7 @@ bool LocalDOMWindow::removeEventListener(const AtomString& eventType, EventListe
     auto& eventNames = WebCore::eventNames();
     auto typeInfo = eventNames.typeInfoForEvent(eventType);
     if (document) {
+        const auto useTouchEventRegions = document->shouldUseTouchEventRegions();
         document->didRemoveEventListenersOfType(eventType, options.capture ? Document::IsCapture::Yes : Document::IsCapture::No);
         if (typeInfo.isInCategory(EventCategory::Wheel)) {
             document->didRemoveWheelEventHandler(*document);
@@ -2329,16 +2446,12 @@ bool LocalDOMWindow::removeEventListener(const AtomString& eventType, EventListe
         } else if (isTouchRelatedEventType(typeInfo, *document)) {
             document->didRemoveTouchEventHandler(*document);
 #if ENABLE(TOUCH_EVENT_REGIONS)
-            document->invalidateEventListenerRegions();
+            if (useTouchEventRegions)
+                document->invalidateEventListenerRegions();
 #endif
-        } else if (typeInfo.isInCategory(EventCategory::Gesture)) {
+        } else if (typeInfo.isInCategory(EventCategory::Gesture) && useTouchEventRegions) {
 #if ENABLE(TOUCH_EVENT_REGIONS)
             document->didRemoveTouchEventHandler(*document);
-            document->invalidateEventListenerRegions();
-#endif
-        } else if (typeInfo.type() == EventType::dblclick) {
-#if ENABLE(DBLCLICK_EVENT_REGIONS)
-            document->didRemoveDoubleClickEventHandler(*document);
             document->invalidateEventListenerRegions();
 #endif
         }
@@ -2413,18 +2526,24 @@ void LocalDOMWindow::dispatchLoadEvent()
         WTFEmitSignpost(document.get(), NavigationAndPaintTiming, "loadEventBegin");
     }
 
+    // When the owner element lives in another process its load event is dispatched asynchronously,
+    // so notify it before running this frame's own load event handlers. Otherwise a message posted
+    // to the parent frame by one of those handlers could be delivered before the owner element's
+    // load event, which is never the case when both frames are in the same process.
+    bool notifiedRemoteParent = frame && frame->dispatchLoadEventToRemoteParent();
+
     dispatchEvent(Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No), document.get());
 
     if (shouldMarkLoadEventTimes) {
         auto now = MonotonicTime::now();
         protectedLoader->timing().setLoadEventEnd(now);
-        performance().navigationFinished(now);
+        protect(performance())->navigationFinished(now);
         WTFEmitSignpost(document.get(), NavigationAndPaintTiming, "loadEventEnd");
         WTFEndSignpost(document.get(), NavigationAndPaintTiming);
     }
 
     // Send a separate load event to the element that owns this frame.
-    if (RefPtr frame = this->frame())
+    if (RefPtr frame = this->frame(); frame && !notifiedRemoteParent)
         frame->dispatchLoadEventToParent();
 
     InspectorInstrumentation::loadEventFired(protect(this->frame()).get());
@@ -2673,8 +2792,8 @@ void LocalDOMWindow::queueEventTimingCandidateForDispatch(PerformanceEventTiming
 
 PerformanceEventTimingCandidate LocalDOMWindow::initializeEventTiming(Event& event, EventType type)
 {
-    auto startTime = performance().relativeTimeFromTimeOriginInReducedResolutionSeconds(event.timeStamp());
-    auto processingStart = performance().nowInReducedResolutionSeconds();
+    auto startTime = protect(performance())->relativeTimeFromTimeOriginInReducedResolutionSeconds(event.timeStamp());
+    auto processingStart = protect(performance())->nowInReducedResolutionSeconds();
     LOG_WITH_STREAM(PerformanceTimeline, stream << "Initializing event timing entry (type=" << event.type() << "; tstamp=" << startTime << ") at t=" << processingStart);
     if (startTime > processingStart)
         startTime = processingStart;
@@ -2702,9 +2821,16 @@ PerformanceEventTimingCandidate LocalDOMWindow::initializeEventTiming(Event& eve
 void LocalDOMWindow::markEndOfProcessingForEventTiming(PerformanceEventTimingCandidate& entry, const Event& event, EventType type)
 {
     // Maps to "Finalize event timing" in the spec.
-    auto processingEnd = performance().nowInReducedResolutionSeconds();
+    auto processingEnd = protect(performance())->nowInReducedResolutionSeconds();
     entry.processingEnd = processingEnd;
-    entry.target = event.target();
+    // Per the Event Timing spec, the target must be retargeted to the document scope.
+    // Without this, when no event listeners are registered for a given event type,
+    // the event target may be an un-retargeted node inside a user-agent shadow tree
+    // (e.g., an internal node of <input>), leaking shadow DOM internals.
+    if (RefPtr targetNode = dynamicDowncast<Node>(event.target()))
+        entry.target = targetNode->document().retargetToScope(*targetNode).get();
+    else
+        entry.target = event.target();
 
     switch (type) {
     case EventType::pointerdown: {
@@ -2772,7 +2898,7 @@ void LocalDOMWindow::markEndOfProcessingForEventTiming(PerformanceEventTimingCan
 void LocalDOMWindow::finalizeAndQueueEventTimingEntries()
 {
     // Maps to "Dispatch pending Event Timing entries" in the spec.
-    auto renderingTime = performance().nowInReducedResolutionSeconds();
+    auto renderingTime = protect(performance())->nowInReducedResolutionSeconds();
     if (m_pendingPointerDown && !m_pendingPointerDown->duration)
         m_pendingPointerDown->duration = std::max(renderingTime - m_pendingPointerDown->startTime, Seconds::fromMilliseconds(1));
 
@@ -2789,10 +2915,10 @@ void LocalDOMWindow::finalizeAndQueueEventTimingEntries()
 
     LOG_WITH_STREAM(PerformanceTimeline, stream << "Dispatching " << m_performanceEventTimingCandidates.size() << " event timing entries at t=" << renderingTime);
     for (auto& candidateEntry : borrow(m_performanceEventTimingCandidates).get()) {
-        performance().countEvent(candidateEntry.type);
+        protect(performance())->countEvent(candidateEntry.type);
         if (!candidateEntry.duration)
             candidateEntry.duration = renderingTime - candidateEntry.startTime;
-        performance().processEventEntry(candidateEntry);
+        protect(performance())->processEventEntry(candidateEntry);
     }
     m_performanceEventTimingCandidates.clear();
 }
@@ -2815,14 +2941,14 @@ void LocalDOMWindow::setLocation(LocalDOMWindow& activeWindow, const URL& comple
     // If the loader for activeWindow's frame (browsing context) has no outgoing referrer, set its outgoing referrer
     // to the URL of its parent frame's Document.
     if (RefPtr activeFrame = activeWindow.frame(); activeFrame && activeFrame->loader().outgoingReferrer().isEmpty() && localParent)
-        activeFrame->loader().setOutgoingReferrer(protect(document())->completeURL(localParent->document()->url().strippedForUseAsReferrer().string));
+        activeFrame->loader().setOutgoingReferrer(protect(document())->encodingParseURL(protect(localParent->document())->url().strippedForUseAsReferrer().string));
 
     // We want a new history item if we are processing a user gesture.
     LockHistory lockHistory = (locking != SetLocationLocking::LockHistoryBasedOnGestureState || !UserGestureIndicator::processingUserGesture()) ? LockHistory::Yes : LockHistory::No;
     LockBackForwardList lockBackForwardList = (locking != SetLocationLocking::LockHistoryBasedOnGestureState) ? LockBackForwardList::Yes : LockBackForwardList::No;
     protect(frame->navigationScheduler())->scheduleLocationChange(*activeDocument, protect(activeDocument->securityOrigin()),
         // FIXME: What if activeDocument()->frame() is 0?
-        completedURL, activeDocument->frame()->loader().outgoingReferrer(),
+        completedURL, protect(activeDocument->frame()->loader())->outgoingReferrer(),
         lockHistory, lockBackForwardList,
         historyHandling);
 }
@@ -2837,7 +2963,7 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     if (!activeDocument)
         return RefPtr<Frame> { nullptr };
 
-    URL completedURL = urlString.isEmpty() ? URL({ }, emptyString()) : protect(firstFrame.document())->completeURL(urlString);
+    URL completedURL = urlString.isEmpty() ? URL({ }, emptyString()) : protect(firstFrame.document())->encodingParseURL(urlString);
     if (!completedURL.isEmpty() && !completedURL.isValid())
         return Exception { ExceptionCode::SyntaxError };
 
@@ -2855,7 +2981,7 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     frameLoadRequest.setShouldOpenExternalURLsPolicy(activeDocument->shouldOpenExternalURLsPolicyToPropagate());
 
     // https://html.spec.whatwg.org/#the-rules-for-choosing-a-browsing-context-given-a-browsing-context-name (Step 8.2)
-    if (openerFrame.document()->shouldForceNoOpenerBasedOnCOOP()) {
+    if (protect(openerFrame.document())->shouldForceNoOpenerBasedOnCOOP()) {
         frameLoadRequest.setFrameName(blankTargetFrameName());
         windowFeatures.noopener = true;
     }
@@ -2870,6 +2996,9 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     auto [newFrame, created] = WebCore::createWindow(openerFrame, WTF::move(frameLoadRequest), WTF::move(windowFeatures));
     if (!newFrame)
         return RefPtr<Frame> { nullptr };
+
+    ASSERT(!isParentTargetFrameName(frameName) && !isTopTargetFrameName(frameName));
+    bool shouldReturnNull = noopener && (created == CreatedNewPage::Yes || !isSelfTargetFrameName(frameName));
 
     // https://html.spec.whatwg.org/#the-rules-for-choosing-a-navigable
     // Consume user activation when a new browsing context is created.
@@ -2892,7 +3021,7 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
 
     RefPtr window = newFrame->window();
     if (window && window->isInsecureScriptAccess(activeWindow, completedURL))
-        return noopener ? RefPtr<Frame> { nullptr } : newFrame;
+        return shouldReturnNull ? RefPtr<Frame> { nullptr } : newFrame;
 
     RefPtr localNewFrame = dynamicDowncast<LocalFrame>(newFrame);
     if (prepareDialogFunction && localNewFrame)
@@ -2913,17 +3042,14 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     if (!newFrame->page())
         return RefPtr<Frame> { nullptr };
 
-    return noopener ? RefPtr<Frame> { nullptr } : newFrame;
+    return shouldReturnNull ? RefPtr<Frame> { nullptr } : newFrame;
 }
 
 #if PLATFORM(IOS_FAMILY)
 static bool shouldBypassPopupBlockerForQuirk(const Document* document, const String& urlString)
 {
-    if (RefPtr firstFrameDocument = document) {
-        if (firstFrameDocument->quirks().shouldAllowPopupFromMicrosoftOfficeToOneDrive())
-            return firstFrameDocument->quirks().needsPopupFromMicrosoftOfficeToOneDrive(firstFrameDocument->completeURL(urlString));
-    }
-    return false;
+    RefPtr firstFrameDocument = document;
+    return firstFrameDocument && firstFrameDocument->quirks().needsPopupFromMicrosoftOfficeToOneDrive(urlString);
 }
 #endif
 
@@ -2950,7 +3076,7 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
     RefPtr userContentProvider = firstFrame->userContentProvider();
     RefPtr firstFrameDocumentLoader = firstFrameDocument ? firstFrameDocument->loader() : nullptr;
     if (firstFrameDocument && page && userContentProvider && firstFrameDocumentLoader) {
-        auto results = userContentProvider->processContentRuleListsForLoad(*page, firstFrameDocument->completeURL(urlString), ContentExtensions::ResourceType::Popup, *firstFrameDocumentLoader);
+        auto results = userContentProvider->processContentRuleListsForLoad(*page, firstFrameDocument->encodingParseURL(urlString), ContentExtensions::ResourceType::Popup, *firstFrameDocumentLoader);
         if (results.shouldBlock())
             return RefPtr<WindowProxy> { nullptr };
     }
@@ -2962,7 +3088,7 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
 
     auto popupAllowed = firstWindow.allowPopUp();
 #if PLATFORM(IOS_FAMILY)
-    popupAllowed |= shouldBypassPopupBlockerForQuirk(firstFrame->document(), urlString);
+    popupAllowed |= shouldBypassPopupBlockerForQuirk(protect(firstFrame->document()), urlString);
 #endif
 
     if (!popupAllowed) {
@@ -2987,7 +3113,7 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
         if (activeDocument->canNavigate(targetFrame.get()) != CanNavigateState::Able)
             return RefPtr<WindowProxy> { nullptr };
 
-        URL completedURL = protect(firstFrame->document())->completeURL(urlString);
+        URL completedURL = protect(firstFrame->document())->encodingParseURL(urlString);
 
         if (protect(targetFrame->window())->isInsecureScriptAccess(activeWindow, completedURL))
             return &targetFrame->windowProxy();
@@ -3075,7 +3201,7 @@ void LocalDOMWindow::eventListenersDidChange()
 CookieStore& LocalDOMWindow::cookieStore()
 {
     if (!m_cookieStore)
-        m_cookieStore = CookieStore::create(protect(document()).get());
+        lazyInitialize(m_cookieStore, CookieStore::create(protect(document()).get()));
     return *m_cookieStore;
 }
 
@@ -3108,7 +3234,7 @@ void LocalDOMWindow::subscribeToPushService(const Vector<uint8_t>& applicationSe
 {
     LOG(Push, "LocalDOMWindow::subscribeToPushService");
 
-    platformStrategies()->pushStrategy()->windowSubscribeToPushService(toScope(*this), applicationServerKey, [protectedThis = Ref { *this }, promise = WTF::move(promise)](auto&& result) mutable {
+    platformStrategies()->pushStrategy()->windowSubscribeToPushService(toScope(*this), applicationServerKey, [protectedThis = Ref { *this }, promise = WTF::move(promise)](ExceptionOr<PushSubscriptionData>&& result) mutable {
         LOG(Push, "LocalDOMWindow::subscribeToPushService completed");
         if (result.hasException()) {
             promise.reject(result.releaseException());
@@ -3133,7 +3259,7 @@ void LocalDOMWindow::getPushSubscription(DOMPromiseDeferred<IDLNullable<IDLInter
 {
     LOG(Push, "LocalDOMWindow::getPushSubscription");
 
-    platformStrategies()->pushStrategy()->windowGetPushSubscription(toScope(*this), [protectedThis = Ref { *this }, promise = WTF::move(promise)](auto&& result) mutable {
+    platformStrategies()->pushStrategy()->windowGetPushSubscription(toScope(*this), [protectedThis = Ref { *this }, promise = WTF::move(promise)](ExceptionOr<std::optional<PushSubscriptionData>>&& result) mutable {
         LOG(Push, "LocalDOMWindow::getPushSubscription completed");
         if (result.hasException()) {
             promise.reject(result.releaseException());

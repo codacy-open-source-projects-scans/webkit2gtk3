@@ -77,6 +77,13 @@ def run_test_parallel_safety_single_iteration(test_name):
         _log.error(f'Error in test-parallel-safety iteration for {test_name}: {e}')
         raise  # Re-raise so TaskPool can handle the error appropriately
 
+
+class EarlyExitException(Exception):
+    def __init__(self, failure_count):
+        self.failure_count = failure_count
+        super().__init__(f'Exiting early after {failure_count} failures.')
+
+
 def report_result(worker, test, status, output, elapsed=None):
     if elapsed < Runner.ELAPSED_THRESHOLD and status == Runner.STATUS_PASSED and (not output or Runner.instance.port.get_option('quiet')):
         Runner.instance.printer.write_update(f'{worker} {test} {Runner.NAME_FOR_STATUS[status]}')
@@ -89,6 +96,11 @@ def report_result(worker, test, status, output, elapsed=None):
             Runner.instance.results[test] = status, output, elapsed
     else:
         Runner.instance.results[test] = status, output, elapsed
+
+    if status in (Runner.STATUS_FAILED, Runner.STATUS_CRASHED, Runner.STATUS_TIMEOUT):
+        Runner.instance._failure_count += 1
+        if Runner.instance.exit_after_n_failures and Runner.instance._failure_count >= Runner.instance.exit_after_n_failures:
+            raise EarlyExitException(Runner.instance._failure_count)
 
 
 def teardown_shard():
@@ -115,7 +127,7 @@ class Runner(object):
 
     instance = None
 
-    def __init__(self, port, printer, log_limit=250):
+    def __init__(self, port, printer, log_limit=250, expectations=None):
         self.port = port
         self.printer = printer
         self.tests_run = 0
@@ -123,16 +135,19 @@ class Runner(object):
         self.log_limit = log_limit
         self._has_logged_for_test = True  # Suppress an empty line between "Running tests" and the first test's output.
         self.results = {}
+        self.expectations = expectations
+        self.exit_after_n_failures = None
+        self._failure_count = 0
 
     # FIXME API tests should run as an app, we won't need this function <https://bugs.webkit.org/show_bug.cgi?id=175204>
     @staticmethod
-    def command_for_port(port, args):
+    def command_for_port(port, args, worker_number=None):
         if (port.get_option('force')):
             args.append('--force')
         if (port.get_option('remote_layer_tree')):
             args.append('--remote-layer-tree')
-        if (port.get_option('site_isolation')):
-            args.append('--site-isolation')
+        if (port.get_option('site_isolation_enabled_by_default')):
+            args.append('--site-isolation-enabled-by-default')
         if (port.get_option('no_remote_layer_tree')):
             args.append('--no-remote-layer-tree')
         if (port.get_option('use_gpu_process')):
@@ -141,7 +156,8 @@ class Runner(object):
             args.append('--no-use-gpu-process')
         if getattr(port, 'DEVICE_MANAGER', None):
             assert port.DEVICE_MANAGER.INITIALIZED_DEVICES
-            return ['/usr/bin/xcrun', 'simctl', 'spawn', port.DEVICE_MANAGER.INITIALIZED_DEVICES[0].udid] + args
+            device = port.target_host(worker_number) if worker_number is not None else port.DEVICE_MANAGER.INITIALIZED_DEVICES[0]
+            return ['/usr/bin/xcrun', 'simctl', 'spawn', device.udid] + args
         elif 'device' in port.port_name:
             raise RuntimeError(f'Running api tests on {port.port_name} is not supported')
         elif port.host.platform.is_win():
@@ -161,6 +177,29 @@ class Runner(object):
             for i, test in enumerate(tests):
                 shards[f"{test}.{i}"] = [test]
         return shards
+
+    @staticmethod
+    def _is_disabled_test(test_name):
+        # gtest never runs a test whose method component is prefixed with
+        # DISABLED_.  test_name is the full binary.suite.method form; strip the
+        # binary name, then check the method component.
+        components = test_name.split('.')[1:]
+        return len(components) > 1 and components[1].startswith('DISABLED_')
+
+    @staticmethod
+    def _partition_parallel_safety_tests(tests):
+        # In test-parallel-safety mode each supplied test is dispatched as a
+        # repeat=True task, so a disabled test loops as an instant no-op and
+        # emits "Disabled" without bound until the log limit is hit.  Partition
+        # disabled tests out of the repeat set.
+        runnable = []
+        disabled = []
+        for test in tests:
+            if Runner._is_disabled_test(test):
+                disabled.append(test)
+            else:
+                runnable.append(test)
+        return runnable, disabled
 
     def run(self, tests, num_workers):
         if not tests:
@@ -206,6 +245,9 @@ class Runner(object):
             if supplied_tests_raw:
                 for test_arg in supplied_tests_raw:
                     supplied_tests.extend(test_arg.split())
+                supplied_tests, disabled_tests = Runner._partition_parallel_safety_tests(supplied_tests)
+                if disabled_tests:
+                    _log.warning(f'Test-parallel-safety mode: skipping {len(disabled_tests)} disabled test(s) that cannot be repeat-run: {disabled_tests}')
                 _log.info(f'Test-parallel-safety mode: creating repeat loop tasks for tests: {supplied_tests}')
 
                 if len(supplied_tests) <= max_repeat_workers:
@@ -306,6 +348,7 @@ class _Worker(object):
         self._port = port
         self.host = port.host
         self.log_limit = log_limit
+        self.worker_number = int((TaskPool.Process.name).split('/')[-1]) if TaskPool.Process.name else None
 
         # ServerProcess doesn't allow for a timeout of 'None,' this uses a week instead of None.
         self._timeout = int(self._port.get_option('timeout')) if self._port.get_option('timeout') else 60 * 24 * 7
@@ -322,14 +365,25 @@ class _Worker(object):
         return result.rstrip()
 
     def _run_single_test(self, binary_name, test):
+        full_test_name = f'{binary_name}.{test}'
+
+        timeout = self._timeout
+        if Runner.instance and Runner.instance.expectations:
+            exp = Runner.instance.expectations.get_expectation(full_test_name)
+            if exp and exp.is_slow():
+                custom_timeout = exp.slow_timeout
+                if custom_timeout is not None and custom_timeout > 0:
+                    timeout = custom_timeout
+                else:
+                    timeout = self._timeout * 5
+
         server_process = ServerProcess(
             self._port, binary_name,
-            Runner.command_for_port(self._port, [self._port.path_to_api_test(binary_name), '--filter', test]),
+            Runner.command_for_port(self._port, [self._port.path_to_api_test(binary_name), '--filter', test], worker_number=self.worker_number),
             env=self._port.environment_for_api_tests())
 
         status = Runner.STATUS_RUNNING
-        split_test = test.split('.')
-        if len(split_test) > 1 and split_test[1].startswith('DISABLED_') and not self._port.get_option('force'):
+        if Runner._is_disabled_test(f'{binary_name}.{test}') and not self._port.get_option('force'):
             status = Runner.STATUS_DISABLED
 
         stdout_buffer = ''
@@ -342,7 +396,7 @@ class _Worker(object):
                 server_process.start()
 
             while status == Runner.STATUS_RUNNING:
-                stdout_line, stderr_line = server_process.read_either_stdout_or_stderr_line(started + self._timeout)
+                stdout_line, stderr_line = server_process.read_either_stdout_or_stderr_line(started + timeout)
                 if not stderr_line and not stdout_line:
                     break
                 if stdout_line:
@@ -419,7 +473,7 @@ class _Worker(object):
                 self._port, binary_name,
                 Runner.command_for_port(self._port, [
                     self._port.path_to_api_test(binary_name), '--filter', ':'.join(remaining_tests)
-                ]), env=self._port.environment_for_api_tests())
+                ], worker_number=self.worker_number), env=self._port.environment_for_api_tests())
 
             try:
                 started = time.time()

@@ -235,6 +235,15 @@ void SWServerRegistration::clear()
 {
     RELEASE_LOG(ServiceWorker, "SWServerRegistration::clear %" PRIu64, identifier().toUInt64());
 
+    terminateWorkersForServiceWorkerPageDisconnect();
+    notifyClientsOfControllerChange();
+
+    // Remove scope to registration map[scopeString].
+    protect(server())->removeRegistration(identifier());
+}
+
+void SWServerRegistration::terminateWorkersForServiceWorkerPageDisconnect()
+{
     if (RefPtr preInstallationWorker = m_preInstallationWorker) {
         ASSERT(preInstallationWorker->state() == ServiceWorkerState::Parsed);
         preInstallationWorker->terminate();
@@ -263,11 +272,6 @@ void SWServerRegistration::clear()
         updateWorkerState(*waitingWorker, ServiceWorkerState::Redundant);
     if (activeWorker)
         updateWorkerState(*activeWorker, ServiceWorkerState::Redundant);
-
-    notifyClientsOfControllerChange();
-
-    // Remove scope to registration map[scopeString].
-    protect(server())->removeRegistration(identifier());
 }
 
 // https://w3c.github.io/ServiceWorker/#try-activate-algorithm
@@ -398,7 +402,7 @@ std::optional<ExceptionData> SWServerRegistration::enableNavigationPreload()
         return ExceptionData { ExceptionCode::InvalidStateError, "No active worker"_s };
 
     m_preloadState.enabled = true;
-    protect(server())->storeRegistrationForWorker(*activeWorker);
+    protect(server())->storeRegistrationForWorkerIfNecessary(*activeWorker);
     return { };
 }
 
@@ -410,7 +414,7 @@ std::optional<ExceptionData> SWServerRegistration::disableNavigationPreload()
         return ExceptionData { ExceptionCode::InvalidStateError, "No active worker"_s };
 
     m_preloadState.enabled = false;
-    protect(server())->storeRegistrationForWorker(*activeWorker);
+    protect(server())->storeRegistrationForWorkerIfNecessary(*activeWorker);
     return { };
 }
 
@@ -425,18 +429,20 @@ std::optional<ExceptionData> SWServerRegistration::setNavigationPreloadHeaderVal
         return ExceptionData { ExceptionCode::InvalidStateError, "No active worker"_s };
 
     m_preloadState.headerValue = WTF::move(headerValue);
-    protect(server())->storeRegistrationForWorker(*activeWorker);
+    protect(server())->storeRegistrationForWorkerIfNecessary(*activeWorker);
     return { };
 }
 
 void SWServerRegistration::addCookieChangeSubscriptions(Vector<CookieChangeSubscription>&& subscriptions)
 {
-    m_cookieChangeSubscriptions.addAll(WTF::move(subscriptions));
+    for (auto& subscription : subscriptions)
+        m_cookieChangeSubscriptions.add(WTF::move(subscription));
 }
 
 void SWServerRegistration::removeCookieChangeSubscriptions(Vector<CookieChangeSubscription>&& subscriptions)
 {
-    m_cookieChangeSubscriptions.removeAll(subscriptions);
+    for (auto& subscription : subscriptions)
+        m_cookieChangeSubscriptions.remove(subscription);
 }
 
 Vector<CookieChangeSubscription> SWServerRegistration::cookieChangeSubscriptions() const

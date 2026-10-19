@@ -27,6 +27,7 @@
 #include "ExtendedDOMIsoSubspaces.h"
 #include "IDLTypes.h"
 #include "JSDOMBinding.h"
+#include "JSDOMBindingFacade.h"
 #include "JSDOMConstructorNotConstructable.h"
 #include "JSDOMConvertBase.h"
 #include "JSDOMConvertScheduledAction.h"
@@ -39,11 +40,8 @@
 #include "WebCoreJSClientData.h"
 #include <JavaScriptCore/FunctionPrototype.h>
 #include <JavaScriptCore/HeapAnalyzer.h>
-#include <JavaScriptCore/JSCInlines.h>
-#include <JavaScriptCore/JSCellInlines.h>
 #include <JavaScriptCore/JSDestructibleObjectHeapCellType.h>
 #include <JavaScriptCore/SlotVisitorMacros.h>
-#include <JavaScriptCore/StructureInlines.h>
 #include <JavaScriptCore/SubspaceInlines.h>
 #include <wtf/GetPtr.h>
 #include <wtf/PointerPreparations.h>
@@ -120,14 +118,14 @@ const ClassInfo JSTestScheduledActionPrototype::s_info = { "TestScheduledActionR
 
 JSC::Structure* JSTestScheduledActionPrototype::createStructure(JSC::VM& vm, JSC::JSGlobalObject* globalObject, JSC::JSValue prototype)
 {
-    return JSC::Structure::create(vm, globalObject, prototype, JSC::TypeInfo(JSC::ObjectType, StructureFlags), info());
+    return JSC::Structure::create(vm, globalObject, prototype, JSC::TypeInfo(JSC::ObjectType, StructureFlags), info(), JSC::NonArray);
 }
 
 void JSTestScheduledActionPrototype::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
     reifyStaticProperties(vm, JSTestScheduledAction::info(), JSTestScheduledActionPrototypeTableValues, *this);
-    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
+    WebCore::putDirectWithoutTransition(this, vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, info()->className), JSC::PropertyAttribute::DontEnum | JSC::PropertyAttribute::ReadOnly);
 }
 
 const ClassInfo JSTestScheduledAction::s_info = { "TestScheduledActionReal"_s, &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSTestScheduledAction) };
@@ -141,7 +139,7 @@ static_assert(!std::is_base_of<ActiveDOMObject, TestScheduledAction>::value, "In
 
 JSTestScheduledAction* JSTestScheduledAction::create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, Ref<TestScheduledAction>&& impl)
 {
-    SUPPRESS_UNCOUNTED_LOCAL auto& vm = globalObject->vm();
+    auto& vm = globalObject->vm();
     JSTestScheduledAction* ptr = new (NotNull, JSC::allocateCell<JSTestScheduledAction>(vm)) JSTestScheduledAction(structure, *globalObject, WTF::move(impl));
     ptr->finishCreation(vm);
     return ptr;
@@ -177,7 +175,7 @@ void JSTestScheduledAction::destroy(JSC::JSCell* cell)
 
 JSC_DEFINE_CUSTOM_GETTER(jsTestScheduledActionConstructor, (JSGlobalObject* lexicalGlobalObject, EncodedJSValue thisValue, PropertyName))
 {
-    SUPPRESS_UNCOUNTED_LOCAL auto& vm = JSC::getVM(lexicalGlobalObject);
+    auto& vm = JSC::getVM(lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
     auto* prototype = dynamicDowncast<JSTestScheduledActionPrototype>(JSValue::decode(thisValue));
     if (!prototype) [[unlikely]]
@@ -187,7 +185,7 @@ JSC_DEFINE_CUSTOM_GETTER(jsTestScheduledActionConstructor, (JSGlobalObject* lexi
 
 static inline JSC::EncodedJSValue jsTestScheduledActionPrototypeFunction_methodBody(JSC::JSGlobalObject* lexicalGlobalObject, JSC::CallFrame* callFrame, typename IDLOperation<JSTestScheduledAction>::ClassParameter castedThis)
 {
-    SUPPRESS_UNCOUNTED_LOCAL auto& vm = JSC::getVM(lexicalGlobalObject);
+    auto& vm = JSC::getVM(lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
     UNUSED_PARAM(throwScope);
     UNUSED_PARAM(callFrame);
@@ -203,7 +201,7 @@ static inline JSC::EncodedJSValue jsTestScheduledActionPrototypeFunction_methodB
 
 JSC_DEFINE_HOST_FUNCTION(jsTestScheduledActionPrototypeFunction_method, (JSGlobalObject* lexicalGlobalObject, CallFrame* callFrame))
 {
-    return IDLOperation<JSTestScheduledAction>::call<jsTestScheduledActionPrototypeFunction_methodBody>(*lexicalGlobalObject, *callFrame, "method");
+    return IDLOperation<JSTestScheduledAction>::call<jsTestScheduledActionPrototypeFunction_methodBody>(*lexicalGlobalObject, *callFrame, "method"_s);
 }
 
 JSC::GCClient::IsoSubspace* JSTestScheduledAction::subspaceForImpl(JSC::VM& vm)
@@ -225,6 +223,8 @@ void JSTestScheduledAction::analyzeHeap(JSCell* cell, HeapAnalyzer& analyzer)
     Base::analyzeHeap(cell, analyzer);
 }
 
+JSTestScheduledActionOwner::JSTestScheduledActionOwner(ClangVTableWorkaroundTag) { }
+
 bool JSTestScheduledActionOwner::isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown> handle, void*, AbstractSlotVisitor& visitor, ASCIILiteral* reason)
 {
     UNUSED_PARAM(handle);
@@ -237,7 +237,7 @@ void JSTestScheduledActionOwner::finalize(JSC::Handle<JSC::Unknown> handle, void
 {
     SUPPRESS_MEMORY_UNSAFE_CAST auto* jsTestScheduledAction = static_cast<JSTestScheduledAction*>(handle.slot()->asCell());
     auto& world = *static_cast<DOMWrapperWorld*>(context);
-    uncacheWrapper(world, protect(jsTestScheduledAction->wrapped()).ptr(), jsTestScheduledAction);
+    SUPPRESS_UNCOUNTED_ARG uncacheWrapper(world, &jsTestScheduledAction->wrapped(), jsTestScheduledAction);
 }
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
@@ -263,7 +263,7 @@ static inline void verifyVTable(TestScheduledAction* ptr)
         // TestScheduledAction has subclasses. If TestScheduledAction has subclasses that get passed
         // to toJS() we currently require TestScheduledAction you to opt out of binding hardening
         // by adding the SkipVTableValidation attribute to the interface IDL definition
-        RELEASE_ASSERT(actualVTablePointer == expectedVTablePointer);
+        RELEASE_ASSERT_WITH_UNQUALIFIED_FUNCTION_NAME(actualVTablePointer == expectedVTablePointer);
     }
 }
 #endif

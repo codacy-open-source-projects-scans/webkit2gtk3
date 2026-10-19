@@ -42,6 +42,7 @@
 #include "WebIDBConnectionToServer.h"
 #include "WebIDBConnectionToServerMessages.h"
 #include "WebLoaderStrategy.h"
+#include "WebMessagePortChannelProvider.h"
 #include "WebPage.h"
 #include "WebPageMessages.h"
 #include "WebPaymentCoordinator.h"
@@ -74,11 +75,6 @@
 #include <WebCore/PermissionController.h>
 #include <WebCore/SharedBuffer.h>
 #include <pal/SessionID.h>
-
-#if USE(LIBRICE)
-#include "RiceBackendProxy.h"
-#include "RiceBackendProxyMessages.h"
-#endif
 
 #if ENABLE(APPLE_PAY_REMOTE_UI)
 #include "WebPaymentCoordinatorMessages.h"
@@ -125,7 +121,7 @@ bool NetworkProcessConnection::dispatchMessage(IPC::Connection& connection, IPC:
         return true;
     }
     if (decoder.messageReceiverName() == Messages::StorageAreaMap::messageReceiverName()) {
-        if (auto storageAreaMap = WebProcess::singleton().storageAreaMap(ObjectIdentifier<StorageAreaMapIdentifierType>(decoder.destinationID())))
+        if (RefPtr storageAreaMap = WebProcess::singleton().storageAreaMap(ObjectIdentifier<StorageAreaMapIdentifierType>(decoder.destinationID())))
             storageAreaMap->didReceiveMessage(connection, decoder);
         return true;
     }
@@ -154,14 +150,6 @@ bool NetworkProcessConnection::dispatchMessage(IPC::Connection& connection, IPC:
             network->resolver(AtomicObjectIdentifier<LibWebRTCResolverIdentifierType>(decoder.destinationID()))->didReceiveMessage(connection, decoder);
         else
             RELEASE_LOG_ERROR(WebRTC, "Received WebRTCResolver message while libWebRTCNetwork is not active");
-        return true;
-    }
-#endif
-
-#if USE(LIBRICE)
-    if (decoder.messageReceiverName() == Messages::RiceBackendProxy::messageReceiverName()) {
-        if (RefPtr agent = WebProcess::singleton().gstreamerIceBackend(RiceBackendIdentifier(decoder.destinationID())))
-            agent->didReceiveMessage(connection, decoder);
         return true;
     }
 #endif
@@ -223,15 +211,8 @@ void NetworkProcessConnection::didClose(IPC::Connection&)
     Ref<NetworkProcessConnection> protector(*this);
     WebProcess::singleton().networkProcessConnectionClosed(this);
 
-    if (auto idbConnection = std::exchange(m_webIDBConnection, nullptr)) {
+    if (auto idbConnection = std::exchange(m_webIDBConnection, nullptr))
         idbConnection->connectionToServerLost();
-
-        // Mark that workers need their IDB proxies refreshed. The actual refresh
-        // is deferred until the network process is relaunched for another reason
-        // (e.g. a document calling indexedDB.open()), to avoid unnecessarily
-        // relaunching the network process just for workers.
-        WebProcess::singleton().setNeedsIDBConnectionRefreshForWorkers();
-    }
 
     if (auto swConnection = std::exchange(m_swConnection, nullptr))
         swConnection->connectionToServerLost();
@@ -244,11 +225,6 @@ void NetworkProcessConnection::didReceiveInvalidMessage(IPC::Connection&, IPC::M
 void NetworkProcessConnection::writeBlobsToTemporaryFilesForIndexedDB(const Vector<String>& blobURLs, CompletionHandler<void(Vector<String>&& filePaths)>&& completionHandler)
 {
     m_connection->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::WriteBlobsToTemporaryFilesForIndexedDB(blobURLs), WTF::move(completionHandler));
-}
-
-void NetworkProcessConnection::didFinishPingLoad(WebCore::ResourceLoaderIdentifier pingLoadIdentifier, ResourceError&& error, ResourceResponse&& response)
-{
-    protect(WebProcess::singleton().webLoaderStrategy())->didFinishPingLoad(pingLoadIdentifier, WTF::move(error), WTF::move(response));
 }
 
 void NetworkProcessConnection::didFinishPreconnection(WebCore::ResourceLoaderIdentifier preconnectionIdentifier, ResourceError&& error)
@@ -306,7 +282,7 @@ void NetworkProcessConnection::didCacheResource(const ResourceRequest& request, 
     
     auto buffer = WTF::move(handle).tryWrapInSharedBuffer();
     if (!buffer) {
-        LOG_ERROR("Unable to create FragmentedSharedBuffer from ShareableResource handle for resource url %s", request.url().string().utf8().data());
+        LOG_ERROR("Unable to create FragmentedSharedBuffer from ShareableResource handle for resource url %s", request.url().string().utf8());
         return;
     }
 
@@ -332,13 +308,18 @@ WebSWClientConnection& NetworkProcessConnection::serviceWorkerConnection()
 WebSharedWorkerObjectConnection& NetworkProcessConnection::sharedWorkerConnection()
 {
     if (!m_sharedWorkerConnection)
-        m_sharedWorkerConnection = WebSharedWorkerObjectConnection::create();
+        lazyInitialize(m_sharedWorkerConnection, WebSharedWorkerObjectConnection::create());
     return *m_sharedWorkerConnection;
 }
 
 void NetworkProcessConnection::messagesAvailableForPort(const WebCore::MessagePortIdentifier& messagePortIdentifier)
 {
     WebProcess::singleton().messagesAvailableForPort(messagePortIdentifier);
+}
+
+void NetworkProcessConnection::dropNonSerializableInProcessCache(WebCore::NonSerializedDataIdentifier identifier)
+{
+    WebMessagePortChannelProvider::singleton().dropNonSerializableInProcessCache(identifier);
 }
 
 void NetworkProcessConnection::broadcastConsoleMessage(MessageSource source, MessageLevel level, const String& message)
@@ -359,7 +340,7 @@ void NetworkProcessConnection::loadCancelledDownloadRedirectRequestInFrame(WebCo
         loadParameters.request = request;
         webPage->loadRequest(WTF::move(loadParameters));
     } else
-        RELEASE_LOG_ERROR(Process, "Trying to load Invalid page or frame for %s", request.url().string().utf8().data());
+        RELEASE_LOG_ERROR(Process, "Trying to load Invalid page or frame for %s", request.url().string().utf8());
 }
 
 #if ENABLE(WEB_RTC)

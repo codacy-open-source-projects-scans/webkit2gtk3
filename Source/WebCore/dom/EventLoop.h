@@ -26,17 +26,14 @@
 #pragma once
 
 #include <WebCore/TaskSource.h>
-#include <optional>
 #include <wtf/ApproximateTime.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/Function.h>
 #include <wtf/Markable.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/RefCountedAndCanMakeWeakPtr.h>
-#include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashSet.h>
-#include <wtf/WeakPtr.h>
 
 namespace JSC {
 class JSGlobalObject;
@@ -228,7 +225,7 @@ public:
     void didAddTimer(EventLoopTimer&);
     void didRemoveTimer(EventLoopTimer&);
 
-    void NODELETE setScriptExecutionContext(ScriptExecutionContext&);
+    void LEGACY_NODELETE setScriptExecutionContext(ScriptExecutionContext&);
 
 private:
     enum class State : uint8_t { Running, Suspended, ReadyToStop, Stopped };

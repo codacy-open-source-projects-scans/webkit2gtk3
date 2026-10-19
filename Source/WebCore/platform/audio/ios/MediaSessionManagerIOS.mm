@@ -31,7 +31,9 @@
 #import "Logging.h"
 #import "MediaPlaybackTargetCocoa.h"
 #import "MediaPlayer.h"
+#import "MediaStrategy.h"
 #import "PlatformMediaSession.h"
+#import "PlatformStrategies.h"
 #import "SystemMemory.h"
 #import "WebCoreThreadRun.h"
 #import <wtf/MainThread.h>
@@ -39,6 +41,7 @@
 #import <wtf/RetainPtr.h>
 #import <wtf/RuntimeApplicationChecks.h>
 #import <wtf/TZoneMalloc.h>
+#import <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
@@ -46,9 +49,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaSessionManageriOS);
 
 RefPtr<PlatformMediaSessionManager> PlatformMediaSessionManager::create(PageIdentifier pageIdentifier)
 {
-    Ref manager = MediaSessionManageriOS::create(pageIdentifier);
-    MediaSessionHelper::sharedHelper().addClient(manager);
-    return manager;
+    return MediaSessionManageriOS::create(pageIdentifier);
 }
 
 Ref<MediaSessionManageriOS> MediaSessionManageriOS::create(PageIdentifier pageIdentifier)
@@ -56,17 +57,18 @@ Ref<MediaSessionManageriOS> MediaSessionManageriOS::create(PageIdentifier pageId
     return adoptRef(*new MediaSessionManageriOS(pageIdentifier));
 }
 
-MediaSessionManageriOS::MediaSessionManageriOS(PageIdentifier pageIdentifier)
+MediaSessionManageriOS::MediaSessionManageriOS(std::optional<PageIdentifier> pageIdentifier)
     : MediaSessionManagerCocoa(pageIdentifier)
 {
+    protect(MediaSessionHelper::sharedHelper())->addClient(*this);
     AudioSession::addInterruptionObserver(*this);
 }
 
 MediaSessionManageriOS::~MediaSessionManageriOS()
 {
     if (m_isMonitoringWirelessRoutes)
-        MediaSessionHelper::sharedHelper().stopMonitoringWirelessRoutes();
-    MediaSessionHelper::sharedHelper().removeClient(*this);
+        protect(MediaSessionHelper::sharedHelper())->stopMonitoringWirelessRoutes();
+    protect(MediaSessionHelper::sharedHelper())->removeClient(*this);
     AudioSession::removeInterruptionObserver(*this);
 }
 
@@ -115,40 +117,42 @@ void MediaSessionManageriOS::configureWirelessTargetMonitoring()
     ALWAYS_LOG(LOGIDENTIFIER, "requiresMonitoring = ", requiresMonitoring);
 
     if (requiresMonitoring)
-        MediaSessionHelper::sharedHelper().startMonitoringWirelessRoutes();
+        protect(MediaSessionHelper::sharedHelper())->startMonitoringWirelessRoutes();
     else
-        MediaSessionHelper::sharedHelper().stopMonitoringWirelessRoutes();
+        protect(MediaSessionHelper::sharedHelper())->stopMonitoringWirelessRoutes();
 #endif
 }
 
-void MediaSessionManageriOS::sessionWillBeginPlayback(PlatformMediaSessionInterface& session, CompletionHandler<void(bool)>&& completionHandler)
+#if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+void MediaSessionManageriOS::ensureMediaDeviceRouteControllerMonitoring()
 {
-    auto logSiteIdentifier = LOGIDENTIFIER;
-    MediaSessionManagerCocoa::sessionWillBeginPlayback(session, [weakThis = ThreadSafeWeakPtr { *this }, completionHandler = WTF::move(completionHandler), strongSession = RefPtr { &session }, logSiteIdentifier = WTF::move(logSiteIdentifier)](bool canBegin) mutable {
+    if (!hasPlatformStrategies() || !platformStrategies()->mediaStrategy()->wirelessPlaybackMediaPlayerEnabled())
+        return;
 
-        UNUSED_PARAM(logSiteIdentifier);
-
-        RefPtr protectedThis = weakThis.get();
-        if (!protectedThis) {
-            completionHandler(false);
-            return;
-        }
-
-        if (!canBegin) {
-            completionHandler(false);
-            return;
-        }
-
-#if PLATFORM(IOS_FAMILY)
-        auto playbackTargetSupportsAirPlayVideo = MediaSessionHelper::sharedHelper().activeVideoRouteSupportsAirPlayVideo();
-        ALWAYS_LOG_WITH_THIS(protectedThis, logSiteIdentifier, "Playback Target Supports AirPlay Video = ", playbackTargetSupportsAirPlayVideo);
-        if (auto target = MediaSessionHelper::sharedHelper().playbackTarget(); target && playbackTargetSupportsAirPlayVideo)
-            strongSession->setPlaybackTarget(*target);
-        strongSession->setShouldPlayToPlaybackTarget(playbackTargetSupportsAirPlayVideo);
+    protect(MediaSessionHelper::sharedHelper())->ensureMediaDeviceRouteControllerMonitoring();
+}
 #endif
 
-        completionHandler(true);
-    });
+void MediaSessionManageriOS::applyActiveVideoRouteToSession(PlatformMediaSessionInterface& session)
+{
+    auto playbackTargetSupportsAirPlayVideo = MediaSessionHelper::sharedHelper().activeVideoRouteSupportsAirPlayVideo();
+    ALWAYS_LOG(LOGIDENTIFIER, "Playback Target Supports AirPlay Video = ", playbackTargetSupportsAirPlayVideo);
+    if (RefPtr target = MediaSessionHelper::sharedHelper().playbackTarget(); target && playbackTargetSupportsAirPlayVideo)
+        session.setPlaybackTarget(*target);
+    session.setShouldPlayToPlaybackTarget(playbackTargetSupportsAirPlayVideo);
+}
+
+void MediaSessionManageriOS::sessionDidCompleteAdmission(PlatformMediaSessionInterface& session)
+{
+    MediaSessionManagerCocoa::sessionDidCompleteAdmission(session);
+
+    applyActiveVideoRouteToSession(session);
+}
+
+void MediaSessionManageriOS::activeNowPlayingSessionChanged(PlatformMediaSessionInterface* session)
+{
+    if (session)
+        applyActiveVideoRouteToSession(*session);
 }
 
 void MediaSessionManageriOS::sessionWillEndPlayback(PlatformMediaSessionInterface& session, DelayCallingUpdateNowPlaying delayCallingUpdateNowPlaying)
@@ -156,7 +160,13 @@ void MediaSessionManageriOS::sessionWillEndPlayback(PlatformMediaSessionInterfac
     MediaSessionManagerCocoa::sessionWillEndPlayback(session, delayCallingUpdateNowPlaying);
 
 #if USE(AUDIO_SESSION)
-    if (isApplicationInBackground() && !anyOfSessions([] (auto& session) { return session.state() == PlatformMediaSession::State::Playing; }))
+    if (isApplicationInBackground())
+        return;
+
+    if (!anyOfSessions([] (auto& session) {
+            return session.state() == PlatformMediaSession::State::Playing
+                || session.isPlayingToWirelessPlaybackTarget();
+        }))
         maybeDeactivateAudioSession();
 #endif
 }

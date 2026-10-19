@@ -51,6 +51,7 @@ public:
 
     virtual void sessionDidEnd(XRDeviceIdentifier) = 0;
     virtual void sessionDidUpdateVisibilityState(XRDeviceIdentifier, PlatformXR::VisibilityState) = 0;
+    virtual void sessionDidInitializeRendering(XRDeviceIdentifier, uint32_t width, uint32_t height, uint32_t arrayLength) = 0;
 };
 
 class PlatformXRCoordinator {
@@ -73,12 +74,14 @@ public:
 
 #if ENABLE(WEBXR_LAYERS)
     using CreateCompositionLayerCallback = CompletionHandler<void(std::optional<PlatformXR::LayerInfo>)>;
-    virtual void createCompositionLayer(PlatformXR::CompositionLayerType, WebCore::IntSize, PlatformXR::LayerLayout, CreateCompositionLayerCallback&&) { };
+    virtual void createCompositionLayer(PlatformXR::CompositionLayerType, WebCore::IntSize, PlatformXR::LayerLayout, CreateCompositionLayerCallback&&) = 0;
 #endif
 
     // Session creation/termination.
     virtual void startSession(WebPageProxy&, WeakPtr<PlatformXRCoordinatorSessionEventClient>&&, const WebCore::SecurityOriginData&, PlatformXR::SessionMode, const PlatformXR::Device::FeatureList&, std::optional<WebCore::XRCanvasConfiguration>&&) = 0;
     virtual void endSessionIfExists(WebPageProxy&) = 0;
+
+    virtual void stopWhenIdle() { }
 
     // Session display loop.
     virtual void scheduleAnimationFrame(WebPageProxy&, std::optional<PlatformXR::RequestData>&&, PlatformXR::Device::RequestFrameCallback&&) = 0;

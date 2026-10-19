@@ -30,10 +30,9 @@
 #include "GeometryUtilities.h"
 #include "Path.h"
 #include "StyleGradient.h"
-#include "StyleLengthWrapper+Blending.h"
+#include "StylePrimitiveNumericOrKeyword+Blending.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
-#include "TransformOperationData.h"
 #include <WebCore/StylePosition.h>
 #include <wtf/TinyLRUCache.h>
 
@@ -44,7 +43,7 @@ namespace Style {
 
 struct EllipsePathPolicy final : public TinyLRUCachePolicy<FloatRect, WebCore::Path> {
 public:
-    static bool NODELETE isKeyNull(const FloatRect& rect)
+    static bool LEGACY_NODELETE isKeyNull(const FloatRect& rect)
     {
         return rect.isEmpty();
     }
@@ -193,10 +192,8 @@ AcceleratedEffectEllipseFunction::RadialSize Evaluation<Ellipse::RadialSize, Acc
     );
 }
 
-AcceleratedEffectEllipseFunction Evaluation<EllipseFunction, AcceleratedEffectEllipseFunction>::operator()(const EllipseFunction& value, const TransformOperationData& data, ZoomFactor zoom)
+AcceleratedEffectEllipseFunction Evaluation<EllipseFunction, AcceleratedEffectEllipseFunction>::operator()(const EllipseFunction& value, const FloatSize& containingBlockSize, ZoomFactor zoom)
 {
-    auto containingBlockSize = data.motionPathData->offsetRect().rect().size();
-
     return {
         .radii = {
             evaluate<AcceleratedEffectEllipseFunction::RadialSize>(get<0>(value->radii), containingBlockSize.width(), zoom),

@@ -78,14 +78,14 @@ struct ScopedNodeDragEnabler {
         : element(dynamicDowncast<Element>(node))
     {
         if (element)
-            element->setBeingDragged(true);
+            protect(element)->setBeingDragged(true);
         protect(frame.document())->updateLayout();
     }
 
     ~ScopedNodeDragEnabler()
     {
         if (element)
-            element->setBeingDragged(false);
+            protect(element)->setBeingDragged(false);
     }
 
     RefPtr<Element> element;
@@ -115,7 +115,7 @@ DragImageRef createDragImageForNode(LocalFrame& frame, Node& node)
 {
     ScopedNodeDragEnabler enableDrag(frame, node);
 
-    SnapshotOptions options { { SnapshotFlags::DraggableElement }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() };
+    SnapshotOptions options { { SnapshotFlags::DraggableElement }, PixelFormat::BGRA8, ColorSpace::SRGB() };
 
     return createDragImageFromSnapshot(snapshotNode(frame, node, WTF::move(options)), &node);
 }
@@ -124,7 +124,7 @@ DragImageRef createDragImageForNode(LocalFrame& frame, Node& node)
 
 DragImageData createDragImageForSelection(LocalFrame& frame, bool forceBlackText)
 {
-    SnapshotOptions options { { }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() };
+    SnapshotOptions options { { }, PixelFormat::BGRA8, ColorSpace::SRGB() };
     if (forceBlackText)
         options.flags.add(SnapshotFlags::ForceBlackText);
     return { createDragImageFromSnapshot(snapshotSelection(frame, WTF::move(options)), nullptr), nullptr };
@@ -182,7 +182,7 @@ DragImageRef createDragImageForRange(LocalFrame& frame, const SimpleRange& range
     if (!startRenderer || !endRenderer)
         return nullptr;
 
-    SnapshotOptions options { { SnapshotFlags::PaintSelectionOnly }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() };
+    SnapshotOptions options { { SnapshotFlags::PaintSelectionOnly }, PixelFormat::BGRA8, ColorSpace::SRGB() };
     if (forceBlackText)
         options.flags.add(SnapshotFlags::ForceBlackText);
 
@@ -201,23 +201,16 @@ DragImageRef createDragImageForImage(LocalFrame& frame, Node& node, IntRect& ima
 {
     ScopedNodeDragEnabler enableDrag(frame, node);
 
-    CheckedPtr renderer = node.renderer();
-    if (!renderer)
+    if (!node.renderer())
         return nullptr;
 
-    // Calculate image and element metrics for the client, then create drag image.
-    LayoutRect topLevelRect;
-    IntRect paintingRect = snappedIntRect(renderer->paintingRootRect(topLevelRect));
+    SnapshotOptions options { { SnapshotFlags::DraggableElement }, PixelFormat::BGRA8, ColorSpace::SRGB() };
 
-    if (paintingRect.isEmpty())
+    RefPtr snapshot = snapshotNode(frame, node, WTF::move(options), &imageRect, &elementRect);
+    if (imageRect.isEmpty())
         return nullptr;
 
-    elementRect = snappedIntRect(topLevelRect);
-    imageRect = paintingRect;
-
-    SnapshotOptions options { { SnapshotFlags::DraggableElement }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() };
-
-    return createDragImageFromSnapshot(snapshotNode(frame, node, WTF::move(options)), &node);
+    return createDragImageFromSnapshot(WTF::move(snapshot), &node);
 }
 
 #if !PLATFORM(IOS_FAMILY) || !ENABLE(DRAG_SUPPORT)

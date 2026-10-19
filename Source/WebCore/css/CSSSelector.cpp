@@ -90,7 +90,7 @@ struct SelectorSpecificity {
     SelectorSpecificity(SelectorSpecificityIncrement);
     SelectorSpecificity& operator+=(SelectorSpecificity);
 
-    std::array<uint8_t, 3> NODELETE specificityTuple() const
+    std::array<uint8_t, 3> LEGACY_NODELETE specificityTuple() const
     {
         uint8_t a = specificity >> 16;
         uint8_t b = specificity >> 8;
@@ -196,6 +196,7 @@ SelectorSpecificity simpleSelectorSpecificity(const CSSSelector& simpleSelector,
         }
     case CSSSelector::Match::Exact:
     case CSSSelector::Match::Class:
+    case CSSSelector::Match::ClassPrefix:
     case CSSSelector::Match::Set:
     case CSSSelector::Match::List:
     case CSSSelector::Match::Hyphen:
@@ -215,13 +216,14 @@ SelectorSpecificity simpleSelectorSpecificity(const CSSSelector& simpleSelector,
         // so whether we add the ClassC specificity shouldn't be observable.
         case CSSSelector::PseudoElement::Slotted:
             return maxSpecificity(simpleSelector.selectorList());
+        case CSSSelector::PseudoElement::Highlight:
         case CSSSelector::PseudoElement::ViewTransitionGroup:
         case CSSSelector::PseudoElement::ViewTransitionImagePair:
         case CSSSelector::PseudoElement::ViewTransitionNew:
         case CSSSelector::PseudoElement::ViewTransitionOld:
             ASSERT(simpleSelector.stringList() && simpleSelector.stringList()->size());
             // Standalone universal selector gets 0 specificity.
-            if (simpleSelector.stringList()->first() == starAtom() && simpleSelector.stringList()->size() == 1)
+            if (simpleSelector.stringList()->first() == universalPseudoElementNameAtom() && simpleSelector.stringList()->size() == 1)
                 return 0;
             break;
         default:
@@ -356,7 +358,7 @@ std::optional<CSSSelector::PseudoElement> CSSSelector::parsePseudoElementName(St
 
     auto type = findPseudoElementName(name);
     if (!type) {
-        ASSERT_WITH_MESSAGE(!isUASheetBehavior(context.mode), "Unknown pseudo-element %s in user-agent stylesheet", name.toString().utf8().data());
+        ASSERT_WITH_MESSAGE(!isUASheetBehavior(context.mode), "Unknown pseudo-element %s in user-agent stylesheet", name.toString().utf8());
         if (name.startsWithIgnoringASCIICase("-webkit-"_s))
             return PseudoElement::WebKitUnknown;
         return type;
@@ -369,21 +371,21 @@ std::optional<CSSSelector::PseudoElement> CSSSelector::parsePseudoElementName(St
 }
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-const CSSSelector* CSSSelector::firstInCompound() const
+const CSSSelector* CSSSelector::rightmostInCompound() const
 {
     auto* selector = this;
-    while (!selector->isFirstInComplexSelector()) {
+    while (auto* preceding = selector->precedingInComplexSelector()) {
         if (selector->relation() != Relation::Subselector)
             break;
-        ++selector;
+        selector = preceding;
     }
     return selector;
 }
 
-const CSSSelector* CSSSelector::lastInCompound() const
+const CSSSelector* CSSSelector::leftmostInCompound() const
 {
     auto* selector = this;
-    while (!selector->isLastInComplexSelector()) {
+    while (!selector->m_isLastInComplexSelector) {
         auto* next = selector - 1;
         if (next->relation() != Relation::Subselector)
             break;
@@ -393,7 +395,7 @@ const CSSSelector* CSSSelector::lastInCompound() const
 }
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
-const CSSSelector* CSSSelector::precedingInCompound() const
+const CSSSelector* CSSSelector::followingInCompound() const
 {
     if (relation() != Relation::Subselector)
         return nullptr;
@@ -505,6 +507,10 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
         } else if (selector->match() == Match::Class) {
             builder.append('.');
             serializeIdentifier(builder, selector->serializingValue());
+        } else if (selector->match() == Match::ClassPrefix) {
+            builder.append('.');
+            serializeIdentifier(builder, selector->serializingValue());
+            builder.append('*');
         } else if (selector->match() == Match::ForgivingUnknown || selector->match() == Match::ForgivingUnknownNestContaining) {
             builder.append(selector->value());
         } else if (selector->match() == Match::HasScope) {
@@ -593,12 +599,15 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
             case PseudoElement::ViewTransitionImagePair:
             case PseudoElement::ViewTransitionOld:
             case PseudoElement::ViewTransitionNew:
-                // Name or universal selector always comes first, followed by classes.
+                // Name or universal selector always comes first, followed by classes (view-transition pseudo-elements only).
                 ASSERT(selector->stringList() && !selector->stringList()->isEmpty());
 
                 builder.append("::"_s, selector->serializingValue(), '(',
                     interleave(*selector->stringList(), [&](auto& builder, auto& nameOrClass) {
-                        serializeIdentifierOrStar(nameOrClass, builder);
+                        if (nameOrClass == universalPseudoElementNameAtom())
+                            builder.append('*');
+                        else
+                            serializeIdentifier(builder, nameOrClass);
                     }, '.'),
                 ')');
                 break;
@@ -667,10 +676,17 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
             }
             if (selector->match() != Match::Set) {
                 serializeString(builder, selector->serializingValue());
-                if (selector->attributeValueMatchingIsCaseInsensitive())
-                    builder.append(" i]"_s);
-                else
+                switch (selector->attributeMatchType()) {
+                case AttributeMatchType::Default:
                     builder.append(']');
+                    break;
+                case AttributeMatchType::CaseInsensitive:
+                    builder.append(" i]"_s);
+                    break;
+                case AttributeMatchType::CaseSensitive:
+                    builder.append(" s]"_s);
+                    break;
+                }
             }
         } else if (selector->match() == Match::PagePseudoClass) {
             switch (selector->pagePseudoClass()) {
@@ -742,7 +758,7 @@ void CSSSelector::setAttribute(const QualifiedName& value, AttributeMatchType ma
 {
     createRareData();
     m_data.rareData->attribute = value;
-    m_caseInsensitiveAttributeValueMatching = matchType == CaseInsensitive;
+    m_attributeMatchType = std::to_underlying(matchType);
 }
 
 void CSSSelector::setArgument(const AtomString& value)
@@ -865,12 +881,13 @@ CSSSelector::CSSSelector(const CSSSelector& other)
     , m_hasRareData(other.m_hasRareData)
     , m_isForPage(other.m_isForPage)
     , m_tagIsForNamespaceRule(other.m_tagIsForNamespaceRule)
-    , m_caseInsensitiveAttributeValueMatching(other.m_caseInsensitiveAttributeValueMatching)
+    , m_attributeMatchType(other.m_attributeMatchType)
     , m_isImplicit(other.m_isImplicit)
+    , m_isEquivalentToClassSelector(other.m_isEquivalentToClassSelector)
 {
     // Manually ref count the m_data union because they are stored as raw ptr, not as Ref.
     if (other.m_hasRareData)
-        m_data.rareData = &other.m_data.rareData->deepCopy().leakRef();
+        m_data.rareData = &protect(other.m_data.rareData)->deepCopy().leakRef();
     else if (other.match() == Match::Tag) {
         m_data.tagQName = other.m_data.tagQName;
         m_data.tagQName->ref();
@@ -888,7 +905,7 @@ CSSSelector::CSSSelector(const CSSSelector& other, MutableSelectorCopyTag)
     m_isLastInComplexSelector = true;
 }
 
-bool CSSSelector::visitSimpleSelectors(VisitFunctor&& functor, VisitFunctionalPseudoClasses visitFunctionalPseudoClasses, VisitOnlySubject visitOnlySubject) const
+bool CSSSelector::visitSimpleSelectors(NOESCAPE const VisitFunctor& functor, VisitFunctionalPseudoClasses visitFunctionalPseudoClasses, VisitOnlySubject visitOnlySubject) const
 {
     Deque<const CSSSelector*, 16> worklist;
     worklist.append(this);
@@ -948,6 +965,11 @@ bool CSSSelector::isScopePseudoClass() const
     return match() == Match::PseudoClass && pseudoClass() == PseudoClass::Scope;
 }
 
+bool CSSSelector::isHasPseudoClass() const
+{
+    return match() == Match::PseudoClass && pseudoClass() == PseudoClass::Has;
+}
+
 bool CSSSelector::hasScope() const
 {
     return visitSimpleSelectors([] (auto& selector) {
@@ -993,7 +1015,7 @@ bool complexSelectorMatchesElementBackedPseudoElement(const CSSSelector& complex
     };
 
     auto result = false;
-    for (auto* simpleSelector = &complexSelector; simpleSelector; simpleSelector = simpleSelector->precedingInCompound()) {
+    for (auto* simpleSelector = &complexSelector; simpleSelector; simpleSelector = simpleSelector->followingInCompound()) {
         if (simpleSelector->matchesPseudoElement()) {
             if (!isElementBacked(simpleSelector->pseudoElement()))
                 return false;
@@ -1007,7 +1029,7 @@ bool CSSSelector::simpleSelectorEqual(const CSSSelector& other) const
 {
     auto valuesEqual = [&] {
         if (m_hasRareData)
-            return m_data.rareData->equals(*other.m_data.rareData);
+            return protect(m_data.rareData)->equals(*protect(other.m_data.rareData));
         if (match() == Match::Tag)
             return *m_data.tagQName == *other.m_data.tagQName;
         return m_data.value == other.m_data.value;
@@ -1018,7 +1040,7 @@ bool CSSSelector::simpleSelectorEqual(const CSSSelector& other) const
         && m_pseudoType == other.m_pseudoType
         && m_hasRareData == other.m_hasRareData
         && m_tagIsForNamespaceRule == other.m_tagIsForNamespaceRule
-        && m_caseInsensitiveAttributeValueMatching == other.m_caseInsensitiveAttributeValueMatching
+        && m_attributeMatchType == other.m_attributeMatchType
         && m_isImplicit == other.m_isImplicit
         && valuesEqual();
 }
@@ -1040,7 +1062,7 @@ bool isElementBackedPseudoElement(CSSSelector::PseudoElement pseudoElement)
     }
 }
 
-static bool NODELETE shouldSkipForEqualMode(const CSSSelector& simpleSelector, ComplexSelectorsEqualMode mode)
+static bool LEGACY_NODELETE shouldSkipForEqualMode(const CSSSelector& simpleSelector, ComplexSelectorsEqualMode mode)
 {
     if (mode == ComplexSelectorsEqualMode::IgnoreNonElementBackedPseudoElements)
         return simpleSelector.matchesPseudoElement() && !isElementBackedPseudoElement(simpleSelector.pseudoElement());
@@ -1073,7 +1095,7 @@ bool complexSelectorsEqual(const CSSSelector& complexA, const CSSSelector& compl
     return true;
 }
 
-static void NODELETE addSimpleSelector(Hasher& hasher, const CSSSelector& simpleSelector)
+static void LEGACY_NODELETE addSimpleSelector(Hasher& hasher, const CSSSelector& simpleSelector)
 {
     // This hash does try to include every possible thing in a selector.
     add(hasher, simpleSelector.match());

@@ -25,19 +25,24 @@
 
 #import "config.h"
 
+#import "HTTPServer.h"
 #import "Helpers/DeprecatedGlobalValues.h"
 #import "Helpers/PlatformUtilities.h"
 #import "RemoteObjectRegistry.h"
 #import "Helpers/cocoa/TestWKWebView.h"
 #import "Helpers/Utilities.h"
+#import "TestNavigationDelegate.h"
+#import "TestUIDelegate.h"
 #import <WebKit/WKNavigationDelegatePrivate.h>
 #import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKProcessPoolPrivate.h>
 #import <WebKit/WKWebView.h>
 #import <WebKit/WKWebViewPrivate.h>
+#import <WebKit/WKWebsiteDataStorePrivate.h>
 #import <WebKit/_WKFeature.h>
 #import <WebKit/_WKRemoteObjectInterface.h>
 #import <WebKit/_WKRemoteObjectRegistry.h>
+#import <WebKit/_WKWebsiteDataStoreConfiguration.h>
 #import <wtf/RetainPtr.h>
 #import <wtf/cocoa/TypeCastsCocoa.h>
 
@@ -471,7 +476,7 @@ TEST(IPCTestingAPI, InvalidURLsDeleteCookie)
     EXPECT_STREQ([alertMessage UTF8String], "[]");
 }
 
-TEST(IPCTestingAPI, EmptyFirstPartyForCookiesCookieRequestHeaderFieldValue)
+TEST(IPCTestingAPI, EmptyFirstPartyForCookiesCookieRequestHeaderFieldValueDigest)
 {
     RetainPtr webView = createWebViewWithIPCTestingAPI();
     RetainPtr delegate = adoptNS([[IPCTestingAPIDelegate alloc] init]);
@@ -481,29 +486,25 @@ TEST(IPCTestingAPI, EmptyFirstPartyForCookiesCookieRequestHeaderFieldValue)
     auto sendMessage = @"const connection = IPC.connectionForProcessTarget('Networking');"
         "const result = connection.sendSyncMessage("
         "    0,"
-        "    IPC.messages.NetworkConnectionToWebProcess_CookieRequestHeaderFieldValue.name,"
+        "    IPC.messages.NetworkConnectionToWebProcess_CookieRequestHeaderFieldValueDigest.name,"
         "    1000,"
         "    ["
         "        {type: 'String', value: null},"
         "        {type: 'uint8_t', value: 1},"
         "        {type: 'uint8_t', value: 1},"
         "        {type: 'uint8_t', value: 1},"
-        "        {type: 'String', value: location.href},"
+        "        {type: 'URL', value: location.href},"
         "        {type: 'uint8_t', value: 1},"
-        "        {type: 'FrameID', value: IPC.frameID},"
-        "        {type: 'uint8_t', value: 1},"
-        "        {type: 'uint64_t', value: IPC.pageID},"
-        "        {type: 'uint8_t', value: 1},"
-        "        {type: 'uint64_t', value: IPC.webPageProxyID},"
         "    ]"
         ");";
     [webView evaluateJavaScript:sendMessage completionHandler:nil];
     while (![webView objectByEvaluatingJavaScript:@"result"])
         TestWebKitAPI::Util::spinRunLoop();
-    EXPECT_STREQ([[webView stringByEvaluatingJavaScript:@"result.arguments[0].value"] UTF8String], "<null>");
+    // std::nullopt decodes to undefined.
+    EXPECT_STREQ([[webView stringByEvaluatingJavaScript:@"typeof result.arguments[0]"] UTF8String], "undefined");
 }
 
-TEST(IPCTestingAPI, InvalidSameSiteInfoCookieRequestHeaderFieldValue)
+TEST(IPCTestingAPI, InvalidSameSiteInfoCookieRequestHeaderFieldValueDigest)
 {
     RetainPtr webView = createWebViewWithIPCTestingAPI();
     [webView synchronouslyLoadHTMLString:@"<!DOCTYPE html><script>document.cookie='a=b';</script>" baseURL:[NSURL URLWithString:@"https://webkit.org/"]];
@@ -511,26 +512,22 @@ TEST(IPCTestingAPI, InvalidSameSiteInfoCookieRequestHeaderFieldValue)
     auto sendMessage = @"const connection = IPC.connectionForProcessTarget('Networking');"
         "const result = connection.sendSyncMessage("
         "    0,"
-        "    IPC.messages.NetworkConnectionToWebProcess_CookieRequestHeaderFieldValue.name,"
+        "    IPC.messages.NetworkConnectionToWebProcess_CookieRequestHeaderFieldValueDigest.name,"
         "    1000,"
         "    ["
-        "        {type: 'String', value: location.href},"
+        "        {type: 'URL', value: location.href},"
         "        {type: 'uint8_t', value: 1},"
         "        {type: 'uint8_t', value: 1},"
         "        {type: 'uint8_t', value: 1},"
-        "        {type: 'String', value: 'https://webkit.org'},"
+        "        {type: 'URL', value: 'https://webkit.org'},"
         "        {type: 'uint8_t', value: 1},"
-        "        {type: 'FrameID', value: IPC.frameID},"
-        "        {type: 'uint8_t', value: 1},"
-        "        {type: 'uint64_t', value: IPC.pageID},"
-        "        {type: 'uint8_t', value: 1},"
-        "        {type: 'uint64_t', value: IPC.webPageProxyID},"
         "    ]"
         ");";
     [webView evaluateJavaScript:sendMessage completionHandler:nil];
     while (![webView objectByEvaluatingJavaScript:@"result"])
         TestWebKitAPI::Util::spinRunLoop();
-    EXPECT_STREQ([[webView stringByEvaluatingJavaScript:@"result.arguments[0].value"] UTF8String], "<null>");
+    // std::nullopt decodes to undefined.
+    EXPECT_STREQ([[webView stringByEvaluatingJavaScript:@"typeof result.arguments[0]"] UTF8String], "undefined");
 }
 
 TEST(IPCTestingAPI, DescribesArguments)
@@ -879,92 +876,241 @@ TEST(IPCTestingAPI, SpeechSynthesisWithLockdownMode)
     [WKProcessPool _setCaptivePortalModeEnabledGloballyForTesting:NO];
 }
 
+static RetainPtr<NSString> sendOriginAccessAllowListEntryAndFetchCrossOrigin(bool allowOriginAccessAllowListIPC)
+{
+    using namespace TestWebKitAPI;
+
+    HTTPServer server({
+        { "/pageA"_s, { "<!DOCTYPE html>"_s } },
+        { "/pageB"_s, { "<!DOCTYPE html>"_s } },
+        { "/target"_s, { {{ "Content-Type"_s, "text/plain"_s }}, "cross-origin-data"_s } },
+    });
+    auto serverPort = server.port();
+
+    RetainPtr configA = adoptNS([[WKWebViewConfiguration alloc] init]);
+    for (_WKFeature *feature in [WKPreferences _features]) {
+        if ([feature.key isEqualToString:@"IPCTestingAPIEnabled"])
+            [[configA preferences] _setEnabled:YES forFeature:feature];
+        if ([feature.key isEqualToString:@"AllowTestOnlyOriginAccessAllowListIPC"])
+            [[configA preferences] _setEnabled:allowOriginAccessAllowListIPC forFeature:feature];
+    }
+
+    RetainPtr configB = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [configB setProcessPool:[configA processPool]];
+
+    RetainPtr webViewA = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configA.get()]);
+    RetainPtr webViewB = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configB.get()]);
+
+    [webViewA loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/pageA", serverPort]]]];
+    [webViewA _test_waitForDidFinishNavigation];
+
+    [webViewB loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://localhost:%u/pageB", serverPort]]]];
+    [webViewB _test_waitForDidFinishNavigation];
+
+    [webViewA stringByEvaluatingJavaScript:[NSString stringWithFormat:
+        @"IPC.sendMessage('Networking', 0,"
+        "  IPC.messages.NetworkConnectionToWebProcess_AddOriginAccessAllowListEntry.name,"
+        "  ["
+        "    { type: 'String', value: 'http://localhost:%u' },"
+        "    { type: 'String', value: 'http' },"
+        "    { type: 'String', value: '127.0.0.1' },"
+        "    { type: 'bool', value: 1 }"
+        "  ]"
+        ")", serverPort]];
+
+    Util::runFor(0.5_s);
+
+    [webViewB evaluateJavaScript:[NSString stringWithFormat:
+        @"try {"
+        "  var xhr = new XMLHttpRequest();"
+        "  xhr.open('GET', 'http://127.0.0.1:%u/target', false);"
+        "  xhr.send();"
+        "  alert('FETCHED:' + xhr.responseText);"
+        "} catch(e) {"
+        "  alert('BLOCKED:' + e);"
+        "}", serverPort] completionHandler:nil];
+
+    return [webViewB _test_waitForAlert];
+}
+
+TEST(IPCTestingAPI, AddOriginAccessAllowListEntryRequiresTestOnlyIPC)
+{
+    auto result = sendOriginAccessAllowListEntryAndFetchCrossOrigin(false);
+    EXPECT_TRUE([result hasPrefix:@"BLOCKED:"]);
+}
+
+TEST(IPCTestingAPI, AddOriginAccessAllowListEntryAllowedWithTestOnlyIPC)
+{
+    auto result = sendOriginAccessAllowListEntryAndFetchCrossOrigin(true);
+    EXPECT_WK_STREQ(result, "FETCHED:cross-origin-data");
+}
+
+#if ENABLE(CONTENT_FILTERING)
+
+static NSString *installMockContentFilterAndNavigateVictim(bool allowMockContentFilterIPC)
+{
+    using namespace TestWebKitAPI;
+
+    HTTPServer attackerServer({
+        { "/attacker"_s, { "<!DOCTYPE html>"_s } },
+        { "/evil"_s, { "<!DOCTYPE html><body>REDIRECTED</body>"_s } },
+    });
+    HTTPServer victimServer({
+        { "/victim"_s, { "<!DOCTYPE html><body>ORIGINAL</body>"_s } },
+    });
+
+    RetainPtr configA = adoptNS([[WKWebViewConfiguration alloc] init]);
+    for (_WKFeature *feature in [WKPreferences _features]) {
+        if ([feature.key isEqualToString:@"IPCTestingAPIEnabled"])
+            [[configA preferences] _setEnabled:YES forFeature:feature];
+        if ([feature.key isEqualToString:@"AllowTestOnlyMockContentFilterIPC"])
+            [[configA preferences] _setEnabled:allowMockContentFilterIPC forFeature:feature];
+    }
+
+    RetainPtr configB = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [configB setProcessPool:[configA processPool]];
+
+    RetainPtr webViewA = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configA.get()]);
+    RetainPtr webViewB = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configB.get()]);
+
+    [webViewA loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/attacker", attackerServer.port()]]]];
+    [webViewA _test_waitForDidFinishNavigation];
+
+    [webViewA stringByEvaluatingJavaScript:[NSString stringWithFormat:
+        @"IPC.sendMessage('Networking', 0,"
+        "  IPC.messages.NetworkConnectionToWebProcess_InstallMockContentFilter.name,"
+        "  ["
+        "    { type: 'bool', value: 1 },"
+        "    { type: 'uint8_t', value: 0 },"
+        "    { type: 'bool', value: 0 },"
+        "    { type: 'bool', value: 1 },"
+        "    { type: 'String', value: '' },"
+        "    { type: 'String', value: 'http://127.0.0.1:%u/evil' },"
+        "    { type: 'double', value: 0 }"
+        "  ]"
+        ")", attackerServer.port()]];
+
+    Util::runFor(0.5_s);
+
+    [webViewB loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/victim", victimServer.port()]]]];
+    [webViewB _test_waitForDidFinishNavigation];
+
+    NSString *bodyText = [webViewB stringByEvaluatingJavaScript:@"document.body.innerText"];
+
+    if (allowMockContentFilterIPC) {
+        // Reset MockContentFilterSettings since it is a process-global singleton in the NetworkProcess.
+        [webViewA stringByEvaluatingJavaScript:
+            @"IPC.sendMessage('Networking', 0,"
+            "  IPC.messages.NetworkConnectionToWebProcess_InstallMockContentFilter.name,"
+            "  ["
+            "    { type: 'bool', value: 0 },"
+            "    { type: 'uint8_t', value: 0 },"
+            "    { type: 'bool', value: 0 },"
+            "    { type: 'bool', value: 0 },"
+            "    { type: 'String', value: '' },"
+            "    { type: 'String', value: '' },"
+            "    { type: 'double', value: 0 }"
+            "  ]"
+            ")"];
+
+        Util::runFor(0.5_s);
+    }
+
+    return bodyText;
+}
+
+TEST(IPCTestingAPI, InstallMockContentFilterRequiresTestOnlyIPC)
+{
+    EXPECT_WK_STREQ(installMockContentFilterAndNavigateVictim(false), "ORIGINAL");
+}
+
+TEST(IPCTestingAPI, InstallMockContentFilterRedirectsWithTestOnlyIPC)
+{
+    EXPECT_WK_STREQ(installMockContentFilterAndNavigateVictim(true), "REDIRECTED");
+}
+
+#endif // ENABLE(CONTENT_FILTERING)
+
+static constexpr auto fileSystemGoodPageHTML = R"TESTRESOURCE(
+<script>
+var capturedIdentifier = null;
+IPC.addOutgoingMessageListener('Networking', function(msg) {
+    if (msg.name === IPC.messages.NetworkStorageManager_GetHandleNames.name && !capturedIdentifier) {
+        var buf = new DataView(msg.buffer);
+        capturedIdentifier = buf.getBigUint64(16, true);
+    }
+});
+
+var run = async() => {
+    var root = await navigator.storage.getDirectory();
+    await root.getFileHandle('test.txt', { create: true });
+    for await (var entry of root.entries()) { }
+    if (capturedIdentifier !== null)
+        alert('id:' + capturedIdentifier.toString());
+    else
+        alert('error:no-identifier-captured');
+};
+run();
+</script>
+)TESTRESOURCE"_s;
+
+static constexpr auto fileSystemBadPageHTML = R"TESTRESOURCE(
+<script>
+var attack = (stolenId) => {
+    var net = IPC.connectionForProcessTarget('Networking');
+    var onReply = (reply) => {
+        var buf = new DataView(reply.buffer);
+        var hasValue = !!buf.getUint8(16);
+        if (hasValue)
+            alert('FAIL:access-granted');
+        else
+            alert('PASS:access-denied');
+    };
+    net.sendWithAsyncReply(0, IPC.messages.NetworkStorageManager_GetHandleNames.name, [ { type: 'uint64_t', value: BigInt(stolenId) } ], onReply);
+};
+</script>
+)TESTRESOURCE"_s;
+
+TEST(IPCTestingAPI, FileSystemForgedHandleIdentifierRejected)
+{
+    using namespace TestWebKitAPI;
+
+    RetainPtr tempDir = retainPtr([[NSFileManager defaultManager] URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:[NSURL fileURLWithPath:NSTemporaryDirectory()] create:YES error:nil]);
+    RetainPtr dataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
+    [dataStoreConfiguration setGeneralStorageDirectory:[tempDir URLByAppendingPathComponent:@"Storage"]];
+    RetainPtr dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:dataStoreConfiguration.get()]);
+    [dataStore _setStorageSiteValidationEnabled:YES];
+
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    for (_WKFeature *feature in [WKPreferences _features]) {
+        if ([feature.key isEqualToString:@"IPCTestingAPIEnabled"]) {
+            [[configuration preferences] _setEnabled:YES forFeature:feature];
+            break;
+        }
+    }
+    [configuration setWebsiteDataStore:dataStore.get()];
+
+    RetainPtr goodUIDelegate = adoptNS([TestUIDelegate new]);
+    RetainPtr goodView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+    [goodView setUIDelegate:goodUIDelegate.get()];
+    [goodView synchronouslyLoadHTMLString:[NSString stringWithUTF8String:fileSystemGoodPageHTML.characters()] baseURL:[NSURL URLWithString:@"https://good.example/"]];
+
+    NSString *goodMessage = [goodUIDelegate waitForAlert];
+    EXPECT_TRUE([goodMessage hasPrefix:@"id:"]);
+    NSString *stolenIdentifier = [goodMessage substringFromIndex:3];
+
+    auto goodPID = [goodView _webProcessIdentifier];
+
+    RetainPtr badUIDelegate = adoptNS([TestUIDelegate new]);
+    RetainPtr badView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+    [badView setUIDelegate:badUIDelegate.get()];
+    [badView synchronouslyLoadHTMLString:[NSString stringWithUTF8String:fileSystemBadPageHTML.characters()] baseURL:[NSURL URLWithString:@"https://bad.example/"]];
+
+    auto badPID = [badView _webProcessIdentifier];
+    EXPECT_NE(goodPID, badPID);
+
+    [badView evaluateJavaScript:[NSString stringWithFormat:@"attack('%@')", stolenIdentifier] completionHandler:nil];
+    EXPECT_WK_STREQ(@"PASS:access-denied", [badUIDelegate waitForAlert]);
+}
+
 #endif
-
-#if !HAVE(WK_SECURE_CODING_NSURLREQUEST)
-TEST(IPCTestingAPI, CGColorInNSSecureCoding)
-{
-    RetainPtr archiver = adoptNS([[NSKeyedArchiver alloc] initRequiringSecureCoding:YES]);
-
-    RetainPtr<id<NSKeyedArchiverDelegate, NSKeyedUnarchiverDelegate>> delegate = adoptNS([[NSClassFromString(@"WKSecureCodingArchivingDelegate") alloc] init]);
-    archiver.get().delegate = delegate.get();
-
-    NSString *key = @"SomeString";
-    RetainPtr value = adoptCF(CGColorCreateSRGB(0.2, 0.3, 0.4, 0.5));
-    auto payload = @{ key : static_cast<id>(value.get()) };
-    [archiver encodeObject:payload forKey:NSKeyedArchiveRootObjectKey];
-    [archiver finishEncoding];
-    [archiver setDelegate:nil];
-
-    auto data = [archiver encodedData];
-
-    RetainPtr unarchiver = adoptNS([[NSKeyedUnarchiver alloc] initForReadingFromData:data error:nullptr]);
-    unarchiver.get().decodingFailurePolicy = NSDecodingFailurePolicyRaiseException;
-    unarchiver.get().delegate = delegate.get();
-
-    RetainPtr allowedClassSet = adoptNS([NSMutableSet new]);
-    [allowedClassSet addObject:NSDictionary.class];
-    [allowedClassSet addObject:NSString.class];
-    [allowedClassSet addObject:NSClassFromString(@"WKSecureCodingCGColorWrapper")];
-
-    NSDictionary *result = [unarchiver decodeObjectOfClasses:allowedClassSet.get() forKey:NSKeyedArchiveRootObjectKey];
-    // Round-tripping the color can slightly change the representation, causing [payload isEqual:result] to report NO.
-    EXPECT_EQ(result.count, static_cast<NSUInteger>(1));
-    NSString *resultKey = result.allKeys[0];
-    EXPECT_TRUE([key isEqual:resultKey]);
-    CGColorRef resultValue = static_cast<CGColorRef>(result.allValues[0]);
-    ASSERT_EQ(CFGetTypeID(resultValue), CGColorGetTypeID());
-    RetainPtr resultValueColorSpace = CGColorGetColorSpace(resultValue);
-    RetainPtr resultValueColorSpaceName = adoptCF(CGColorSpaceCopyName(resultValueColorSpace.get()));
-    EXPECT_NE(CFStringFind(resultValueColorSpaceName.get(), CFSTR("SRGB"), 0).location, kCFNotFound);
-    ASSERT_EQ(CGColorGetNumberOfComponents(resultValue), CGColorGetNumberOfComponents(value.get()));
-    for (size_t i = 0; i < CGColorGetNumberOfComponents(resultValue); ++i)
-        EXPECT_EQ(CGColorGetComponents(resultValue)[i], CGColorGetComponents(value.get())[i]);
-    [unarchiver finishDecoding];
-    unarchiver.get().delegate = nil;
-}
-
-TEST(IPCTestingAPI, NSURLWithBaseURLInNSSecureCoding)
-{
-    RetainPtr archiver = adoptNS([[NSKeyedArchiver alloc] initRequiringSecureCoding:YES]);
-
-    RetainPtr<id<NSKeyedArchiverDelegate, NSKeyedUnarchiverDelegate>> delegate = adoptNS([[NSClassFromString(@"WKSecureCodingArchivingDelegate") alloc] init]);
-    archiver.get().delegate = delegate.get();
-
-    NSString *key = @"SomeString";
-    NSURL *value = [NSURL URLWithString:@"/garden_home.html" relativeToURL:[NSURL URLWithString:@"amcomponent://com.xunmeng.pinduoduo/"]];
-    EXPECT_WK_STREQ(value.baseURL.absoluteString, @"amcomponent://com.xunmeng.pinduoduo/");
-    EXPECT_WK_STREQ(value.relativeString, @"/garden_home.html");
-    EXPECT_WK_STREQ(value.absoluteString, @"amcomponent://com.xunmeng.pinduoduo/garden_home.html");
-
-    auto payload = @{ key : static_cast<id>(value) };
-    [archiver encodeObject:payload forKey:NSKeyedArchiveRootObjectKey];
-    [archiver finishEncoding];
-    [archiver setDelegate:nil];
-
-    auto data = [archiver encodedData];
-
-    RetainPtr unarchiver = adoptNS([[NSKeyedUnarchiver alloc] initForReadingFromData:data error:nullptr]);
-    unarchiver.get().decodingFailurePolicy = NSDecodingFailurePolicyRaiseException;
-    unarchiver.get().delegate = delegate.get();
-
-    RetainPtr allowedClassSet = adoptNS([NSMutableSet new]);
-    [allowedClassSet addObject:NSDictionary.class];
-    [allowedClassSet addObject:NSString.class];
-    [allowedClassSet addObject:NSClassFromString(@"WKSecureCodingURLWrapper")];
-
-    NSDictionary *result = [unarchiver decodeObjectOfClasses:allowedClassSet.get() forKey:NSKeyedArchiveRootObjectKey];
-
-    EXPECT_EQ(result.count, static_cast<NSUInteger>(1));
-    NSString *resultKey = result.allKeys[0];
-    EXPECT_TRUE([key isEqual:resultKey]);
-    RetainPtr resultValue = checked_objc_cast<NSURL>(result.allValues[0]);
-
-    // Our coder resolves the URL so we end up with an absolute URL instead of base URL + relative string.
-    EXPECT_WK_STREQ(resultValue.get().baseURL.absoluteString, @"");
-    EXPECT_WK_STREQ(resultValue.get().baseURL.relativeString, @"");
-    EXPECT_WK_STREQ(resultValue.get().absoluteString, @"amcomponent://com.xunmeng.pinduoduo/garden_home.html");
-    [unarchiver finishDecoding];
-    unarchiver.get().delegate = nil;
-}
-#endif // !HAVE(WK_SECURE_CODING_NSURLREQUEST)

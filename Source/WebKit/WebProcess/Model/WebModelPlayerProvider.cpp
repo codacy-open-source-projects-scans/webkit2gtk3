@@ -34,6 +34,10 @@
 #include <WebCore/Settings.h>
 #include <wtf/TZoneMallocInlines.h>
 
+#if PLATFORM(COCOA)
+#include <sys/sysctl.h>
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
+#endif
 
 #if ENABLE(MODEL_PROCESS)
 #include "ModelProcessModelPlayer.h"
@@ -58,9 +62,24 @@ WebModelPlayerProvider::~WebModelPlayerProvider() = default;
 
 // MARK: - WebCore::ModelPlayerProvider overrides.
 
+bool WebModelPlayerProvider::isAvailable() const
+{
+#if PLATFORM(COCOA)
+    return !isInBaseSystem();
+#else
+    return true;
+#endif
+}
+
 RefPtr<WebCore::ModelPlayer> WebModelPlayerProvider::createModelPlayer(WebCore::ModelPlayerClient& client)
 {
     Ref page = m_page.get();
+#if PLATFORM(COCOA)
+    if (!isAvailable()) {
+        UNUSED_PARAM(client);
+        return nullptr;
+    }
+#endif
 #if ENABLE(MODEL_PROCESS)
     if (page->corePage() && page->corePage()->settings().modelProcessEnabled())
         return WebProcess::singleton().modelProcessModelPlayerManager().createModelProcessModelPlayer(page, client);
@@ -81,6 +100,9 @@ void WebModelPlayerProvider::deleteModelPlayer(WebCore::ModelPlayer& modelPlayer
     Ref page = m_page.get();
     if (page->corePage() && page->corePage()->settings().modelProcessEnabled())
         WebProcess::singleton().modelProcessModelPlayerManager().deleteModelProcessModelPlayer(modelPlayer);
+#elif ENABLE(GPU_PROCESS_MODEL)
+    if (RefPtr webModelPlayer = dynamicDowncast<WebModelPlayer>(modelPlayer))
+        webModelPlayer->releaseModelResources();
 #else
     UNUSED_PARAM(modelPlayer);
 #endif

@@ -25,8 +25,10 @@
 
 #pragma once
 
+#include <JavaScriptCore/ExceptionHelpers.h>
+#include <JavaScriptCore/GetVM.h>
 #include <JavaScriptCore/HeapCellInlines.h>
-#include <JavaScriptCore/JSGlobalObjectInlines.h>
+#include <JavaScriptCore/JSGlobalObject.h>
 #include <JavaScriptCore/JSString.h>
 #include <JavaScriptCore/KeyAtomStringCacheInlines.h>
 #include <JavaScriptCore/MarkedBlockInlines.h>
@@ -221,6 +223,81 @@ std::optional<size_t> JSString::tryFindOneChar(JSGlobalObject*, char16_t charact
     return WTF::notFound;
 }
 
+std::optional<size_t> JSString::tryFindLastOneChar(JSGlobalObject*, char16_t character, unsigned& startPosition) const
+{
+    ASSERT(isRope());
+
+    // Reverse counterpart of tryFindOneChar: walk the rope structure without resolving it
+    // and return the last occurrence of `character` at or before `startPosition` (inclusive).
+    // nullopt means the rope structure is too complex to walk; in that case `startPosition`
+    // is updated to mark the latest position known not to contain the character (so the
+    // caller can resolve only the remaining prefix).
+
+    auto scanSubstring = [&](const JSRopeString* substringRope, unsigned fiberLength, unsigned offset) -> std::optional<size_t> {
+        JSString* base = substringRope->substringBase();
+        ASSERT(!base->isRope());
+        ASSERT(startPosition >= offset);
+        if (!fiberLength)
+            return std::nullopt;
+        unsigned localStart = startPosition >= offset + fiberLength ? fiberLength - 1 : startPosition - offset;
+        StringView view = StringView(base->valueInternal()).substring(substringRope->substringOffset(), fiberLength);
+        size_t result = view.reverseFind(character, localStart);
+        if (result != WTF::notFound)
+            return offset + result;
+        return std::nullopt;
+    };
+
+    if (isSubstring()) {
+        auto result = scanSubstring(static_cast<const JSRopeString*>(this), length(), 0);
+        return result ? result : std::optional<size_t>(WTF::notFound);
+    }
+
+    const JSRopeString* rope = static_cast<const JSRopeString*>(this);
+    std::array<unsigned, JSRopeString::s_maxInternalRopeLength> fiberLengths;
+    std::array<JSString*, JSRopeString::s_maxInternalRopeLength> fibers;
+    unsigned fiberCount = 0;
+    for (unsigned i = 0; i < JSRopeString::s_maxInternalRopeLength; ++i) {
+        JSString* fiber = rope->fiber(i);
+        if (!fiber)
+            break;
+        fibers[fiberCount] = fiber;
+        fiberLengths[fiberCount] = fiber->length();
+        ++fiberCount;
+    }
+
+    unsigned totalLength = length();
+
+    // Walk fibers in reverse order so we return the largest matching index.
+    unsigned offset = totalLength;
+    for (unsigned i = fiberCount; i-- > 0;) {
+        unsigned fiberLength = fiberLengths[i];
+        offset -= fiberLength;
+
+        if (!fiberLength)
+            continue;
+        if (offset > startPosition)
+            continue; // fiber is entirely past `startPosition`.
+
+        JSString* fiber = fibers[i];
+        if (!fiber->isRope()) {
+            unsigned localStart = startPosition >= offset + fiberLength ? fiberLength - 1 : startPosition - offset;
+            size_t result = StringView(fiber->valueInternal()).reverseFind(character, localStart);
+            if (result != WTF::notFound)
+                return offset + result;
+        } else if (fiber->isSubstring()) {
+            if (auto result = scanSubstring(static_cast<const JSRopeString*>(fiber), fiberLength, offset))
+                return result;
+        } else {
+            // Bail out but update startPosition so the caller only needs to scan
+            // [0, offset + fiberLength - 1].
+            startPosition = std::min(startPosition, offset + fiberLength - 1);
+            return std::nullopt;
+        }
+    }
+
+    return WTF::notFound;
+}
+
 ALWAYS_INLINE std::optional<char16_t> JSString::tryGetCharAt(JSGlobalObject*, unsigned index) const
 {
     ASSERT(isRope());
@@ -307,11 +384,16 @@ inline void JSRopeString::convertToNonRope(String&& string) const
     // Concurrent compiler threads can access String held by JSString. So we always emit
     // store-store barrier here to ensure concurrent compiler threads see initialized String.
     ASSERT(JSString::isRope());
+    bool isAtom = string.impl() && string.impl()->isAtom();
     WTF::storeStoreFence();
     new (&uninitializedValueInternal()) String(WTF::move(string));
     static_assert(sizeof(String) == sizeof(RefPtr<StringImpl>), "JSString's String initialization must be done in one pointer move.");
     // We do not clear the trailing fibers and length information (fiber1 and fiber2) because we could be reading the length concurrently.
     ASSERT(!JSString::isRope());
+    if (isAtom) {
+        WTF::storeStoreFence(); // Publish the impl before the per-cell bit that advertises it.
+        markAsAtom();
+    }
     notifyNeedsDestruction();
 }
 
@@ -542,6 +624,9 @@ inline void JSRopeString::resolveToBuffer(JSString* fiber0, JSString* fiber1, JS
 
 inline JSString* jsAtomString(JSGlobalObject* globalObject, VM& vm, JSString* string)
 {
+    if (string->isDefinitelyAtom())
+        return string;
+
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     unsigned length = string->length();
@@ -554,7 +639,7 @@ inline JSString* jsAtomString(JSGlobalObject* globalObject, VM& vm, JSString* st
     if (!string->isRope()) {
         auto createFromNonRope = [&](VM& vm, auto&) {
             AtomString atom(string->valueInternal());
-            if (!string->valueInternal().impl()->isAtom())
+            if (!string->existingAtomOrNull())
                 string->swapToAtomString(vm, RefPtr { atom.impl() });
             return string;
         };

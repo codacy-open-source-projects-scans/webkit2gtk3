@@ -35,8 +35,8 @@
 #include "RenderElementInlines.h"
 #include "RenderListItem.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle.h"
 #include "RenderView.h"
+#include "StyleComputedStyle.h"
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
 
@@ -55,7 +55,7 @@ using CounterMaps = SingleThreadWeakHashMap<RenderElement, std::unique_ptr<Count
 
 static CounterNode* makeCounterNode(RenderElement&, const AtomString& identifier, bool alwaysCreateCounter);
 
-static CounterMaps& NODELETE counterMaps()
+static CounterMaps& LEGACY_NODELETE counterMaps()
 {
     static NeverDestroyed<CounterMaps> staticCounterMaps;
     return staticCounterMaps;
@@ -91,7 +91,7 @@ static RenderElement* previousInPreOrderRespectingContainment(const RenderElemen
 }
 
 // Unwrap anonymous block to find the real element it contains.
-static RenderElement* lastDescendantInAnonymousBlock(RenderElement& anonymousBlock)
+static RenderElement* LEGACY_NODELETE lastDescendantInAnonymousBlock(RenderElement& anonymousBlock)
 {
     ASSERT(anonymousBlock.isAnonymous());
     RenderElement* current = &anonymousBlock;
@@ -101,7 +101,7 @@ static RenderElement* lastDescendantInAnonymousBlock(RenderElement& anonymousBlo
     return current;
 }
 
-static RenderElement* previousSiblingUnwrappingAnonymous(const RenderElement& renderer)
+static RenderElement* LEGACY_NODELETE previousSiblingUnwrappingAnonymous(const RenderElement& renderer)
 {
     for (auto* previous = renderer.previousSibling(); previous; previous = previous->previousSibling()) {
         if (auto* previousElement = dynamicDowncast<RenderElement>(previous))
@@ -132,7 +132,7 @@ static RenderElement* previousSiblingOrParent(const RenderElement& renderer)
     return previousSiblingOrParentSkippingAnonymous(renderer);
 }
 
-static inline bool NODELETE areRenderersElementsSiblings(const RenderElement& first, const RenderElement& second)
+static inline bool LEGACY_NODELETE areRenderersElementsSiblings(const RenderElement& first, const RenderElement& second)
 {
     return first.firstNonAnonymousAncestor() == second.firstNonAnonymousAncestor();
 }
@@ -221,7 +221,7 @@ static std::optional<CounterPlan> planCounter(RenderElement& renderer, const Ato
     if (directives.setValue)
         return CounterPlan { type, *directives.setValue };
     if (directives.resetValue)
-        return CounterPlan { type, saturatedSum<int>(*directives.resetValue, directives.incrementValue.value_or(0)) };
+        return CounterPlan { type, saturatingSum<int>(*directives.resetValue, directives.incrementValue.value_or(0)) };
     if (directives.incrementValue)
         return CounterPlan { type, *directives.incrementValue };
     return std::nullopt;
@@ -275,7 +275,7 @@ static CounterInsertionPoint findPlaceForCounter(RenderElement& counterOwner, co
 
     bool isReset = type.contains(CounterNode::Type::Reset);
     while (currentRenderer) {
-        auto currentCounter = makeCounterNode(*currentRenderer, identifier, false);
+        RefPtr currentCounter = makeCounterNode(*currentRenderer, identifier, false);
         if (searchEndRenderer == currentRenderer) {
             // We may be at the end of our search.
             if (currentCounter) {
@@ -380,7 +380,7 @@ static CounterNode* makeCounterNode(RenderElement& renderer, const AtomString& i
 
     auto place = findPlaceForCounter(renderer, identifier, type);
     if (place.parent)
-        place.parent->insertAfter(newNode, place.previousSibling.get(), identifier);
+        protect(place.parent)->insertAfter(newNode, place.previousSibling.get(), identifier);
 
     maps.add(renderer, makeUnique<CounterMap>()).iterator->value->add(identifier, newNode.copyRef());
     renderer.setHasCounterNodeMap(true);
@@ -404,7 +404,7 @@ static CounterNode* makeCounterNode(RenderElement& renderer, const AtomString& i
             continue;
         if (stayWithin == currentRenderer->firstNonAnonymousAncestor() && currentCounter->hasResetType())
             break;
-        newNode->insertAfter(*currentCounter, newNode->lastChild(), identifier);
+        newNode->insertAfter(*currentCounter, protect(newNode->lastChild()), identifier);
     }
 
     return newNode.unsafePtr();
@@ -485,7 +485,7 @@ static void destroyCounterNodeWithoutMapRemoval(const AtomString& identifier, Co
     RefPtr<CounterNode> previous;
     for (RefPtr<CounterNode> child = node.lastDescendant(); child && child != &node; child = WTF::move(previous)) {
         previous = child->previousInPreOrder();
-        child->parent()->removeChild(*child);
+        protect(child->parent())->removeChild(*child);
         auto& ownerCounterMap = *counterMaps().find(child->owner())->value;
         ASSERT(ownerCounterMap.get(identifier) == child);
         ownerCounterMap.remove(identifier);
@@ -521,9 +521,9 @@ void RenderCounter::destroyCounterNode(RenderElement& owner, const AtomString& i
     // will be called.
 }
 
-void RenderCounter::rendererStyleChangedSlowCase(RenderElement& renderer, const RenderStyle* oldStyle, const RenderStyle& newStyle)
+void RenderCounter::rendererStyleChangedSlowCase(RenderElement& renderer, const Style::ComputedStyle* oldStyle, const Style::ComputedStyle& newStyle)
 {
-    Element* element = renderer.generatingElement();
+    RefPtr element = renderer.generatingElement();
     if (!element || !element->renderer())
         return; // cannot have generated content or if it can have, it will be handled during attaching
 

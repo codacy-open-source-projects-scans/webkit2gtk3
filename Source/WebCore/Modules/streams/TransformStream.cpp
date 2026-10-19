@@ -62,12 +62,12 @@ ExceptionOr<Ref<TransformStream>> TransformStream::create(JSC::JSGlobalObject& g
     if (readableStrategy)
         readableStrategyValue = readableStrategy.get();
 
-    auto result = createInternalTransformStream(uncheckedDowncast<JSDOMGlobalObject>(globalObject), transformerValue, writableStrategyValue, readableStrategyValue);
+    auto result = createInternalTransformStream(downcast<JSDOMGlobalObject>(globalObject), transformerValue, writableStrategyValue, readableStrategyValue);
     if (result.hasException())
         return result.releaseException();
 
     auto transformResult = result.releaseReturnValue();
-    return adoptRef(*new TransformStream(uncheckedDowncast<JSDOMGlobalObject>(globalObject), transformResult.transform, WTF::move(transformResult.readable), WTF::move(transformResult.writable)));
+    return adoptRef(*new TransformStream(downcast<JSDOMGlobalObject>(globalObject), transformResult.transform, WTF::move(transformResult.readable), WTF::move(transformResult.writable)));
 }
 
 Ref<TransformStream> TransformStream::create(Ref<ReadableStream>&& readable, Ref<WritableStream>&& writable)
@@ -166,9 +166,15 @@ ExceptionOr<CreateInternalTransformStreamResult> createInternalTransformStream(J
         return Exception { ExceptionCode::ExistingExceptionError };
 
     auto results = resultsConversionResult.releaseReturnValue();
-    ASSERT(results.size() == 3);
+    if (results.size() != 3) [[unlikely]]
+        return Exception { ExceptionCode::TypeError, "Internal TransformStream creation returned an unexpected number of values"_s };
 
-    return CreateInternalTransformStreamResult { results[0].get(), dynamicDowncast<JSReadableStream>(results[1].get())->wrapped(), dynamicDowncast<JSWritableStream>(results[2].get())->wrapped() };
+    auto* readable = dynamicDowncast<JSReadableStream>(results[1].get());
+    auto* writable = dynamicDowncast<JSWritableStream>(results[2].get());
+    if (!readable || !writable) [[unlikely]]
+        return Exception { ExceptionCode::TypeError, "Internal TransformStream creation returned values of unexpected types"_s };
+
+    return CreateInternalTransformStreamResult { results[0].get(), readable->wrapped(), writable->wrapped() };
 }
 
 template<typename Visitor>

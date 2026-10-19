@@ -57,6 +57,7 @@
 #include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/TextStream.h>
 
 #if USE(QUICK_LOOK)
 #include "QuickLook.h"
@@ -65,7 +66,7 @@
 #undef CACHEDRESOURCE_RELEASE_LOG
 #define PAGE_ID(frame) (frame.pageID() ? frame.pageID()->toUInt64() : 0)
 #define FRAME_ID(frame) (frame.frameID().toUInt64())
-#define CACHEDRESOURCE_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - CachedResource::" fmt, this, ##__VA_ARGS__)
+#define CACHEDRESOURCE_RELEASE_LOG(formatString, ...) RELEASE_LOG_FORWARDABLE(Network, CachedResource##formatString, ##__VA_ARGS__)
 #define CACHEDRESOURCE_RELEASE_LOG_WITH_FRAME(fmt, frame, ...) RELEASE_LOG(Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 "] CachedResource::" fmt, this, PAGE_ID(frame), FRAME_ID(frame), ##__VA_ARGS__)
 
 namespace WebCore {
@@ -74,7 +75,7 @@ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CachedResourceResponseData);
 
 static Seconds deadDecodedDataDeletionIntervalForResourceType(CachedResource::Type type)
 {
-    if (type == CachedResource::Type::Script || type == CachedResource::Type::JSON)
+    if (type == CachedResource::Type::Script || type == CachedResource::Type::JSON || type == CachedResource::Type::Text)
         return 5_s;
 
     return MemoryCache::singleton().deadDecodedDataDeletionInterval();
@@ -92,6 +93,7 @@ CachedResource::CachedResource(CachedResourceRequest&& request, Type type, PAL::
     , m_preloadResult(PreloadResult::PreloadNotReferenced)
     , m_status(Pending)
     , m_isLinkPreload(request.isLinkPreload())
+    , m_isLinkModulePreload(request.isLinkModulePreload())
     , m_hasUnknownEncoding(request.isLinkPreload())
     , m_ignoreForRequestCount(request.ignoreForRequestCount())
 {
@@ -116,6 +118,7 @@ CachedResource::CachedResource(const URL& url, Type type, PAL::SessionID session
     , m_preloadResult(PreloadResult::PreloadNotReferenced)
     , m_status(Cached)
     , m_isLinkPreload(false)
+    , m_isLinkModulePreload(false)
     , m_hasUnknownEncoding(false)
     , m_ignoreForRequestCount(false)
 {
@@ -137,15 +140,17 @@ void CachedResource::deref() const
 {
     // Invoke the inspector notification while the object is still fully intact
     // (i.e. before derived class destructors have run).
-    if (hasOneRef())
-        InspectorInstrumentation::willDestroyCachedResource(const_cast<CachedResource&>(*this));
+    if (hasOneRef()) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST InspectorInstrumentation::willDestroyCachedResource(const_cast<CachedResource&>(*this));
+    }
     RefCountedAndCanMakeWeakPtr::deref();
 }
 
 void CachedResource::failBeforeStarting()
 {
     // FIXME: What if resources in other frames were waiting for this revalidation?
-    LOG(ResourceLoading, "Cannot start loading '%s'", url().string().latin1().data());
+    LOG_WITH_STREAM(ResourceLoading, stream << "Cannot start loading '"_s << url().string() << "'"_s);
     if (allowsCaching() && m_resourceToRevalidate)
         MemoryCache::singleton().revalidationFailed(*this);
     error(CachedResource::LoadError);
@@ -154,7 +159,7 @@ void CachedResource::failBeforeStarting()
 void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
 {
     if (!cachedResourceLoader.frame()) {
-        CACHEDRESOURCE_RELEASE_LOG("load: No associated frame");
+        CACHEDRESOURCE_RELEASE_LOG(LoadNoAssociatedFrame);
         failBeforeStarting();
         return;
     }
@@ -246,30 +251,6 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
         return;
     }
 
-    // FIXME: Deprecate that code path.
-    if (m_options.keepAlive && shouldUsePingLoad(type()) && platformStrategies()->loaderStrategy()->usePingLoad()) {
-        ASSERT(m_originalRequest);
-        RefPtr protectedThis { *this };
-
-        auto identifier = ResourceLoaderIdentifier::generate();
-        InspectorInstrumentation::willSendRequestOfType(frame.ptr(), identifier, protect(frameLoader->activeDocumentLoader()).get(), request, InspectorInstrumentation::LoadType::Beacon);
-
-        platformStrategies()->loaderStrategy()->startPingLoad(frame, request, m_originalRequest->httpHeaderFields(), m_options, m_options.contentSecurityPolicyImposition, [this, protectedThis = Ref { *this }, frame = Ref { frame }, identifier] (const ResourceError& error, const ResourceResponse& response) {
-            if (!response.isNull())
-                InspectorInstrumentation::didReceiveResourceResponse(frame, identifier, protect(frame->loader().activeDocumentLoader()), response, nullptr);
-            if (!error.isNull()) {
-                setResourceError(error);
-                this->error(LoadError);
-                InspectorInstrumentation::didFailLoading(frame.ptr(), protect(frame->loader().activeDocumentLoader()), identifier, error);
-                return;
-            }
-            finishLoading(nullptr, { });
-            NetworkLoadMetrics emptyMetrics;
-            InspectorInstrumentation::didFinishLoading(frame.ptr(), protect(frame->loader().activeDocumentLoader()), identifier, emptyMetrics, nullptr);
-        });
-        return;
-    }
-
     platformStrategies()->loaderStrategy()->loadResource(frame, *this, WTF::move(request), m_options, [this, protectedThis = RefPtr { *this }, frameRef = Ref { frame }] (RefPtr<SubresourceLoader>&& loader) {
         m_loader = WTF::move(loader);
         if (!m_loader) {
@@ -289,7 +270,7 @@ void CachedResource::loadFrom(const CachedResource& resource)
 
     if (isCrossOrigin() && m_options.mode == FetchOptions::Mode::Cors) {
         ASSERT(m_origin);
-        auto accessControlCheckResult = WebCore::passesAccessControlCheck(resource.response(), m_options.storedCredentialsPolicy, *protect(m_origin), &CrossOriginAccessControlCheckDisabler::singleton());
+        auto accessControlCheckResult = WebCore::passesAccessControlCheck(resource.response(), m_options.storedCredentialsPolicy, *m_origin, &CrossOriginAccessControlCheckDisabler::singleton());
         if (!accessControlCheckResult) {
             setResourceError(ResourceError(String(), 0, url(), accessControlCheckResult.error(), ResourceError::Type::AccessControl));
             return;
@@ -465,7 +446,7 @@ Seconds CachedResource::freshnessLifetime(const ResourceResponse& response) cons
 void CachedResource::redirectReceived(ResourceRequest&& request, const ResourceResponse& response, CompletionHandler<void(ResourceRequest&&)>&& completionHandler)
 {
     RefPtr protectedThis { *this };
-    CACHEDRESOURCE_RELEASE_LOG("redirectReceived:");
+    CACHEDRESOURCE_RELEASE_LOG(RedirectReceived);
 
     // Remove redirect urls from the memory cache if they contain a fragment.
     // If we cache localhost/#key=foo we will return the same parameters key=foo
@@ -491,7 +472,7 @@ void CachedResource::setResponse(ResourceResponse&& newResponse)
 {
     ASSERT(response().type() == ResourceResponse::Type::Default || isOpaqueRedirectResponseWithoutLocationHeader(response()));
     mutableResponseData().m_response = WTF::move(newResponse);
-    m_varyingHeaderValues = collectVaryingRequestHeaders(protect(m_cookieJar).get(), m_resourceRequest, response());
+    m_varyingHeaderValues = collectVaryingRequestHeaders(m_cookieJar.get(), m_resourceRequest, response());
 
     if (response().source() == ResourceResponse::Source::ServiceWorker) {
         m_responseTainting = response().tainting();
@@ -763,22 +744,23 @@ void CachedResource::switchClientsToRevalidatedResource()
     }
 
     for (auto& client : clientsToMove) {
-        if (client)
-            removeClient(*client);
+        if (RefPtr protectedClient = client)
+            removeClient(*protectedClient);
     }
     ASSERT(!m_clients.computeSize());
 
     for (auto& client : clientsToMove) {
-        if (client)
-            protect(m_resourceToRevalidate)->addClientToSet(*client);
+        if (RefPtr protectedClient = client)
+            protect(m_resourceToRevalidate)->addClientToSet(*protectedClient);
     }
     for (auto& client : clientsToMove) {
         // Calling didAddClient may do anything, including trying to cancel revalidation.
         // Assert that it didn't succeed.
         ASSERT(m_resourceToRevalidate);
         // Calling didAddClient for a client may end up removing another client. In that case it won't be in the set anymore.
-        if (client && m_resourceToRevalidate->m_clients.contains(*client))
-            protect(m_resourceToRevalidate)->didAddClient(*client);
+        RefPtr protectedClient = client;
+        if (protectedClient && m_resourceToRevalidate->m_clients.contains(*protectedClient))
+            protect(m_resourceToRevalidate)->didAddClient(*protectedClient);
     }
     m_switchingClientsToRevalidatedResource = false;
 }
@@ -858,7 +840,7 @@ bool CachedResource::varyHeaderValuesMatch(const ResourceRequest& request)
     if (m_varyingHeaderValues.isEmpty())
         return true;
 
-    return verifyVaryingRequestHeaders(protect(m_cookieJar).get(), m_varyingHeaderValues, request);
+    return verifyVaryingRequestHeaders(m_cookieJar.get(), m_varyingHeaderValues, request);
 }
 
 unsigned CachedResource::overheadSize() const
@@ -887,8 +869,10 @@ CachedResource::ResponseData::ResponseData(CachedResource& resource)
 
 CachedResource::ResponseData& CachedResource::mutableResponseData() const
 {
-    if (!m_response)
-        m_response = makeUnique<ResponseData>(*const_cast<CachedResource*>(this));
+    if (!m_response) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST m_response = makeUnique<ResponseData>(*const_cast<CachedResource*>(this));
+    }
     return *m_response;
 }
 
@@ -955,8 +939,8 @@ unsigned CachedResource::decodedSize() const
 
 inline CachedResourceCallback::CachedResourceCallback(CachedResource& resource, CachedResourceClient& client)
     : m_timer([resource = RefPtr { resource }, client = WeakPtr { client }] {
-        if (client)
-            resource->didAddClient(*client);
+        if (RefPtr protectedClient = client)
+            resource->didAddClient(*protectedClient);
     })
 {
     m_timer.startOneShot(0_s);

@@ -30,6 +30,7 @@
 #import "WKSecurityOriginInternal.h"
 #import "WKWebViewInternal.h"
 #import <WebKit/WKError.h>
+#import <wtf/Borrow.h>
 #import <wtf/HashSet.h>
 #import <wtf/RetainPtr.h>
 
@@ -50,11 +51,15 @@
     _filterOptions = _WKTextExtractionFilterAll;
     _includeURLs = YES;
     _includeRects = YES;
+    _includeTagName = NO;
     _includeSelectOptions = YES;
     _nodeIdentifierInclusion = _WKTextExtractionNodeIdentifierInclusionInteractive;
     _eventListenerCategories = _WKTextExtractionEventListenerCategoryAll;
     _includeAccessibilityAttributes = YES;
     _includeTextInAutoFilledControls = NO;
+    _includeSameOriginSubframes = YES;
+    _includeClippedContent = YES;
+    _skipNearlyTransparentContent = YES;
     _targetRect = CGRectNull;
     _maxWordsPerParagraph = NSUIntegerMax;
     _maxWordsPerParagraphPolicy = _WKTextExtractionWordLimitPolicyAlways;
@@ -74,6 +79,7 @@
     _outputFormat = _WKTextExtractionOutputFormatPlainText;
     _includeURLs = NO;
     _includeRects = NO;
+    _includeTagName = NO;
     _includeSelectOptions = NO;
     _nodeIdentifierInclusion = _WKTextExtractionNodeIdentifierInclusionNone;
     _eventListenerCategories = _WKTextExtractionEventListenerCategoryNone;
@@ -89,6 +95,16 @@
 }
 
 - (void)setTargetNode:(_WKJSHandle *)targetNode
+{
+    _targetNode = adoptNS([targetNode copy]);
+}
+
+- (WKJSHandle *)targetNodeHandle
+{
+    return _targetNode.get();
+}
+
+- (void)setTargetNodeHandle:(WKJSHandle *)targetNode
 {
     _targetNode = adoptNS([targetNode copy]);
 }
@@ -171,7 +187,7 @@
     return self;
 }
 
-- (Expected<std::optional<WebKit::ExtractedNodeInfo>, String>)resolveContainerForSearchText:(NSString *)searchText
+- (std::expected<std::optional<WebKit::ExtractedNodeInfo>, String>)resolveContainerForSearchText:(NSString *)searchText
 {
     if (!searchText.length)
         return { std::nullopt };
@@ -188,7 +204,7 @@
         return { containers.first() };
 
     std::optional<WebKit::ExtractedNodeInfo> interactiveContainer;
-    for (auto& container : containers) {
+    for (auto& container : borrow(containers)) {
         if (container.interactivity != WebKit::ExtractedNodeInfo::IsInteractive::Yes)
             continue;
 
@@ -228,6 +244,13 @@
     [webView _requestJSHandleForNodeIdentifier:nodeIdentifier searchText:searchText completionHandler:completionHandler];
 }
 
+- (void)requestHandleForNodeIdentifier:(nullable NSString *)nodeIdentifier searchText:(nullable NSString *)searchText completionHandler:(void (^)(WKJSHandle * _Nullable))completionHandler
+{
+    [self requestJSHandleForNodeIdentifier:nodeIdentifier searchText:searchText completionHandler:[completionHandler = makeBlockPtr(completionHandler)] (_WKJSHandle *handle) {
+        completionHandler(handle);
+    }];
+}
+
 - (void)requestContainerJSHandleForNodeIdentifier:(NSString *)nodeIdentifier searchText:(NSString *)searchText completionHandler:(void (^)(_WKJSHandle *))completionHandler
 {
     RetainPtr webView = _webView;
@@ -235,6 +258,13 @@
         return completionHandler(nil);
 
     [webView _requestContainerJSHandleForNodeIdentifier:nodeIdentifier searchText:searchText completionHandler:completionHandler];
+}
+
+- (void)requestContainerHandleForNodeIdentifier:(NSString *)nodeIdentifier searchText:(NSString *)searchText completionHandler:(void (^)(WKJSHandle *))completionHandler
+{
+    [self requestContainerJSHandleForNodeIdentifier:nodeIdentifier searchText:searchText completionHandler:[completionHandler = makeBlockPtr(completionHandler)] (_WKJSHandle *handle) {
+        completionHandler(handle);
+    }];
 }
 
 - (void)requestContainerJSHandleForSearchTexts:(NSArray<NSString *> *)searchTexts nodeIdentifier:(NSString *)nodeIdentifier completionHandler:(void (^)(_WKJSHandle *))completionHandler
@@ -246,10 +276,27 @@
     [webView _requestContainerJSHandleForSearchTexts:searchTexts nodeIdentifier:nodeIdentifier completionHandler:completionHandler];
 }
 
+- (void)requestContainerHandleForSearchTexts:(NSArray<NSString *> *)searchTexts nodeIdentifier:(nullable NSString *)nodeIdentifier completionHandler:(void (^)(WKJSHandle * _Nullable))completionHandler
+{
+    [self requestContainerJSHandleForSearchTexts:searchTexts nodeIdentifier:nodeIdentifier completionHandler:[completionHandler = makeBlockPtr(completionHandler)] (_WKJSHandle *handle) {
+        completionHandler(handle);
+    }];
+}
+
+- (void)requestFrameInfoForNodeIdentifier:(NSString *)nodeIdentifier completionHandler:(void (^)(WKFrameInfo *))completionHandler
+{
+    RetainPtr webView = _webView;
+    if (!webView)
+        return completionHandler(nil);
+
+    [webView _requestFrameInfoForNodeIdentifier:nodeIdentifier completionHandler:completionHandler];
+}
+
 @end
 
 @implementation _WKTextExtractionInteraction {
     RetainPtr<NSString> _nodeIdentifier;
+    RetainPtr<_WKJSHandle> _elementHandle;
     RetainPtr<NSString> _text;
     RetainPtr<_WKTextExtractionResult> _extractionContext;
 }
@@ -287,6 +334,16 @@
     _nodeIdentifier = adoptNS(nodeIdentifier.copy);
 }
 
+- (_WKJSHandle *)elementHandle
+{
+    return _elementHandle.get();
+}
+
+- (void)setElementHandle:(_WKJSHandle *)elementHandle
+{
+    _elementHandle = adoptNS([elementHandle copy]);
+}
+
 - (NSString *)text
 {
     return _text.get();
@@ -317,15 +374,20 @@
 
 @implementation _WKTextExtractionInteractionResult {
     RetainPtr<NSError> _error;
+    RetainPtr<NSString> _summary;
+    CGRect _interactedElementBounds;
 }
 
-- (instancetype)initWithErrorDescription:(NSString *)errorDescription
+- (instancetype)initWithErrorDescription:(NSString *)errorDescription summary:(NSString *)summary interactedElementBounds:(CGRect)interactedElementBounds
 {
     if (!(self = [super init]))
         return nil;
 
     if (errorDescription)
         _error = [NSError errorWithDomain:WKErrorDomain code:WKErrorUnknown userInfo:@{ NSDebugDescriptionErrorKey: errorDescription }];
+
+    _summary = adoptNS([summary copy]);
+    _interactedElementBounds = interactedElementBounds;
 
     return self;
 }
@@ -335,4 +397,46 @@
     return _error.get();
 }
 
+- (NSString *)summary
+{
+    return _summary.get();
+}
+
+- (CGRect)interactedElementBounds
+{
+    return _interactedElementBounds;
+}
+
 @end
+
+namespace WebKit {
+
+NSString *nameForTextExtractionAction(_WKTextExtractionAction action)
+{
+    switch (action) {
+    case _WKTextExtractionActionClick:
+        return @"Click";
+    case _WKTextExtractionActionSelectText:
+        return @"SelectText";
+    case _WKTextExtractionActionSelectMenuItem:
+        return @"SelectMenuItem";
+    case _WKTextExtractionActionTextInput:
+        return @"TextInput";
+    case _WKTextExtractionActionKeyPress:
+        return @"KeyPress";
+    case _WKTextExtractionActionHighlightText:
+        return @"HighlightText";
+    case _WKTextExtractionActionScrollBy:
+        return @"ScrollBy";
+    case _WKTextExtractionActionHover:
+        return @"Hover";
+    }
+    return @"?";
+}
+
+RetainPtr<_WKTextExtractionResult> createEmptyTextExtractionResult()
+{
+    return adoptNS([[_WKTextExtractionResult alloc] initWithWebView:nil origin:nil textContent:@"" filteredOutAnyText:NO shortenedURLs:@{ } textToContainerMap:{ }]);
+}
+
+} // namespace WebKit

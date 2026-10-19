@@ -34,6 +34,7 @@
 #import "Event.h"
 #import "EventListener.h"
 #import "EventNames.h"
+#import "EventTarget.h"
 #import "ExceptionOr.h"
 #import "HTMLVideoElement.h"
 #import "LocalDOMWindow.h"
@@ -118,6 +119,7 @@ void PlaybackSessionModelMediaElement::setMediaElement(HTMLMediaElement* mediaEl
     }
 
     m_mediaElement = newMediaElement;
+    m_lastSeekableRanges.reset();
 
     if (newMediaElement) {
         newMediaElement->addClient(*this);
@@ -209,12 +211,8 @@ void PlaybackSessionModelMediaElement::updateForEventName(const WTF::AtomString&
     if (all
         || eventName == eventNames().progressEvent) {
         auto bufferedTime = this->bufferedTime();
-        auto seekableTimeRangesLastModifiedTime = this->seekableTimeRangesLastModifiedTime();
-        auto liveUpdateInterval = this->liveUpdateInterval();
-        for (auto& client : m_clients) {
+        for (auto& client : m_clients)
             client->bufferedTimeChanged(bufferedTime);
-            client->seekableRangesChanged(seekableRanges(), seekableTimeRangesLastModifiedTime, liveUpdateInterval);
-        }
     }
 
     if (all
@@ -227,11 +225,12 @@ void PlaybackSessionModelMediaElement::updateForEventName(const WTF::AtomString&
         bool enabled = externalPlaybackEnabled();
         ExternalPlaybackTargetType targetType = externalPlaybackTargetType();
         String localizedDeviceName = externalPlaybackLocalizedDeviceName();
+        String localizedRouteName = externalPlaybackLocalizedRouteName();
 
         bool wirelessVideoPlaybackDisabled = this->wirelessVideoPlaybackDisabled();
 
         for (auto& client : m_clients) {
-            client->externalPlaybackChanged(enabled, targetType, localizedDeviceName);
+            client->externalPlaybackChanged(enabled, targetType, localizedDeviceName, localizedRouteName);
             client->wirelessVideoPlaybackDisabledChanged(wirelessVideoPlaybackDisabled);
         }
     }
@@ -271,6 +270,8 @@ void PlaybackSessionModelMediaElement::addClient(PlaybackSessionModelClient& cli
 {
     ASSERT(!m_clients.contains(&client));
     m_clients.add(&client);
+    // The new client has not been told anything yet; let the next update through.
+    m_lastSeekableRanges.reset();
 }
 
 void PlaybackSessionModelMediaElement::removeClient(PlaybackSessionModelClient& client)
@@ -368,7 +369,7 @@ void PlaybackSessionModelMediaElement::selectAudioMediaOption(uint64_t selectedA
         return;
 
     for (size_t i = 0, size = m_audioTracksForMenu.size(); i < size; ++i)
-        m_audioTracksForMenu[i]->setEnabled(i == selectedAudioIndex);
+        protect(m_audioTracksForMenu[i])->setEnabled(i == selectedAudioIndex);
 }
 
 void PlaybackSessionModelMediaElement::selectLegibleMediaOption(uint64_t index)
@@ -421,7 +422,7 @@ void PlaybackSessionModelMediaElement::enterInWindowFullscreen()
     if (!element)
         return;
 
-    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, &element->document() };
+    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, protect(element->document()).ptr() };
 
     if (element->fullscreenMode() != MediaPlayerEnums::VideoFullscreenModeInWindow)
         element->setPresentationModeIgnoringPermissionsPolicy(HTMLVideoElement::VideoPresentationMode::InWindow);
@@ -436,7 +437,7 @@ void PlaybackSessionModelMediaElement::exitInWindowFullscreen()
     if (!element)
         return;
 
-    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, &element->document() };
+    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, protect(element->document()).ptr() };
 
     if (element->fullscreenMode() == MediaPlayerEnums::VideoFullscreenModeInWindow)
         element->setPresentationMode(HTMLVideoElement::VideoPresentationMode::Inline);
@@ -450,7 +451,7 @@ void PlaybackSessionModelMediaElement::enterFullscreen()
     if (!element)
         return;
 
-    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, &element->document() };
+    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, protect(element->document()).ptr() };
     element->enterFullscreenIgnoringPermissionsPolicy();
 }
 
@@ -471,7 +472,7 @@ void PlaybackSessionModelMediaElement::exitFullscreen()
     if (!element)
         return;
 
-    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, &element->document() };
+    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, protect(element->document()).ptr() };
     element->webkitExitFullscreen();
 }
 
@@ -516,7 +517,7 @@ void PlaybackSessionModelMediaElement::setSpatialTrackingLabel(const String& spa
 void PlaybackSessionModelMediaElement::sendRemoteCommand(PlatformMediaSession::RemoteControlCommandType command, const PlatformMediaSession::RemoteCommandArgument& argument)
 {
     if (RefPtr mediaElement = m_mediaElement)
-        mediaElement->mediaSession().didReceiveRemoteControlCommand(command, argument);
+        protect(mediaElement->mediaSession())->didReceiveRemoteControlCommand(command, argument);
 }
 
 void PlaybackSessionModelMediaElement::updateMediaSelectionOptions()
@@ -528,7 +529,7 @@ void PlaybackSessionModelMediaElement::updateMediaSelectionOptions()
     if (!mediaElement->document().page())
         return;
 
-    Ref captionPreferences = protect(mediaElement->document().page()->group())->ensureCaptionPreferences();
+    Ref captionPreferences = protect(protect(protect(mediaElement->document())->page())->group())->ensureCaptionPreferences();
     auto* textTracks = mediaElement->textTracks();
     if (textTracks && textTracks->length())
         m_legibleTracksForMenu = captionPreferences->sortedTrackListForMenu(textTracks, { TextTrack::Kind::Subtitles, TextTrack::Kind::Captions, TextTrack::Kind::Descriptions });
@@ -577,7 +578,7 @@ void PlaybackSessionModelMediaElement::maybeUpdateVideoMetadata()
         m_immersiveVideoMetadata = WTF::move(immersiveVideoMetadata);
         ALWAYS_LOG_IF_POSSIBLE(LOGIDENTIFIER, "immersiveVideoMetadata: ", m_immersiveVideoMetadata);
         for (auto& client : m_clients)
-            client->immersiveVideoMetadataChanged(immersiveVideoMetadata);
+            client->immersiveVideoMetadataChanged(m_immersiveVideoMetadata);
     }
 }
 
@@ -730,7 +731,7 @@ Vector<MediaSelectionOption> PlaybackSessionModelMediaElement::audioMediaSelecti
     if (!mediaElement || !mediaElement->document().page())
         return { };
 
-    Ref captionPreferences = protect(mediaElement->document().page()->group())->ensureCaptionPreferences();
+    Ref captionPreferences = protect(protect(protect(mediaElement->document())->page())->group())->ensureCaptionPreferences();
     return m_audioTracksForMenu.map([&](auto& audioTrack) {
         return captionPreferences->mediaSelectionOptionForTrack(audioTrack.get());
     });
@@ -739,7 +740,7 @@ Vector<MediaSelectionOption> PlaybackSessionModelMediaElement::audioMediaSelecti
 uint64_t PlaybackSessionModelMediaElement::audioMediaSelectedIndex() const
 {
     for (size_t index = 0; index < m_audioTracksForMenu.size(); ++index) {
-        if (m_audioTracksForMenu[index]->enabled())
+        if (protect(m_audioTracksForMenu[index])->enabled())
             return index;
     }
     return std::numeric_limits<uint64_t>::max();
@@ -761,7 +762,7 @@ Vector<MediaSelectionOption> PlaybackSessionModelMediaElement::legibleMediaSelec
     }
 #endif
 
-    Ref captionPreferences = protect(mediaElement->document().page()->group())->ensureCaptionPreferences();
+    Ref captionPreferences = protect(protect(protect(mediaElement->document())->page())->group())->ensureCaptionPreferences();
     return m_legibleTracksForMenu.map([&](auto& track) {
         return captionPreferences->mediaSelectionOptionForTrack(track.get());
     });
@@ -844,10 +845,17 @@ String PlaybackSessionModelMediaElement::externalPlaybackLocalizedDeviceName() c
     return emptyString();
 }
 
+String PlaybackSessionModelMediaElement::externalPlaybackLocalizedRouteName() const
+{
+    if (RefPtr mediaElement = m_mediaElement; mediaElement && mediaElement->mediaControlsHost())
+        return mediaElement->mediaControlsHost()->externalDeviceRouteName();
+    return emptyString();
+}
+
 bool PlaybackSessionModelMediaElement::wirelessVideoPlaybackDisabled() const
 {
     if (RefPtr mediaElement = m_mediaElement)
-        return mediaElement->mediaSession().wirelessVideoPlaybackDisabled();
+        return protect(mediaElement->mediaSession())->wirelessVideoPlaybackDisabled();
     return false;
 }
 
@@ -898,6 +906,36 @@ void PlaybackSessionModelMediaElement::captionTracksChanged()
 void PlaybackSessionModelMediaElement::captionsEnabledChanged()
 {
     updateMediaSelectionOptions();
+}
+
+void PlaybackSessionModelMediaElement::seekableRangesChanged()
+{
+    updateSeekableRanges();
+}
+
+void PlaybackSessionModelMediaElement::updateSeekableRanges()
+{
+    if (m_clients.isEmpty())
+        return;
+
+    auto timeRanges = seekableRanges();
+    auto seekableTimeRangesLastModifiedTime = this->seekableTimeRangesLastModifiedTime();
+    auto liveUpdateInterval = this->liveUpdateInterval();
+
+    // The media source reports a buffered change on every append; only tell the clients when the
+    // seekable range they would show actually moved.
+    if (m_lastSeekableRanges
+        && *m_lastSeekableRanges == timeRanges
+        && m_lastSeekableTimeRangesLastModifiedTime == seekableTimeRangesLastModifiedTime
+        && m_lastLiveUpdateInterval == liveUpdateInterval)
+        return;
+
+    m_lastSeekableRanges = timeRanges;
+    m_lastSeekableTimeRangesLastModifiedTime = seekableTimeRangesLastModifiedTime;
+    m_lastLiveUpdateInterval = liveUpdateInterval;
+
+    for (auto& client : m_clients)
+        client->seekableRangesChanged(timeRanges, seekableTimeRangesLastModifiedTime, liveUpdateInterval);
 }
 
 #if !RELEASE_LOG_DISABLED

@@ -10,11 +10,12 @@
 #ifndef COMMON_POOLALLOC_H_
 #define COMMON_POOLALLOC_H_
 
-#ifdef UNSAFE_BUFFERS_BUILD
-#    pragma allow_unsafe_buffers
-#endif
+// This include MUST precede the ANGLE_WITH_TSAN check below to define that macro.
+#include "common/platform.h"
 
-#if !defined(NDEBUG)
+#if defined(ANGLE_WITH_TSAN)
+#    define ANGLE_DISABLE_POOL_ALLOC
+#elif !defined(NDEBUG)
 #    define ANGLE_POOL_ALLOC_GUARD_BLOCKS  // define to enable guard block checking
 #endif
 
@@ -41,20 +42,11 @@
 #include <utility>
 #include <vector>
 
+#include "common/MemoryTagging.h"
 #include "common/angleutils.h"
 #include "common/log_utils.h"
 #include "common/mathutil.h"
 #include "common/span.h"
-#ifdef ANGLE_PLATFORM_APPLE
-#    if __has_include(<WebKitAdditions/ANGLEAllocProfile.h>)
-#        include <WebKitAdditions/ANGLEAllocProfile.h>
-#    endif
-#endif
-
-#if !defined(ANGLE_ALLOC_PROFILE)
-#    define ANGLE_ALLOC_PROFILE(kind, ...)
-#    define ANGLE_ALLOC_PROFILE_ALIGNMENT(x) (x)
-#endif
 
 namespace angle
 {
@@ -74,13 +66,18 @@ class PoolAllocator : angle::NonCopyable
     void reset();
 
   private:
-    static constexpr size_t kAlignment = ANGLE_ALLOC_PROFILE_ALIGNMENT(sizeof(void *));
+#if defined(ANGLE_ENABLE_MEMORY_TAGGING)
+    // The allocations are tagged, so they are aligned to a memory tag granule.
+    static constexpr size_t kAlignment = kMemoryTagGranuleSize;
+#else
+    static constexpr size_t kAlignment = sizeof(void *);
+#endif
     Span<uint8_t> allocateSingleObject(size_t size);
     class Segment;
     std::vector<Segment> mSingleObjectSegments;  // Large objects.
 
-#if !defined(ANGLE_DISABLE_POOL_ALLOC)
     static constexpr size_t kSegmentSize = 32768;
+#if !defined(ANGLE_DISABLE_POOL_ALLOC)
     bool allocateNewPoolSegment();
 
     Span<uint8_t> mCurrentPool;  // The unused part of memory in last entry of mPoolSegments.
@@ -114,7 +111,7 @@ inline void *PoolAllocator::allocate(size_t size)
     {
         data         = mCurrentPool.first(extent);
         mCurrentPool = mCurrentPool.subspan(extent);
-        ANGLE_ALLOC_PROFILE(LOCAL_BUMP_ALLOCATION, data, false);
+        data         = TagMemory(data);
     }
     else if (extent < kSegmentSize)
     {
@@ -124,7 +121,7 @@ inline void *PoolAllocator::allocate(size_t size)
         }
         data         = mCurrentPool.first(extent);
         mCurrentPool = mCurrentPool.subspan(extent);
-        ANGLE_ALLOC_PROFILE(LOCAL_BUMP_ALLOCATION, data, false);
+        data         = TagMemory(data);
     }
     else
 #endif

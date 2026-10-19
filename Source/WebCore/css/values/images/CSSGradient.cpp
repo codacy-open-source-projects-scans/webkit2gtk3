@@ -32,7 +32,6 @@
 #include "CSSPrimitiveNumericTypes+ComputedStyleDependencies.h"
 #include "CSSPrimitiveNumericTypes+Serialization.h"
 #include "ColorInterpolation.h"
-#include "StyleCalculationValue.h"
 #include "StyleGradientImage.h"
 #include "StyleKeyword+Mappings.h"
 #include "StylePosition.h"
@@ -122,15 +121,15 @@ void Serialize<GradientDeprecatedColorStop>::operator()(StringBuilder& builder, 
 
 static bool appendColorInterpolationMethod(StringBuilder& builder, CSS::GradientColorInterpolationMethod colorInterpolationMethod, bool needsLeadingSpace)
 {
-    return WTF::switchOn(colorInterpolationMethod.method.colorSpace,
-        [&](const ColorInterpolationMethod::OKLab&) {
+    return WTF::switchOn(colorInterpolationMethod.method.value.colorSpace,
+        [&](const WebCore::ColorInterpolationMethod::OKLab&) {
             if (colorInterpolationMethod.defaultMethod != CSS::GradientColorInterpolationMethod::Default::OKLab) {
                 builder.append(needsLeadingSpace ? " "_s : ""_s, "in oklab"_s);
                 return true;
             }
             return false;
         },
-        [&](const ColorInterpolationMethod::SRGB&) {
+        [&](const WebCore::ColorInterpolationMethod::SRGB&) {
             if (colorInterpolationMethod.defaultMethod != CSS::GradientColorInterpolationMethod::Default::SRGB) {
                 builder.append(needsLeadingSpace ? " "_s : ""_s, "in srgb"_s);
                 return true;

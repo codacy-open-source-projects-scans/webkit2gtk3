@@ -109,7 +109,7 @@ void NetworkResourcesData::ResourceData::decodeDataToContent()
 
     if (m_decoder) {
         m_base64Encoded = false;
-        m_content = m_decoder->decodeAndFlush(buffer->span());
+        m_content = protect(m_decoder)->decodeAndFlush(buffer->span());
     } else {
         m_base64Encoded = true;
         m_content = base64EncodeToString(buffer->span());
@@ -342,6 +342,14 @@ void NetworkResourcesData::clear(std::optional<String> preservedLoaderId)
             m_requestIdToResourceDataMap.remove(requestId);
         }
     }
+
+    m_requestIdToResourceDataMap.removeIf([&](auto& entry) {
+        auto& resourceData = *entry.value;
+        if (resourceData.loaderId() == *preservedLoaderId)
+            return false;
+        m_contentSize -= resourceData.evictContent();
+        return true;
+    });
 }
 
 Vector<NetworkResourcesData::ResourceData*> NetworkResourcesData::resources()

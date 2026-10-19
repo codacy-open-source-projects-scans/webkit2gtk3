@@ -117,7 +117,7 @@ ExceptionOr<bool> ElementInternals::checkValidity()
 ExceptionOr<RefPtr<NodeList>> ElementInternals::labels()
 {
     if (RefPtr element = elementAsFormAssociatedCustom())
-        return element->asHTMLElement().labels();
+        return protect(element->asHTMLElement())->labels();
     return Exception { ExceptionCode::NotSupportedError };
 }
 
@@ -143,7 +143,7 @@ void ElementInternals::setAttributeWithoutSynchronization(const QualifiedName& n
 
     protect(element->customElementDefaultARIA())->setValueForAttribute(name, value);
 
-    if (CheckedPtr cache = element->document().existingAXObjectCache())
+    if (CheckedPtr cache = protect(element->document())->existingAXObjectCache())
         cache->deferAttributeChangeIfNeeded(*element, name, oldValue, computeValueForAttribute(*element, name));
 }
 
@@ -168,7 +168,7 @@ void ElementInternals::setElementAttribute(const QualifiedName& name, Element* v
 
     protect(element->customElementDefaultARIA())->setElementForAttribute(name, value);
 
-    if (CheckedPtr cache = element->document().existingAXObjectCache())
+    if (CheckedPtr cache = protect(element->document())->existingAXObjectCache())
         cache->deferAttributeChangeIfNeeded(*element, name, oldValue, computeValueForAttribute(*element, name));
 }
 
@@ -188,13 +188,13 @@ void ElementInternals::setElementsArrayAttribute(const QualifiedName& name, std:
 
     protect(element->customElementDefaultARIA())->setElementsForAttribute(name, WTF::move(value));
 
-    if (CheckedPtr cache = element->document().existingAXObjectCache())
+    if (CheckedPtr cache = protect(element->document())->existingAXObjectCache())
         cache->deferAttributeChangeIfNeeded(*element, name, oldValue, computeValueForAttribute(*element, name));
 }
 
 CustomStateSet& ElementInternals::states()
 {
-    return m_element->ensureCustomStateSet();
+    return protect(m_element)->ensureCustomStateSet();
 }
 
 } // namespace WebCore

@@ -118,7 +118,8 @@ static Vector<uint8_t> combineSegmentsData(const FragmentedSharedBuffer::DataSeg
 
 Ref<SharedBuffer> FragmentedSharedBuffer::makeContiguous() const
 {
-    if (RefPtr sharedBuffer = dynamicDowncast<SharedBuffer>(*const_cast<FragmentedSharedBuffer*>(this)))
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST if (RefPtr sharedBuffer = dynamicDowncast<SharedBuffer>(*const_cast<FragmentedSharedBuffer*>(this)))
         return sharedBuffer.releaseNonNull();
     if (!m_segments.size())
         return SharedBuffer::create();
@@ -534,10 +535,20 @@ Ref<DataSegment> DataSegment::create(Vector<uint8_t>&& data)
     return adoptRef(*new DataSegment(WTF::move(data)));
 }
 
+DataSegment::DataSegment(Vector<uint8_t>&& data)
+    : m_immutableData(WTF::move(data))
+{
+}
+
 #if USE(CF)
 Ref<DataSegment> DataSegment::create(RetainPtr<CFDataRef>&& data)
 {
     return adoptRef(*new DataSegment(WTF::move(data)));
+}
+
+DataSegment::DataSegment(RetainPtr<CFDataRef>&& data)
+    : m_immutableData(WTF::move(data))
+{
 }
 #endif
 
@@ -546,12 +557,22 @@ Ref<DataSegment> DataSegment::create(GRefPtr<GBytes>&& data)
 {
     return adoptRef(*new DataSegment(WTF::move(data)));
 }
+
+DataSegment::DataSegment(GRefPtr<GBytes>&& data)
+    : m_immutableData(WTF::move(data))
+{
+}
 #endif
 
 #if USE(GSTREAMER)
 Ref<DataSegment> DataSegment::create(RefPtr<GstMappedOwnedBuffer>&& data)
 {
     return adoptRef(*new DataSegment(WTF::move(data)));
+}
+
+DataSegment::DataSegment(RefPtr<GstMappedOwnedBuffer>&& data)
+    : m_immutableData(WTF::move(data))
+{
 }
 #endif
 
@@ -560,6 +581,11 @@ Ref<DataSegment> DataSegment::create(sk_sp<SkData>&& data)
 {
     return adoptRef(*new DataSegment(WTF::move(data)));
 }
+
+DataSegment::DataSegment(sk_sp<SkData>&& data)
+    : m_immutableData(WTF::move(data))
+{
+}
 #endif
 
 Ref<DataSegment> DataSegment::create(FileSystem::MappedFileData&& data)
@@ -567,10 +593,32 @@ Ref<DataSegment> DataSegment::create(FileSystem::MappedFileData&& data)
     return adoptRef(*new DataSegment(WTF::move(data)));
 }
 
+DataSegment::DataSegment(FileSystem::MappedFileData&& data)
+    : m_immutableData(WTF::move(data))
+{
+}
+
 Ref<DataSegment> DataSegment::create(Provider&& provider)
 {
     return adoptRef(*new DataSegment(WTF::move(provider)));
 }
+
+DataSegment::DataSegment(Provider&& provider)
+    : m_immutableData(WTF::move(provider))
+{
+}
+
+Ref<DataSegment> DataSegment::create(std::unique_ptr<JSC::ArrayBufferContents>&& data)
+{
+    return adoptRef(*new DataSegment(WTF::move(data)));
+}
+
+DataSegment::DataSegment(std::unique_ptr<JSC::ArrayBufferContents>&& data)
+    : m_immutableData(WTF::move(data))
+{
+}
+
+DataSegment::~DataSegment() = default;
 
 std::span<const uint8_t> DataSegment::span() const LIFETIME_BOUND
 {
@@ -589,7 +637,8 @@ std::span<const uint8_t> DataSegment::span() const LIFETIME_BOUND
         [](const sk_sp<SkData>& data) -> std::span<const uint8_t> { return WebCore::span(data); },
 #endif
         [](const FileSystem::MappedFileData& data) { return data.span(); },
-        [](const Provider& provider) { return provider.span(); }
+        [](const Provider& provider) { return provider.span(); },
+        [](const std::unique_ptr<JSC::ArrayBufferContents>& data) { return data->span(); }
     );
     return WTF::visit(visitor, m_immutableData);
 }

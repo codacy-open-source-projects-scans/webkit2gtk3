@@ -15,6 +15,12 @@ add_definitions(-DSCE_LIBC_DISABLE_CPP14_HEADER_WARNING= -DSCE_LIBC_DISABLE_CPP1
 # bug-224462
 WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wno-dll-attribute-on-redeclaration)
 
+# bug-322829
+set(CMAKE_C_LINKER_WRAPPER_FLAG "-Wl,")
+set(CMAKE_C_LINKER_WRAPPER_FLAG_SEP ",")
+set(CMAKE_CXX_LINKER_WRAPPER_FLAG "-Wl,")
+set(CMAKE_CXX_LINKER_WRAPPER_FLAG_SEP ",")
+
 # Set the standard libary version
 WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-sce-stdlib=v2)
 
@@ -216,7 +222,6 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEB_AUDIO PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_CONTEXT_MENUS PRIVATE OFF)
 
 # No support planned
-WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_FTPDIR PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_GEOLOCATION PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_IMAGE_DIFF PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MATHML PRIVATE OFF)
@@ -384,13 +389,13 @@ endif ()
 
 function(add_executable target)
     _add_executable(${ARGV})
-    target_link_options(${target} PRIVATE -Wl,--wrap=mmap)
+    target_link_options(${target} PRIVATE "LINKER:--wrap=mmap")
 endfunction()
 
 function(add_library target type)
     _add_library(${ARGV})
     if ("${type}" STREQUAL "SHARED")
-        target_link_options(${target} PRIVATE -Wl,--wrap=mmap)
+        target_link_options(${target} PRIVATE "LINKER:--wrap=mmap")
         sign(${target})
     endif ()
 endfunction()
@@ -416,7 +421,7 @@ macro(WEBKIT_EXECUTABLE _target)
     endif ()
     if (PLAYSTATION_${_target}_WRAP)
         foreach (WRAP ${PLAYSTATION_${_target}_WRAP})
-            target_link_options(${_target} PRIVATE -Wl,--wrap=${WRAP})
+            target_link_options(${_target} PRIVATE "LINKER:--wrap=${WRAP}")
         endforeach ()
     endif ()
     add_dependencies(${_target} playstation_tools_copy)

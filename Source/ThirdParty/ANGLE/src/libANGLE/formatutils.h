@@ -9,13 +9,10 @@
 #ifndef LIBANGLE_FORMATUTILS_H_
 #define LIBANGLE_FORMATUTILS_H_
 
-#ifdef UNSAFE_BUFFERS_BUILD
-#    pragma allow_unsafe_buffers
-#endif
-
 #include <stdint.h>
 #include <cstddef>
 #include <ostream>
+#include "common/unsafe_buffers.h"
 
 #include "angle_gl.h"
 #include "common/android_util.h"
@@ -180,20 +177,6 @@ struct InternalFormat
 
     [[nodiscard]] bool computeBufferRowLength(uint32_t width, uint32_t *resultOut) const;
     [[nodiscard]] bool computeBufferImageHeight(uint32_t height, uint32_t *resultOut) const;
-    // FIXME: When computePackUnpackEndByte does not call this, change PixelStoreStateBase
-    // to glPixelUnpackState.
-    [[nodiscard]] bool computeRowDepthSkipBytes(GLenum formatType,
-                                                const Extents &size,
-                                                const gl::PixelStoreStateBase &unpack,
-                                                bool is3D,
-                                                GLuint *rowPitchOut,
-                                                GLuint *depthPitchOut,
-                                                GLuint *skipBytesOut) const;
-    [[nodiscard]] bool computeRowSkipBytes(GLenum formatType,
-                                           GLsizei width,
-                                           const gl::PixelPackState &pack,
-                                           GLuint *rowPitchOut,
-                                           GLuint *skipBytesOut) const;
     [[nodiscard]] bool computeRowPitch(GLenum formatType,
                                        GLsizei width,
                                        GLint alignment,
@@ -225,7 +208,21 @@ struct InternalFormat
                                         GLsizei samples,
                                         GLuint *resultOut) const;
 
-    [[nodiscard]] std::pair<GLuint, GLuint> getCompressedImageMinBlocks() const;
+    [[nodiscard]] GLuint getCompressedImageMinBlocks() const;
+
+    [[nodiscard]] bool computeRowDepthSkipBytes(GLenum formatType,
+                                                GLsizei width,
+                                                GLsizei height,
+                                                const gl::PixelStoreStateBase &unpack,
+                                                bool is3D,
+                                                GLuint *rowPitchOut,
+                                                GLuint *depthPitchOut,
+                                                GLuint *skipBytesOut) const;
+    [[nodiscard]] bool computeRowSkipBytes(GLenum formatType,
+                                           GLsizei width,
+                                           const gl::PixelPackState &pack,
+                                           GLuint *rowPitchOut,
+                                           GLuint *skipBytesOut) const;
     [[nodiscard]] bool computeSkipBytes(GLenum formatType,
                                         GLuint rowPitch,
                                         GLuint depthPitch,
@@ -243,9 +240,6 @@ struct InternalFormat
     bool isLUMA() const;
     GLenum getReadPixelsFormat(const Extensions &extensions) const;
     GLenum getReadPixelsType(const Version &version) const;
-
-    // Support upload a portion of image?
-    bool supportSubImage() const;
 
     ANGLE_INLINE bool isChannelSizeCompatible(GLuint redSize,
                                               GLuint greenSize,
@@ -355,9 +349,6 @@ GLenum GetSizedFormatInternal(GLenum format, GLenum type);
 // format is valid.
 GLenum GetUnsizedFormat(GLenum internalFormat);
 
-// Return whether the compressed format requires whole image/mip level to be uploaded to texture.
-bool CompressedFormatRequiresWholeImage(GLenum internalFormat);
-
 // In support of GetImage, check for LUMA formats and override with real format
 void MaybeOverrideLuminance(GLenum &format, GLenum &type, GLenum actualFormat, GLenum actualType);
 
@@ -442,15 +433,15 @@ ANGLE_INLINE angle::FormatID GetVertexFormatID(VertexAttribType type,
     int index = static_cast<int>(type);
     if (pureInteger)
     {
-        result = kVertexFormatPureInteger[index][components - 1];
+        result = ANGLE_UNSAFE_TODO(kVertexFormatPureInteger[index][components - 1]);
     }
     else if (normalized)
     {
-        result = kVertexFormatNormalized[index][components - 1];
+        result = ANGLE_UNSAFE_TODO(kVertexFormatNormalized[index][components - 1]);
     }
     else
     {
-        result = kVertexFormatScaled[index][components - 1];
+        result = ANGLE_UNSAFE_TODO(kVertexFormatScaled[index][components - 1]);
     }
 
     ASSERT(result != angle::FormatID::NONE);

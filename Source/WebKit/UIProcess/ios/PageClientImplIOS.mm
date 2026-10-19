@@ -39,6 +39,7 @@
 #import "FrameInfoData.h"
 #import "InteractionInformationAtPosition.h"
 #import "KeyEventInterpretationContext.h"
+#import "LayerHostingVisibilityPropagator.h"
 #import "Logging.h"
 #import "NativeWebKeyboardEvent.h"
 #import "NavigationState.h"
@@ -52,6 +53,7 @@
 #import "UIKitSPI.h"
 #import "UIKitUtilities.h"
 #import "UndoOrRedo.h"
+#import "VideoPresentationManagerProxy.h"
 #import "ViewSnapshotStore.h"
 #import "WKContentView.h"
 #import "WKContentViewInteraction.h"
@@ -69,10 +71,12 @@
 #import "WebContextMenuProxy.h"
 #import "WebDataListSuggestionsDropdownIOS.h"
 #import "WebEditCommandProxy.h"
+#import "WebFrameProxy.h"
 #import "WebPageProxy.h"
 #import "WebPreferences.h"
 #import "WebProcessProxy.h"
 #import "_WKDownloadInternal.h"
+#import <ImageIO/ImageIO.h>
 #import <WebCore/AXObjectCache.h>
 #import <WebCore/Color.h>
 #import <WebCore/Cursor.h>
@@ -89,6 +93,7 @@
 #import <WebCore/ShareData.h>
 #import <WebCore/SharedBuffer.h>
 #import <WebCore/TextIndicator.h>
+#import <WebCore/UTIRegistry.h>
 #import <WebCore/ValidationBubble.h>
 #import <wtf/BlockPtr.h>
 #import <wtf/cocoa/Entitlements.h>
@@ -191,6 +196,13 @@ bool PageClientImpl::isActiveViewVisible()
         return true;
 #endif
 
+#if HAVE(AVEXPERIENCECONTROLLER)
+    if (page && page->preferences().isAVExperienceControllerFullscreenEnabled()) {
+        if (RefPtr videoPresentationManager = page->videoPresentationManager(); videoPresentationManager && videoPresentationManager->hasMode(WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard))
+            return true;
+    }
+#endif
+
     return false;
 }
 
@@ -237,7 +249,7 @@ bool PageClientImpl::isVisuallyIdle()
     return !isActiveViewVisible();
 }
 
-WebCore::DestinationColorSpace PageClientImpl::colorSpace()
+WebCore::ColorSpace PageClientImpl::colorSpace()
 {
     if (!m_colorSpace)
         m_colorSpace = screenColorSpace(nullptr);
@@ -307,6 +319,13 @@ void PageClientImpl::removeVisibilityPropagationView(UIView *view)
 {
     [contentView() _removeVisibilityPropagationView:view];
 }
+
+#if ENABLE(ENDOWMENT_BASED_APPLICATION_STATE_TRACKING)
+RefPtr<LayerHostingVisibilityPropagator> PageClientImpl::createLayerHostingVisibilityPropagator()
+{
+    return [contentView() _createLayerHostingVisibilityPropagator];
+}
+#endif
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 
 #if ENABLE(GPU_PROCESS)
@@ -352,9 +371,12 @@ void PageClientImpl::toolTipChanged(const String&, const String& newToolTip)
 
 void PageClientImpl::decidePolicyForGeolocationPermissionRequest(WebFrameProxy& frame, const FrameInfoData& frameInfo, Function<void(bool)>& completionHandler)
 {
+    RefPtr mainFrame = frame.mainFrame();
+    if (!mainFrame)
+        return std::exchange(completionHandler, nullptr)(false);
     if (auto webView = this->webView()) {
         RetainPtr geolocationProvider = [protect(wrapper(webView->_page->configuration().processPool())) _geolocationProvider];
-        [geolocationProvider decidePolicyForGeolocationRequestFromOrigin:FrameInfoData { frameInfo } completionHandler:std::exchange(completionHandler, nullptr) view:webView.get()];
+        [geolocationProvider decidePolicyForGeolocationRequestFromOrigin:FrameInfoData { frameInfo } topOrigin:mainFrame->documentSecurityOriginData() completionHandler:std::exchange(completionHandler, nullptr) view:webView.get()];
     }
 }
 
@@ -373,7 +395,7 @@ void PageClientImpl::didFailProvisionalLoadForMainFrame()
 
 void PageClientImpl::didCommitLoadForMainFrame(const String& mimeType, bool useCustomContentProvider)
 {
-    auto webView = this->webView();
+    RetainPtr webView = this->webView();
     [webView _hidePasswordView];
     [webView _setHasCustomContentView:useCustomContentProvider loadedMIMEType:mimeType];
     [contentView() _didCommitLoadForMainFrame];
@@ -387,7 +409,7 @@ void PageClientImpl::didCommitLoadForMainFrame(const String& mimeType, bool useC
 #endif
 
 #if ENABLE(SYSTEM_TEXT_EXTRACTION)
-    if (protect(*[webView _page])->preferences().systemTextExtractionEnabled())
+    if (RefPtr page = [webView _page].get(); page && page->preferences().systemTextExtractionEnabled())
         [webView _addTextExtractionAnnotation];
 #endif
 }
@@ -408,6 +430,11 @@ double PageClientImpl::minimumZoomScale() const
 WebCore::FloatRect PageClientImpl::documentRect() const
 {
     return [contentView() bounds];
+}
+
+WebCore::InteractiveWidgetValue PageClientImpl::viewportMetaTagInteractiveWidget() const
+{
+    return [webView() _viewportMetaTagInteractiveWidget];
 }
 
 void PageClientImpl::setCursor(const Cursor& cursor)
@@ -461,14 +488,21 @@ bool PageClientImpl::interpretKeyEvent(const NativeWebKeyboardEvent& event, KeyE
     return [contentView() _interpretKeyEvent:protect(event.nativeEvent()).get() withContext:WTF::move(context)];
 }
 
-void PageClientImpl::positionInformationDidChange(const InteractionInformationAtPosition& info)
+void PageClientImpl::positionInformationDidChange(const InteractionInformationAtPosition& info, std::optional<WebCore::FrameIdentifier> frameID)
 {
-    [contentView() _positionInformationDidChange:info];
+    [contentView() _positionInformationDidChange:info fromFrame:frameID];
 }
 
-void PageClientImpl::saveImageToLibrary(Ref<SharedBuffer>&& imageBuffer)
+void PageClientImpl::saveImageToLibrary(const Ref<SharedBuffer>& imageBuffer)
 {
-    RetainPtr<NSData> imageData = imageBuffer->createNSData();
+    RetainPtr<NSData> imageData = toNSData(imageBuffer->span());
+    RetainPtr source = adoptCF(CGImageSourceCreateWithData((__bridge CFDataRef)imageData.get(), nullptr));
+    if (!source)
+        return;
+    RetainPtr type = CGImageSourceGetType(source.get());
+    if (!type || !WebCore::isSupportedImageType(type.get()))
+        return;
+
     UIImageDataWriteToSavedPhotosAlbum(imageData.get(), nil, NULL, NULL);
 }
 
@@ -804,6 +838,11 @@ void PageClientImpl::elementDidBlur()
     [contentView() _elementDidBlur];
 }
 
+bool PageClientImpl::hasFocusedElement() const
+{
+    return [contentView() _hasFocusedElement];
+}
+
 void PageClientImpl::focusedElementDidChangeInputMode(WebCore::InputMode mode)
 {
     [contentView() _didUpdateInputMode:mode];
@@ -834,8 +873,7 @@ bool PageClientImpl::handleRunOpenPanel(const WebPageProxy& page, const WebFrame
     }
 #endif
 
-    [contentView() _showRunOpenPanel:&parameters frameInfo:frameInfo resultListener:&listener];
-    return true;
+    return [contentView() _showRunOpenPanel:&parameters frameInfo:frameInfo resultListener:&listener];
 }
 
 bool PageClientImpl::showShareSheet(ShareDataWithParsedURL&& shareData, WTF::CompletionHandler<void(bool)>&& completionHandler)
@@ -850,14 +888,14 @@ void PageClientImpl::showContactPicker(WebCore::ContactsRequestData&& requestDat
 }
 
 #if ENABLE(WEB_AUTHN)
-void PageClientImpl::showDigitalCredentialsPicker(const WebCore::DigitalCredentialsRequestData& requestData, WTF::CompletionHandler<void(Expected<WebCore::DigitalCredentialsResponseData, WebCore::ExceptionData>&&)>&& completionHandler)
+void PageClientImpl::showDigitalCredentialsChooser(const WebCore::DigitalCredentialsRequestData& requestData, WTF::CompletionHandler<void(std::expected<WebCore::DigitalCredentialsResponseData, WebCore::ExceptionData>&&)>&& completionHandler)
 {
-    [contentView() _showDigitalCredentialsPicker:requestData completionHandler:WTF::move(completionHandler)];
+    [contentView() _showDigitalCredentialsChooser:requestData completionHandler:WTF::move(completionHandler)];
 }
 
-void PageClientImpl::dismissDigitalCredentialsPicker(CompletionHandler<void(bool)>&& completionHandler)
+void PageClientImpl::dismissDigitalCredentialsChooser(CompletionHandler<void(bool)>&& completionHandler)
 {
-    [contentView() _dismissDigitalCredentialsPicker:WTF::move(completionHandler)];
+    [contentView() _dismissDigitalCredentialsChooser:WTF::move(completionHandler)];
 }
 #endif
 
@@ -1154,12 +1192,12 @@ void PageClientImpl::didPerformDragOperation(bool handled)
     [contentView() _didPerformDragOperation:handled];
 }
 
-void PageClientImpl::startDrag(const DragItem& item, ShareableBitmap::Handle&& image, const std::optional<NodeIdentifier>& nodeID, const std::optional<FrameIdentifier>&)
+void PageClientImpl::startDrag(const DragItem& item, ShareableBitmap::Handle&& image, const std::optional<NodeIdentifier>& nodeID, const std::optional<FrameIdentifier>& frameID)
 {
     auto bitmap = ShareableBitmap::create(WTF::move(image));
     if (!bitmap)
         return;
-    [contentView() _startDrag:bitmap->createPlatformImage() item:item nodeID:nodeID];
+    [contentView() _startDrag:bitmap->createPlatformImage() item:item nodeID:nodeID frameID:frameID];
 }
 
 void PageClientImpl::willReceiveEditDragSnapshot()
@@ -1205,9 +1243,9 @@ void PageClientImpl::requestPasswordForQuickLookDocument(const String& fileName,
 }
 #endif
 
-void PageClientImpl::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAccessCategory, WebCore::DOMPasteRequiresInteraction requiresInteraction, const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completionHandler)
+void PageClientImpl::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAccessCategory, WebCore::DOMPasteRequiresInteraction requiresInteraction, WebCore::FrameIdentifier frameID, const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completionHandler)
 {
-    [contentView() _requestDOMPasteAccessForCategory:pasteAccessCategory requiresInteraction:requiresInteraction elementRect:elementRect originIdentifier:originIdentifier completionHandler:WTF::move(completionHandler)];
+    [contentView() _requestDOMPasteAccessForCategory:pasteAccessCategory requiresInteraction:requiresInteraction frameID:frameID elementRect:elementRect originIdentifier:originIdentifier completionHandler:WTF::move(completionHandler)];
 }
 
 void PageClientImpl::cancelPointersForGestureRecognizer(UIGestureRecognizer* gestureRecognizer)
@@ -1246,6 +1284,13 @@ void PageClientImpl::didCleanupFullscreen()
 {
 #if ENABLE(FULLSCREEN_API)
     [[webView() fullScreenWindowController] didCleanupFullscreen];
+#endif
+
+#if HAVE(AVEXPERIENCECONTROLLER)
+    if (RetainPtr webView = this->webView()) {
+        if (RefPtr page = webView->_page; page && page->preferences().isAVExperienceControllerFullscreenEnabled())
+            page->activityStateDidChange(WebCore::ActivityState::IsVisible);
+    }
 #endif
 }
 
@@ -1450,7 +1495,7 @@ void PageClientImpl::removeAnyPDFPageNumberIndicator()
 
 #endif
 
-void PageClientImpl::showCaptionDisplaySettings(WebCore::HTMLMediaElementIdentifier identifier, const WebCore::ResolvedCaptionDisplaySettingsOptions& options, CompletionHandler<void(Expected<void, WebCore::ExceptionData>&&)>&& completionHandler)
+void PageClientImpl::showCaptionDisplaySettings(WebCore::HTMLMediaElementIdentifier identifier, const WebCore::ResolvedCaptionDisplaySettingsOptions& options, CompletionHandler<void(std::expected<void, WebCore::ExceptionData>&&)>&& completionHandler)
 {
 #if USE(UICONTEXTMENU)
     [contentView() showCaptionDisplaySettingsMenu:identifier withOptions:options completionHandler:WTF::move(completionHandler)];

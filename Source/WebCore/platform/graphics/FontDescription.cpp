@@ -39,7 +39,7 @@ namespace WebCore {
 
 FontDescription::FontDescription()
     : m_variantAlternates(FontVariantAlternates::Normal())
-    , m_fontPalette({ FontPalette::Type::Normal, nullAtom() })
+    , m_fontPalette(FontPalette::Keyword::Normal)
     , m_fontSelectionRequest { normalWeightValue(), normalWidthValue(), std::nullopt }
     , m_orientation(std::to_underlying(FontOrientation::Horizontal))
     , m_nonCJKGlyphOrientation(std::to_underlying(NonCJKGlyphOrientation::Mixed))
@@ -67,7 +67,6 @@ FontDescription::FontDescription()
     , m_opticalSizing(std::to_underlying(FontOpticalSizing::Auto))
     , m_shouldAllowUserInstalledFonts(std::to_underlying(AllowUserInstalledFonts::No))
     , m_shouldDisableLigaturesForSpacing(false)
-    , m_evaluationTimeZoomEnabled(false)
 {
 }
 
@@ -82,7 +81,7 @@ static AtomString computeSpecializedChineseLocale()
     return "zh-hans"_s; // We have no signal. Pick one option arbitrarily.
 }
 
-static AtomString& NODELETE cachedSpecializedChineseLocale()
+static AtomString& LEGACY_NODELETE cachedSpecializedChineseLocale()
 {
     static MainThreadNeverDestroyed<AtomString> specializedChineseLocale;
     return specializedChineseLocale.get();
@@ -104,12 +103,12 @@ static const AtomString& specializedChineseLocale()
     return locale;
 }
 
-void FontDescription::setSpecifiedLocale(const AtomString& locale)
+void FontDescription::setComputedLocale(const AtomString& computedLocale)
 {
     ASSERT(isMainThread());
-    m_specifiedLocale = locale;
-    m_script = localeToScriptCode(m_specifiedLocale);
-    m_locale = m_script == USCRIPT_HAN ? specializedChineseLocale() : m_specifiedLocale;
+    m_computedLocale = computedLocale;
+    m_script = localeToScriptCode(m_computedLocale);
+    m_usedLocale = m_script == USCRIPT_HAN ? specializedChineseLocale() : m_computedLocale;
 }
 
 #if !PLATFORM(COCOA)
@@ -122,7 +121,7 @@ AtomString FontDescription::platformResolveGenericFamily(UScriptCode, const Atom
 float FontDescription::adjustedSizeForFontFace(float fontFaceSizeAdjust) const
 {
     // It is not worth modifying the used size with @font-face size-adjust if we are to re-adjust it later with font-size-adjust. This is because font-size-adjust will overrule this change, since size-adjust also modifies the font's metric values and thus, keeps the aspect-value unchanged.
-    return fontSizeAdjust().value ? computedSize() : fontFaceSizeAdjust * computedSize();
+    return fontSizeAdjust().value ? usedSize() : fontFaceSizeAdjust * usedSize();
 }
 
 FontVariantEastAsianValues FontDescription::variantEastAsian() const
@@ -199,6 +198,22 @@ void FontDescription::setVariantLigatures(FontVariantLigaturesValues values)
     setVariantDiscretionaryLigatures(values.discretionary);
     setVariantHistoricalLigatures(values.historical);
     setVariantContextualAlternates(values.contextual);
+}
+
+// Resolves which axis a font's slope is applied to when realizing variations. The slnt variation
+// implements oblique values and ital=1 implements italic values. WebKit treats italic as a synonym
+// for oblique, which css-fonts-4 permits ("User agents may treat italic as a synonym for oblique"),
+// so when italic is requested against a face that exposes its slope on the 'slnt' axis (an
+// oblique-angle @font-face, no 'ital' axis) and no synthetic oblique applies, drive the 'slnt' axis
+// rather than the absent 'ital' axis.
+FontStyleAxis variationStyleAxis(const FontDescription& description, const FontSelectionSpecifiedCapabilities& faceCapabilities)
+{
+    auto axis = description.fontStyleAxis();
+    if (axis != FontStyleAxis::ital || faceCapabilities.faceAxis != FontStyleAxis::slnt)
+        return axis;
+    bool willSynthesizeOblique = description.allowsItalicOrObliqueFontSynthesisStyle()
+        && faceCapabilities.slope && !isItalic(faceCapabilities.slope->maximum);
+    return willSynthesizeOblique ? axis : FontStyleAxis::slnt;
 }
 
 } // namespace WebCore

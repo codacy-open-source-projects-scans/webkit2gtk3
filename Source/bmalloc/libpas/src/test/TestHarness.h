@@ -239,6 +239,11 @@ public:
     DisableBitfit();
 };
 
+class ForceSegregated : public RuntimeConfigTestScope {
+public:
+    ForceSegregated();
+};
+
 class ForceBaselines : public RuntimeConfigTestScope {
 public:
     ForceBaselines();
@@ -269,6 +274,12 @@ public:
 class InstallVerifier : public TestScope {
 public:
     InstallVerifier();
+};
+
+/* This exists to make it easier to filter for non-verifier tests */
+class NoVerifier : public TestScope {
+public:
+    NoVerifier();
 };
 
 class EpochIsCounter : public TestScope {

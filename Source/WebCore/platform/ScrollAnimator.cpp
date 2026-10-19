@@ -35,6 +35,7 @@
 #include "FloatPoint.h"
 #include "KeyboardScrollingAnimator.h"
 #include "LayoutSize.h"
+#include "Logging.h"
 #include "PlatformWheelEvent.h"
 #include "ScrollExtents.h"
 #include "ScrollableArea.h"
@@ -66,7 +67,7 @@ ScrollAnimator::~ScrollAnimator()
     m_scrollController.stopAllTimers();
 }
 
-bool ScrollAnimator::singleAxisScroll(ScrollEventAxis axis, float scrollDelta, OptionSet<ScrollBehavior> behavior)
+bool ScrollAnimator::singleAxisScroll(ScrollEventAxis axis, float scrollDelta, EnumSet<ScrollBehavior> behavior)
 {
     CheckedRef scrollableArea = m_scrollableArea;
     scrollableArea->scrollbarsController().setScrollbarAnimationsUnsuspendedByUserInteraction(true);
@@ -77,7 +78,8 @@ bool ScrollAnimator::singleAxisScroll(ScrollEventAxis axis, float scrollDelta, O
         auto currentOffset = offsetFromPosition(currentPosition());
         auto newOffset = currentOffset + delta;
         auto velocity = copysignf(1.0f, scrollDelta);
-        auto newOffsetOnAxis = m_scrollController.adjustedScrollDestination(axis, newOffset, velocity, valueForAxis(currentOffset, axis));
+        auto selectionMethod = behavior.contains(ScrollBehavior::Paged) ? ScrollSnapPointSelectionMethod::Paging : ScrollSnapPointSelectionMethod::Directional;
+        auto newOffsetOnAxis = m_scrollController.adjustedScrollDestination(axis, newOffset, velocity, valueForAxis(currentOffset, axis), selectionMethod);
         newOffset = setValueForAxis(newOffset, axis, newOffsetOnAxis);
         delta = newOffset - currentOffset;
     } else {
@@ -131,10 +133,10 @@ bool ScrollAnimator::scrollToPositionWithAnimation(const FloatPoint& position, S
     return m_scrollController.startAnimatedScrollToDestination(offsetFromPosition(m_currentPosition), offsetFromPosition(adjustedPosition));
 }
 
-void ScrollAnimator::retargetRunningAnimation(const FloatPoint& newPosition)
+bool ScrollAnimator::retargetRunningAnimation(const FloatPoint& newPosition)
 {
     ASSERT(scrollableArea().scrollAnimationStatus() == ScrollAnimationStatus::Animating);
-    m_scrollController.retargetAnimatedScroll(offsetFromPosition(newPosition));
+    return m_scrollController.retargetAnimatedScroll(offsetFromPosition(newPosition));
 }
 
 FloatPoint ScrollAnimator::offsetFromPosition(const FloatPoint& position) const
@@ -211,7 +213,7 @@ bool ScrollAnimator::handleSteppedScrolling(const PlatformWheelEvent& wheelEvent
         || (deltaY > 0 && maxBackwardScrollDelta.height() > 0)) {
         handled = true;
 
-        OptionSet<ScrollBehavior> behavior = { ScrollBehavior::RespectScrollSnap };
+        EnumSet<ScrollBehavior> behavior = { ScrollBehavior::RespectScrollSnap };
         if (wheelEvent.hasPreciseScrollingDeltas())
             behavior.add(ScrollBehavior::NeverAnimate);
 
@@ -317,6 +319,11 @@ void ScrollAnimator::didStopAnimatedScroll()
     scrollableArea->scrollDidEnd();
 }
 
+void ScrollAnimator::didStopWheelEventScroll()
+{
+    protect(m_scrollableArea)->scrollDidEnd();
+}
+
 #if HAVE(RUBBER_BANDING)
 IntSize ScrollAnimator::stretchAmount() const
 {
@@ -375,7 +382,8 @@ ScrollExtents ScrollAnimator::scrollExtents() const
     CheckedRef scrollableArea = m_scrollableArea;
     return {
         scrollableArea->totalContentsSize(),
-        scrollableArea->visibleSize()
+        scrollableArea->visibleSize(),
+        scrollableArea->snapportSize()
     };
 }
 
@@ -441,10 +449,13 @@ FloatPoint ScrollAnimator::scrollOffsetAdjustedForSnapping(const FloatPoint& off
     if (!m_scrollController.usesScrollSnap())
         return offset;
 
-    return {
+    auto result = FloatPoint {
         scrollOffsetAdjustedForSnapping(ScrollEventAxis::Horizontal, offset, method),
         scrollOffsetAdjustedForSnapping(ScrollEventAxis::Vertical, offset, method)
     };
+
+    LOG_WITH_STREAM(ScrollSnap, stream << "ScrollAnimator::scrollOffsetAdjustedForSnapping() - offset " << offset << " adjusted to  " << result);
+    return result;
 }
 
 float ScrollAnimator::scrollOffsetAdjustedForSnapping(ScrollEventAxis axis, const FloatPoint& newOffset, ScrollSnapPointSelectionMethod method) const

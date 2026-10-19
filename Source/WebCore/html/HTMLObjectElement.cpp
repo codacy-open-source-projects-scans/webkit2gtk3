@@ -28,11 +28,9 @@
 #include "CSSValueKeywords.h"
 #include "CachedImage.h"
 #include "ContainerNodeInlines.h"
-#include "ElementAncestorIteratorInlines.h"
 #include "ElementChildIteratorInlines.h"
 #include "FrameLoader.h"
 #include "HTMLDocument.h"
-#include "HTMLEmbedElement.h"
 #include "HTMLFormElement.h"
 #include "HTMLImageLoader.h"
 #include "HTMLMetaElement.h"
@@ -41,7 +39,6 @@
 #include "LocalFrame.h"
 #include "MIMETypeRegistry.h"
 #include "NodeList.h"
-#include "NodeInlines.h"
 #include "NodeName.h"
 #include "Page.h"
 #include "RenderEmbeddedObject.h"
@@ -65,35 +62,20 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(HTMLObjectElement);
 
 using namespace HTMLNames;
 
-inline HTMLObjectElement::HTMLObjectElement(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
+inline HTMLObjectElement::HTMLObjectElement(const QualifiedName& tagName, Document& document)
     : HTMLPlugInElement(tagName, document)
-    , FormListedElement(form)
 {
     ASSERT(hasTagName(objectTag));
 }
 
-Ref<HTMLObjectElement> HTMLObjectElement::create(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
+Ref<HTMLObjectElement> HTMLObjectElement::create(const QualifiedName& tagName, Document& document)
 {
-    return adoptRef(*new HTMLObjectElement(tagName, document, form));
+    return adoptRef(*new HTMLObjectElement(tagName, document));
 }
 
 HTMLObjectElement::~HTMLObjectElement()
 {
     clearForm();
-}
-
-// https://html.spec.whatwg.org/multipage/dom.html#exposed
-bool HTMLObjectElement::isExposed() const
-{
-    for (Ref ancestor : ancestorsOfType<HTMLObjectElement>(*this)) {
-        if (ancestor->isExposed())
-            return false;
-    }
-    for (auto& descendant : descendantsOfType<HTMLElement>(*this)) {
-        if (is<HTMLObjectElement>(descendant) || is<HTMLEmbedElement>(descendant))
-            return false;
-    }
-    return true;
 }
 
 int HTMLObjectElement::defaultTabIndex() const
@@ -323,11 +305,11 @@ void HTMLObjectElement::renderFallbackContent()
     m_useFallbackContent = true;
 }
 
-void HTMLObjectElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) const
+void HTMLObjectElement::addSubresourceAttributeURLs(OrderedHashSet<URL>& urls) const
 {
     HTMLPlugInElement::addSubresourceAttributeURLs(urls);
 
-    addSubresourceURL(urls, protect(document())->completeURL(attributeWithoutSynchronization(dataAttr)));
+    addSubresourceURL(urls, protect(document())->encodingParseURL(attributeWithoutSynchronization(dataAttr)));
 }
 
 void HTMLObjectElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)

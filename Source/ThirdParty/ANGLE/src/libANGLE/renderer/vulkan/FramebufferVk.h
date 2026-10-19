@@ -163,6 +163,14 @@ class FramebufferVk : public FramebufferImpl
     bool isFoveationEnabled() { return mFoveationState.isFoveated(); }
 
     const vk::ImageHelper *getImageWithTileMemory() const;
+    void onTileMemoryFallback(ContextVk *contextVk)
+    {
+        // Invalidate cached objects associated with depth/stencil attachment. They will gets
+        // recreated from Framebuffer::startNewRenderPass.
+        mCachedAttachmentsInfo.clear();
+        releaseCurrentFramebuffer(contextVk);
+        updateDepthStencilAttachmentSerial(contextVk);
+    }
 
   private:
     enum class ClearWithCommand
@@ -266,13 +274,16 @@ class FramebufferVk : public FramebufferImpl
     void restageDeferredClearsImpl(ContextVk *contextVk);
     angle::Result flushDeferredClears(ContextVk *contextVk);
     void clearWithCommand(ContextVk *contextVk,
+                          const bool scissoredClear,
                           const gl::Rectangle &scissoredRenderArea,
                           ClearWithCommand behavior,
                           vk::ClearValuesArray *clears);
     void clearWithLoadOp(ContextVk *contextVk);
     void updateActiveColorMasks(size_t colorIndex, bool r, bool g, bool b, bool a);
     void updateRenderPassDesc(ContextVk *contextVk);
-    angle::Result updateColorAttachment(const gl::Context *context, uint32_t colorIndex);
+    angle::Result updateColorAttachment(const gl::Context *context,
+                                        uint32_t colorIndex,
+                                        bool *readColorTargetUpdatedOut);
     void updateColorAttachmentColorspace(gl::SrgbWriteControlMode srgbWriteControlMode);
     angle::Result updateDepthStencilAttachment(const gl::Context *context);
     void updateDepthStencilAttachmentSerial(ContextVk *contextVk);
@@ -326,7 +337,7 @@ class FramebufferVk : public FramebufferImpl
 
     void insertCache(ContextVk *contextVk,
                      const vk::FramebufferDesc &desc,
-                     vk::FramebufferHelper &&newFramebuffer);
+                     vk::Framebuffer &&newFramebuffer);
 
     WindowSurfaceVk *mBackbuffer;
 

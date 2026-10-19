@@ -44,7 +44,6 @@ my $clientISOSubspacesHeaderFile;
 my $constructorsHeaderFile;
 my $windowConstructorsFile;
 my $workerGlobalScopeConstructorsFile;
-my $shadowRealmGlobalScopeConstructorsFile;
 my $dedicatedWorkerGlobalScopeConstructorsFile;
 my $serviceWorkerGlobalScopeConstructorsFile;
 my $sharedWorkerGlobalScopeConstructorsFile;
@@ -68,7 +67,6 @@ my @supportedGlobalContexts = (
     "SharedWorker",
     "PaintWorklet",
     "AudioWorklet",
-    "ShadowRealm",
 );
 
 # Toggle this to validate that the fast regular expression based "parsing" used
@@ -85,7 +83,6 @@ GetOptions('defines=s' => \$defines,
            'constructorsHeaderFile=s' => \$constructorsHeaderFile,
            'windowConstructorsFile=s' => \$windowConstructorsFile,
            'workerGlobalScopeConstructorsFile=s' => \$workerGlobalScopeConstructorsFile,
-           'shadowRealmGlobalScopeConstructorsFile=s' => \$shadowRealmGlobalScopeConstructorsFile,
            'dedicatedWorkerGlobalScopeConstructorsFile=s' => \$dedicatedWorkerGlobalScopeConstructorsFile,
            'serviceWorkerGlobalScopeConstructorsFile=s' => \$serviceWorkerGlobalScopeConstructorsFile,
            'sharedWorkerGlobalScopeConstructorsFile=s' => \$sharedWorkerGlobalScopeConstructorsFile,
@@ -102,7 +99,6 @@ die('Must specify #define macros using --defines.') unless defined($defines);
 die('Must specify an output file using --supplementalDependencyFile.') unless defined($supplementalDependencyFile);
 die('Must specify an output file using --windowConstructorsFile.') unless defined($windowConstructorsFile);
 die('Must specify an output file using --workerGlobalScopeConstructorsFile.') unless defined($workerGlobalScopeConstructorsFile);
-die('Must specify an output file using --shadowRealmGlobalScopeConstructorsFile.') unless defined($shadowRealmGlobalScopeConstructorsFile);
 die('Must specify an output file using --dedicatedWorkerGlobalScopeConstructorsFile.') unless defined($dedicatedWorkerGlobalScopeConstructorsFile);
 die('Must specify an output file using --serviceWorkerGlobalScopeConstructorsFile.') unless defined($serviceWorkerGlobalScopeConstructorsFile);
 die('Must specify an output file using --sharedWorkerGlobalScopeConstructorsFile.') unless defined($sharedWorkerGlobalScopeConstructorsFile);
@@ -119,7 +115,6 @@ $clientISOSubspacesHeaderFile = CygwinPathIfNeeded($clientISOSubspacesHeaderFile
 $constructorsHeaderFile = CygwinPathIfNeeded($constructorsHeaderFile);
 $windowConstructorsFile = CygwinPathIfNeeded($windowConstructorsFile);
 $workerGlobalScopeConstructorsFile = CygwinPathIfNeeded($workerGlobalScopeConstructorsFile);
-$shadowRealmGlobalScopeConstructorsFile = CygwinPathIfNeeded($shadowRealmGlobalScopeConstructorsFile);
 $dedicatedWorkerGlobalScopeConstructorsFile = CygwinPathIfNeeded($dedicatedWorkerGlobalScopeConstructorsFile);
 $serviceWorkerGlobalScopeConstructorsFile = CygwinPathIfNeeded($serviceWorkerGlobalScopeConstructorsFile);
 $workletGlobalScopeConstructorsFile = CygwinPathIfNeeded($workletGlobalScopeConstructorsFile);
@@ -161,7 +156,6 @@ my %dictionaryDependencies;
 my %supplementals;
 my $windowConstructorsCode = "";
 my $workerGlobalScopeConstructorsCode = "";
-my $shadowRealmGlobalScopeConstructorsCode = "";
 my $dedicatedWorkerGlobalScopeConstructorsCode = "";
 my $serviceWorkerGlobalScopeConstructorsCode = "";
 my $sharedWorkerGlobalScopeConstructorsCode = "";
@@ -206,7 +200,7 @@ my @constructors = ();
 my $constructorsHeaderCode = <<END;
 #include <wtf/FastMalloc.h>
 #include <wtf/Noncopyable.h>
-#include <JavaScriptCore/JSCInlines.h>
+#include <JavaScriptCore/WriteBarrier.h>
 
 #pragma once
 
@@ -291,16 +285,26 @@ foreach my $idlFileName (sort keys %idlFileNameHash) {
         }
         $exposedAttribute = substr($exposedAttribute, 1, -1) if substr($exposedAttribute, 0, 1) eq "(";
 
+        my %exposedEnabledBySetting;
+        if (my $exposedSetting = $extendedAttributes->{"ExposedEnabledBySetting"}) {
+            if ($exposedSetting =~ /^(\w+)\|(\w+)$/) {
+                $exposedEnabledBySetting{$1} = $2;
+            }
+        }
+
         my @globalContexts = split(",", $exposedAttribute);
         foreach my $globalContext (@globalContexts) {
-            my ($attributeCode, $windowAliases) = GenerateConstructorAttributes($interfaceName, $extendedAttributes, $globalContext);
+            my %contextExtendedAttributes = %{$extendedAttributes};
+            if (my $setting = $exposedEnabledBySetting{$globalContext}) {
+                my $existing = $contextExtendedAttributes{"EnabledBySetting"};
+                $contextExtendedAttributes{"EnabledBySetting"} = $existing ? "$setting&$existing" : $setting;
+            }
+            my ($attributeCode, $windowAliases) = GenerateConstructorAttributes($interfaceName, \%contextExtendedAttributes, $globalContext);
             if ($globalContext eq "Window") {
                 $windowConstructorsCode .= $attributeCode;
                 $windowConstructorsCode .= $windowAliases if $windowAliases;
             } elsif ($globalContext eq "Worker") {
                 $workerGlobalScopeConstructorsCode .= $attributeCode;
-            } elsif ($globalContext eq "ShadowRealm") {
-                $shadowRealmGlobalScopeConstructorsCode .= $attributeCode;
             } elsif ($globalContext eq "DedicatedWorker") {
                 $dedicatedWorkerGlobalScopeConstructorsCode .= $attributeCode;
             } elsif ($globalContext eq "ServiceWorker") {
@@ -332,7 +336,6 @@ foreach my $idlFileName (sort keys %idlFileNameHash) {
 # Generate partial interfaces for Constructors.
 GeneratePartialInterface("DOMWindow", $windowConstructorsCode, $windowConstructorsFile);
 GeneratePartialInterface("WorkerGlobalScope", $workerGlobalScopeConstructorsCode, $workerGlobalScopeConstructorsFile);
-GeneratePartialInterface("ShadowRealmGlobalScope", $shadowRealmGlobalScopeConstructorsCode, $shadowRealmGlobalScopeConstructorsFile);
 GeneratePartialInterface("DedicatedWorkerGlobalScope", $dedicatedWorkerGlobalScopeConstructorsCode, $dedicatedWorkerGlobalScopeConstructorsFile);
 GeneratePartialInterface("ServiceWorkerGlobalScope", $serviceWorkerGlobalScopeConstructorsCode, $serviceWorkerGlobalScopeConstructorsFile);
 GeneratePartialInterface("SharedWorkerGlobalScope", $sharedWorkerGlobalScopeConstructorsCode, $sharedWorkerGlobalScopeConstructorsFile);
@@ -499,21 +502,12 @@ sub GenerateConstructorAttributes
       $extendedAttributes->{"Conditional"} = $existingConditional;
     }
 
-    if ($globalContext eq "ShadowRealm" && $extendedAttributes->{"Exposed"} eq "*") {
-        my $enabledBySetting = "WebAPIsInShadowRealmEnabled";
-        my $existingEnabledBySetting = $extendedAttributes->{"EnabledBySetting"};
-        if ($existingEnabledBySetting) {
-            $enabledBySetting .= "&" . $existingEnabledBySetting;
-        }
-        $extendedAttributes->{"EnabledBySetting"} = $enabledBySetting;
-    }
-
     my $code = "    ";
     my @extendedAttributesList;
     foreach my $attributeName (sort keys %{$extendedAttributes}) {
       next unless ($attributeName eq "Conditional" || $attributeName eq "EnabledByDeprecatedGlobalSetting" || $attributeName eq "EnabledForWorld" || $attributeName eq "EnabledForGlobalObject"
         || $attributeName eq "EnabledBySetting" || $attributeName eq "SecureContext" || $attributeName eq "PrivateIdentifier"
-        || $attributeName eq "PublicIdentifier" || $attributeName eq "DisabledByQuirk" || $attributeName eq "EnabledByQuirk"
+        || $attributeName eq "PublicIdentifier" || $attributeName eq "DisabledByQuirk" || $attributeName eq "EnabledByQuirk" || $attributeName eq "EnabledBySettingOrQuirk"
         || $attributeName eq "EnabledForContext") || $attributeName eq "LegacyFactoryFunctionEnabledBySetting";
       my $extendedAttribute = $attributeName;
       

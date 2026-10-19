@@ -37,10 +37,12 @@
 #include "MachineContext.h"
 #include "MacroAssemblerCodeRef.h"
 #include "VMEntryScopeInlines.h"
+#include "VMInlines.h"
 #include "VMManager.h"
 #include "VMTrapsInlines.h"
 #include "WaiterListManager.h"
 #include "Watchdog.h"
+#include <wtf/Condition.h>
 #include <wtf/ProcessID.h>
 #include <wtf/Scope.h>
 #include <wtf/ThreadMessage.h>
@@ -60,7 +62,7 @@ private:
     { }
 
 public:
-    static std::optional<SignalContext> NODELETE tryCreate(PlatformRegisters& registers)
+    static std::optional<SignalContext> LEGACY_NODELETE tryCreate(PlatformRegisters& registers)
     {
         auto instructionPointer = MachineContext::instructionPointer(registers);
         if (!instructionPointer)
@@ -74,12 +76,12 @@ public:
     void* framePointer;
 };
 
-inline static bool NODELETE vmIsInactive(VM& vm)
+inline static bool LEGACY_NODELETE vmIsInactive(VM& vm)
 {
     return !vm.entryScope && !vm.ownerThread();
 }
 
-static bool NODELETE isSaneFrame(CallFrame* frame, CallFrame* calleeFrame, EntryFrame* entryFrame, StackBounds stackBounds)
+static bool LEGACY_NODELETE isSaneFrame(CallFrame* frame, CallFrame* calleeFrame, EntryFrame* entryFrame, StackBounds stackBounds)
 {
     if (reinterpret_cast<void*>(frame) >= reinterpret_cast<void*>(entryFrame))
         return false;
@@ -259,7 +261,7 @@ public:
         });
     }
 
-    VMTraps& NODELETE traps() { return m_vm.traps(); }
+    VMTraps& LEGACY_NODELETE traps() { return m_vm.traps(); }
 
 
     void notify(AbstractLocker&)
@@ -272,7 +274,7 @@ public:
         });
     }
 
-    bool NODELETE isStopped(AbstractLocker&)
+    bool LEGACY_NODELETE isStopped(AbstractLocker&)
     {
         return !m_scheduled;
     }

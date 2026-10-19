@@ -35,14 +35,14 @@ class HTMLWBRElement final : public HTMLElement {
     WTF_MAKE_TZONE_ALLOCATED(HTMLWBRElement);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(HTMLWBRElement);
 public:
-    static Ref<HTMLWBRElement> create(const QualifiedName&, Document&);
+    static Ref<HTMLWBRElement> LEGACY_NODELETE create(const QualifiedName&, Document&);
 
     RenderLineBreak* renderer() const;
 
 private:
     HTMLWBRElement(const QualifiedName&, Document&);
 
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) final;
 };
 
 } // namespace WebCore

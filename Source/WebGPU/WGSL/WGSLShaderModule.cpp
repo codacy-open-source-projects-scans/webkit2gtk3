@@ -88,6 +88,16 @@ std::optional<Error> ShaderModule::validateOverrides(const PrepareResult& prepar
     return std::nullopt;
 }
 
+bool ShaderModule::containsOverride(const String& key) const
+{
+    for (auto* variable : m_overrides) {
+        String name = variable->id().has_value() ? String::number(*variable->id()) : variable->originalName();
+        if (name == key)
+            return true;
+    }
+    return false;
+}
+
 void ShaderModule::initializeOverloads()
 {
     // This file contains the overloads generated from `TypeDeclarations.rb`
@@ -100,6 +110,12 @@ const OverloadedDeclaration* ShaderModule::lookupOverload(const String& name) co
     if (it == m_overloadedOperations.end())
         return nullptr;
     return &it->value;
+}
+
+void ShaderModule::releaseOverloadCandidates()
+{
+    for (auto& declaration : m_overloadedOperations.values())
+        declaration.overloads.clear();
 }
 
 } // namespace WGSL

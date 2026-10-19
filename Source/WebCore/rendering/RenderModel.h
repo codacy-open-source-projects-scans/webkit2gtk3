@@ -41,18 +41,21 @@ class RenderModel final : public RenderReplaced {
     WTF_MAKE_TZONE_ALLOCATED(RenderModel);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderModel);
 public:
-    RenderModel(HTMLModelElement&, RenderStyle&&);
+    RenderModel(HTMLModelElement&, Style::ComputedStyle&&);
     virtual ~RenderModel();
 
-    HTMLModelElement& NODELETE modelElement() const;
+    HTMLModelElement& LEGACY_NODELETE modelElement() const;
 
 private:
     void element() const = delete;
     ASCIILiteral renderName() const final { return "RenderModel"_s; }
 
-    bool NODELETE requiresLayer() const final;
+    NaturalDimensions zoomedNaturalDimensions() const final;
+
+    bool LEGACY_NODELETE requiresLayer() const final;
     void updateFromElement() final;
-    void styleDidChange(Style::Difference, const RenderStyle* oldStyle) final;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle* oldStyle) final;
+    void paintReplaced(PaintInfo&, const LayoutPoint&) final;
 
     void update();
 };

@@ -30,14 +30,6 @@
 
 namespace JSC {
 
-// The first and last JSType are inclusive
-struct JSTypeRange {
-    bool contains(JSType type) const { return first <= type && type <= last; }
-
-    JSType first;
-    JSType last;
-};
-
 // Specific type overloads.
 
 template<typename>
@@ -135,6 +127,7 @@ using JSResizableOrGrowableSharedBigUint64Array = JSGenericResizableOrGrowableSh
     macro(RegExpObject, JSType::RegExpObjectType, JSType::RegExpObjectType) \
     macro(JSWebAssemblyModule, JSType::WebAssemblyModuleType, JSType::WebAssemblyModuleType) \
     macro(JSWebAssemblyInstance, JSType::WebAssemblyInstanceType, JSType::WebAssemblyInstanceType) \
+    macro(JSWebAssemblyStreamingContext, JSType::JSWebAssemblyStreamingContextType, JSType::JSWebAssemblyStreamingContextType) \
     macro(DirectArguments, JSType::DirectArgumentsType, JSType::DirectArgumentsType) \
     macro(FunctionExecutable, JSType::FunctionExecutableType, JSType::FunctionExecutableType) \
     macro(ScopedArguments, JSType::ScopedArgumentsType, JSType::ScopedArgumentsType) \
@@ -147,9 +140,9 @@ using JSResizableOrGrowableSharedBigUint64Array = JSGenericResizableOrGrowableSh
     macro(JSSymbolTableObject, JSType::GlobalObjectType, JSType::ModuleEnvironmentType) \
     macro(JSScope, FirstScopeType, LastScopeType) \
     macro(StringObject, JSType::StringObjectType, JSType::DerivedStringObjectType) \
-    macro(ShadowRealmObject, JSType::ShadowRealmType, JSType::ShadowRealmType) \
     macro(JSDataView, JSType::DataViewType, JSType::DataViewType) \
     macro(JSGenerator, JSType::JSGeneratorType, JSType::JSGeneratorType) \
+    macro(JSAsyncFunctionGenerator, JSType::JSAsyncFunctionGeneratorType, JSType::JSAsyncFunctionGeneratorType) \
     macro(JSAsyncGenerator, JSType::JSAsyncGeneratorType, JSType::JSAsyncGeneratorType) \
     macro(WebAssemblyGCObjectBase, JSType::WebAssemblyGCObjectType, JSType::WebAssemblyGCObjectType) \
 

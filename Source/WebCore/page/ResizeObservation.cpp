@@ -29,7 +29,6 @@
 #include "ElementInlines.h"
 #include "HTMLFrameOwnerElement.h"
 #include "Logging.h"
-#include "NodeInlines.h"
 #include "RenderBoxInlines.h"
 #include "RenderElementStyleInlines.h"
 #include "SVGElement.h"
@@ -77,15 +76,16 @@ auto ResizeObservation::computeObservedSizes() const -> std::optional<BoxSizes>
         }
     }
 
-    CheckedPtr box = m_target->renderBox();
-    if (box) {
-        if (box->isSkippedContent())
-            return std::nullopt;
-        return { {
-            Style::adjustLayoutSizeForAbsoluteZoom(box->contentBoxSize(), *box),
-            Style::adjustLayoutSizeForAbsoluteZoom(box->contentBoxLogicalSize(), *box),
-            Style::adjustLayoutSizeForAbsoluteZoom(box->borderBoxLogicalSize(), *box)
-        } };
+    if (RefPtr target = m_target) {
+        if (CheckedPtr box = target->renderBox()) {
+            if (box->isSkippedContent())
+                return std::nullopt;
+            return { {
+                Style::unapplyingZoom<LayoutSize>(box->contentBoxSize(), *box),
+                Style::unapplyingZoom<LayoutSize>(box->contentBoxLogicalSize(), *box),
+                Style::unapplyingZoom<LayoutSize>(box->logicalSize(), *box)
+            } };
+        }
     }
 
     return BoxSizes { };
@@ -93,11 +93,8 @@ auto ResizeObservation::computeObservedSizes() const -> std::optional<BoxSizes>
 
 LayoutPoint ResizeObservation::computeTargetLocation() const
 {
-    if (!m_target)
-        return { };
-
-    if (!m_target->isSVGElement()) {
-        if (CheckedPtr box = m_target->renderBox())
+    if (RefPtr target = m_target; target && !target->isSVGElement()) {
+        if (CheckedPtr box = target->renderBox())
             return LayoutPoint(box->paddingLeft(), box->paddingTop());
     }
 
@@ -106,7 +103,8 @@ LayoutPoint ResizeObservation::computeTargetLocation() const
 
 FloatRect ResizeObservation::computeContentRect() const
 {
-    return FloatRect(FloatPoint(computeTargetLocation()), FloatSize(m_lastObservationSizes.contentBoxSize));
+    // FIXME: Remove suppression once rdar://189998444 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return FloatRect(FloatPoint(computeTargetLocation()), FloatSize(m_lastObservationSizes.contentBoxSize));
 }
 
 FloatSize ResizeObservation::borderBoxSize() const

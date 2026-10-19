@@ -532,6 +532,92 @@ TEST(WKWebExtensionAPIRuntime, SendMessageFromContentScript)
     [manager run];
 }
 
+TEST(WKWebExtensionAPIRuntime, SendMessageWithEmptyContainers)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message, sender, sendResponse) => {",
+        @"  const containers = [message.firstArray, message.secondArray, message.firstObject, message.secondObject, message.nested.array, message.nested.object, message.list[0], message.list[1]]",
+        @"  for (let i = 0; i < containers.length; ++i) {",
+        @"    for (let j = i + 1; j < containers.length; ++j)",
+        @"      browser.test.assertFalse(containers[i] === containers[j], `Message containers ${i} and ${j} should be distinct`)",
+        @"  }",
+
+        @"  message.firstArray.push(1)",
+        @"  browser.test.assertEq(message.secondArray.length, 0, 'Mutating one empty array should not change the other')",
+
+        @"  sendResponse({ firstArray: [], secondArray: [], firstObject: {}, secondObject: {} })",
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')"
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"(async () => {",
+        @"  const response = await browser.runtime.sendMessage({ firstArray: [], secondArray: [], firstObject: {}, secondObject: {}, nested: { array: [], object: {} }, list: [[], []] })",
+
+        @"  browser.test.assertFalse(response.firstArray === response.secondArray, 'Empty arrays in the response should be distinct')",
+        @"  browser.test.assertFalse(response.firstObject === response.secondObject, 'Empty objects in the response should be distinct')",
+
+        @"  browser.test.notifyPass()",
+        @"})()"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
+
+    auto *urlRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
+    [manager.get().defaultTab.webView loadRequest:urlRequest];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, SendMessageFromContentScriptWhileBackgroundIsLoading)
+{
+    // A content script sends runtime.sendMessage while the non-persistent background content
+    // is still loading on initial load (before its onMessage listener has registered). The
+    // message must be queued and delivered once the background loads, not dropped.
+
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *urlRequest = server.requestWithLocalhost();
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message, sender, sendResponse) => {",
+        @"  browser.test.assertEq(message?.content, 'Hello', 'Should receive the message sent while the background was loading')",
+        @"  sendResponse({ content: 'Received' })",
+        @"})",
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"(async () => {",
+        @"  const response = await browser.runtime.sendMessage({ content: 'Hello' })",
+
+        @"  browser.test.assertEq(response?.content, 'Received', 'Should get the response from the background script')",
+
+        @"  browser.test.notifyPass()",
+        @"})()"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
+
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    // Load the tab immediately, without waiting for the background to be ready, so the content script's
+    // runtime.sendMessage races the initial background content load.
+    [manager.get().defaultTab.webView loadRequest:urlRequest];
+
+    [manager run];
+}
+
 TEST(WKWebExtensionAPIRuntime, SendMessageFromContentScriptWithAsyncReply)
 {
     TestWebKitAPI::HTTPServer server({
@@ -1039,12 +1125,139 @@ TEST(WKWebExtensionAPIRuntime, SendMessageWithNaNValue)
     [manager run];
 }
 
-// FIXME rdar://147858640
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WKWebExtensionAPIRuntime, DISABLED_ConnectFromContentScript)
-#else
+TEST(WKWebExtensionAPIRuntime, SendMessageGestureFromContentScriptIsNotPropagated)
+{
+    // Gestures from content scripts are intentionally not propagated to extension pages
+    // to prevent web page interactions from triggering privileged extension APIs.
+
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message, sender, sendResponse) => {",
+        @"  if (message !== 'check-gesture')",
+        @"    return",
+
+        @"  browser.test.assertFalse(navigator.userActivation.isActive, 'User gesture from content script should not propagate to background onMessage')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Background Ready')"
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"browser.test.onMessage.addListener((message) => {",
+        @"  if (message !== 'Send')",
+        @"    return",
+
+        @"  browser.test.runWithUserGesture(() => {",
+        @"    browser.runtime.sendMessage('check-gesture')",
+        @"  })",
+        @"})",
+
+        @"browser.test.sendMessage('Content Ready')"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
+
+    RetainPtr urlRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.get().URL];
+    [manager.get().defaultTab.webView loadRequest:urlRequest.get()];
+
+    [manager runUntilTestMessage:@"Background Ready"];
+    [manager runUntilTestMessage:@"Content Ready"];
+
+    [manager sendTestMessage:@"Send"];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, SendMessageGestureFromPopupIsPropagated)
+{
+    // Gestures from extension pages (popup, sidebar) ARE propagated to other extension pages.
+    // These originate from deliberate user interaction with the extension UI, unlike content
+    // scripts which run in web page contexts where any page click qualifies as a gesture.
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message) => {",
+        @"  if (message !== 'check-gesture')",
+        @"    return",
+
+        @"  browser.test.assertTrue(navigator.userActivation.isActive, 'User gesture from popup (extension page) should propagate to background onMessage')",
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Background Ready')"
+    ]);
+
+    auto *popupScript = Util::constructScript(@[
+        @"browser.test.runWithUserGesture(() => {",
+        @"  browser.runtime.sendMessage('check-gesture')",
+        @"})"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeManifest, @{
+        @"background.js": backgroundScript,
+        @"popup.html": @"<script type='module' src='popup.js'></script>",
+        @"popup.js": popupScript,
+    });
+
+    [manager runUntilTestMessage:@"Background Ready"];
+
+    manager.get().internalDelegate.presentPopupForAction = ^(WKWebExtensionAction *) { };
+
+    [manager.get().context performActionForTab:manager.get().defaultTab];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, SendMessageWithoutUserGestureFromContentScript)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message, sender, sendResponse) => {",
+        @"  if (message !== 'check-gesture')",
+        @"    return",
+
+        @"  browser.test.assertFalse(navigator.userActivation.isActive, 'User gesture should not be active in background onMessage regardless of sender gesture state')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Background Ready')"
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"browser.test.onMessage.addListener((message) => {",
+        @"  if (message !== 'Send')",
+        @"    return",
+
+        @"  browser.runtime.sendMessage('check-gesture')",
+        @"})",
+
+        @"browser.test.sendMessage('Content Ready')"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
+
+    RetainPtr urlRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.get().URL];
+    [manager.get().defaultTab.webView loadRequest:urlRequest.get()];
+
+    [manager runUntilTestMessage:@"Background Ready"];
+    [manager runUntilTestMessage:@"Content Ready"];
+
+    [manager sendTestMessage:@"Send"];
+
+    [manager run];
+}
+
 TEST(WKWebExtensionAPIRuntime, ConnectFromContentScript)
-#endif
 {
     TestWebKitAPI::HTTPServer server({
         { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
@@ -1067,30 +1280,33 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromContentScript)
         @"    browser.test.assertEq(message, 'Hello', 'Should receive the correct message content')",
         @"    port?.postMessage('Received')",
         @"  })",
-        @"})"
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')"
     ]);
 
     auto *contentScript = Util::constructScript(@[
-        @"setTimeout(() => {",
-        @"  const port = browser.runtime?.connect({ name: 'testPort' })",
-        @"  browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
-        @"  browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
-        @"  browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
+        @"const port = browser.runtime?.connect({ name: 'testPort' })",
+        @"browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
+        @"browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
+        @"browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
 
-        @"  port?.postMessage('Hello')",
+        @"port?.postMessage('Hello')",
 
-        @"  port?.onMessage.addListener((response) => {",
-        @"    browser.test.assertEq(response, 'Received', 'Should get the response from the background script')",
+        @"port?.onMessage.addListener((response) => {",
+        @"  browser.test.assertEq(response, 'Received', 'Should get the response from the background script')",
 
-        @"    browser.test.notifyPass()",
-        @"  })",
-        @"}, 1000)"
+        @"  browser.test.notifyPass()",
+        @"})"
     ]);
 
     auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
 
     auto *urlRequest = server.requestWithLocalhost();
     [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
     [manager.get().defaultTab.webView loadRequest:urlRequest];
 
     [manager run];
@@ -1136,6 +1352,53 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromContentScriptWithImmediateMessage)
     };
 
     auto manager = Util::loadExtension(runtimeContentScriptManifest, resources);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
+    [manager.get().defaultTab.webView loadRequest:urlRequest];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, PortMessageWithEmptyContainers)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onConnect.addListener((port) => {",
+        @"  port.onMessage.addListener((message) => {",
+        @"    const containers = [message.firstArray, message.secondArray, message.firstObject, message.secondObject, message.nested.array, message.nested.object, message.list[0], message.list[1]]",
+        @"    for (let i = 0; i < containers.length; ++i) {",
+        @"      for (let j = i + 1; j < containers.length; ++j)",
+        @"        browser.test.assertFalse(containers[i] === containers[j], `Message containers ${i} and ${j} should be distinct`)",
+        @"    }",
+
+        @"    port.postMessage({ firstArray: [], secondArray: [], firstObject: {}, secondObject: {} })",
+        @"  })",
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')"
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"const port = browser.runtime.connect({ name: 'testPort' })",
+
+        @"port.onMessage.addListener((response) => {",
+        @"  browser.test.assertFalse(response.firstArray === response.secondArray, 'Empty arrays in the response should be distinct')",
+        @"  browser.test.assertFalse(response.firstObject === response.secondObject, 'Empty objects in the response should be distinct')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"port.postMessage({ firstArray: [], secondArray: [], firstObject: {}, secondObject: {}, nested: { array: [], object: {} }, list: [[], []] })"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
 
     auto *urlRequest = server.requestWithLocalhost();
     [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
@@ -1223,12 +1486,7 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromSubframe)
     [manager run];
 }
 
-// FIXME rdar://147858640
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WKWebExtensionAPIRuntime, DISABLED_ConnectFromContentScriptWithMultipleListeners)
-#else
 TEST(WKWebExtensionAPIRuntime, ConnectFromContentScriptWithMultipleListeners)
-#endif
 {
     TestWebKitAPI::HTTPServer server({
         { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
@@ -1269,43 +1527,41 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromContentScriptWithMultipleListeners)
         @"    browser.test.assertEq(message, 'Hello', 'Should receive the correct message content in second listener')",
         @"    port?.postMessage('Received')",
         @"  })",
-        @"})"
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')"
     ]);
 
     auto *contentScript = Util::constructScript(@[
-        @"setTimeout(() => {",
-        @"  const port = browser.runtime?.connect({ name: 'testPort' })",
-        @"  browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
-        @"  browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
-        @"  browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
+        @"const port = browser.runtime?.connect({ name: 'testPort' })",
+        @"browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
+        @"browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
+        @"browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
 
-        @"  port?.postMessage('Hello')",
+        @"port?.postMessage('Hello')",
 
-        @"  let receivedMessages = 0",
-        @"  port?.onMessage.addListener((response) => {",
-        @"    browser.test.assertEq(response, 'Received', 'Should get the response from the background script')",
+        @"let receivedMessages = 0",
+        @"port?.onMessage.addListener((response) => {",
+        @"  browser.test.assertEq(response, 'Received', 'Should get the response from the background script')",
 
-        @"    if (++receivedMessages === 2)",
-        @"      browser.test.notifyPass()",
-        @"  })",
-        @"}, 1000)"
+        @"  if (++receivedMessages === 2)",
+        @"    browser.test.notifyPass()",
+        @"})"
     ]);
 
     auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
 
     auto *urlRequest = server.requestWithLocalhost();
     [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
     [manager.get().defaultTab.webView loadRequest:urlRequest];
 
     [manager run];
 }
 
-// FIXME rdar://147858640
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WKWebExtensionAPIRuntime, DISABLED_PortDisconnectFromContentScript)
-#else
 TEST(WKWebExtensionAPIRuntime, PortDisconnectFromContentScript)
-#endif
 {
     TestWebKitAPI::HTTPServer server({
         { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
@@ -1324,41 +1580,39 @@ TEST(WKWebExtensionAPIRuntime, PortDisconnectFromContentScript)
 
         @"    browser.test.notifyPass()",
         @"  })",
-        @"})"
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')"
     ]);
 
     auto *contentScript = Util::constructScript(@[
-        @"setTimeout(() => {",
-        @"  const port = browser.runtime?.connect({ name: 'testPort' })",
-        @"  browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
-        @"  browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
-        @"  browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
+        @"const port = browser.runtime?.connect({ name: 'testPort' })",
+        @"browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
+        @"browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
+        @"browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
 
-        @"  port?.postMessage('Message from content script to background')",
+        @"port?.postMessage('Message from content script to background')",
 
-        @"  port?.onDisconnect.addListener(() => {",
-        @"    browser.test.assertTrue(true, 'Should trigger the onDisconnect event in the content script')",
-        @"  })",
+        @"port?.onDisconnect.addListener(() => {",
+        @"  browser.test.assertTrue(true, 'Should trigger the onDisconnect event in the content script')",
+        @"})",
 
-        @"  port?.disconnect()",
-        @"}, 1000)"
+        @"port?.disconnect()"
     ]);
 
     auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
 
     auto *urlRequest = server.requestWithLocalhost();
     [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
     [manager.get().defaultTab.webView loadRequest:urlRequest];
 
     [manager run];
 }
 
-// FIXME rdar://147858640
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WKWebExtensionAPIRuntime, DISABLED_PortDisconnectFromContentScriptWithMultipleListeners)
-#else
 TEST(WKWebExtensionAPIRuntime, PortDisconnectFromContentScriptWithMultipleListeners)
-#endif
 {
     TestWebKitAPI::HTTPServer server({
         { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
@@ -1384,33 +1638,36 @@ TEST(WKWebExtensionAPIRuntime, PortDisconnectFromContentScriptWithMultipleListen
 
         @"    port?.postMessage('Response from background script 2')",
         @"  })",
-        @"})"
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')"
     ]);
 
     auto *contentScript = Util::constructScript(@[
         @"let messagesReceived = 0",
 
-        @"setTimeout(() => {",
-        @"  const port = browser.runtime?.connect({ name: 'testPort' })",
-        @"  browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
-        @"  browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
-        @"  browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
+        @"const port = browser.runtime?.connect({ name: 'testPort' })",
+        @"browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
+        @"browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
+        @"browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
 
-        @"  port?.postMessage('Message from content script')",
+        @"port?.postMessage('Message from content script')",
 
-        @"  port?.onMessage.addListener((message) => {",
-        @"    browser.test.assertTrue(message?.startsWith('Response from background script '), 'Should receive the correct message content')",
+        @"port?.onMessage.addListener((message) => {",
+        @"  browser.test.assertTrue(message?.startsWith('Response from background script '), 'Should receive the correct message content')",
 
-        @"    if (++messagesReceived === 2)",
-        @"      browser.test.notifyPass()",
-        @"  })",
-        @"}, 1000)"
+        @"  if (++messagesReceived === 2)",
+        @"    browser.test.notifyPass()",
+        @"})"
     ]);
 
     auto manager = Util::loadExtension(runtimeContentScriptManifest, @{ @"background.js": backgroundScript, @"content.js": contentScript });
 
     auto *urlRequest = server.requestWithLocalhost();
     [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
     [manager.get().defaultTab.webView loadRequest:urlRequest];
 
     [manager run];
@@ -1553,6 +1810,57 @@ TEST(WKWebExtensionAPIRuntime, ConnectNative)
                 EXPECT_NULL(error);
             }];
 
+            [messagePort disconnectWithError:nil];
+        };
+    };
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, PortMutateListenersDuringDispatch)
+{
+    auto *backgroundScript = Util::constructScript(@[
+        @"const port = browser.runtime?.connectNative('test')",
+
+        @"const initialListenerCount = 64",
+        @"let messageDispatchCount = 0",
+        @"let disconnectDispatchCount = 0",
+
+        @"port?.onMessage.addListener(() => {",
+        @"  ++messageDispatchCount",
+        @"  for (let i = 0; i < 1024; ++i)",
+        @"    port?.onMessage.addListener(() => { })",
+        @"})",
+
+        @"for (let i = 0; i < initialListenerCount; ++i)",
+        @"  port?.onMessage.addListener(() => { ++messageDispatchCount })",
+
+        @"port?.onDisconnect.addListener(() => {",
+        @"  ++disconnectDispatchCount",
+        @"  for (let i = 0; i < 1024; ++i)",
+        @"    port?.onDisconnect.addListener(() => { })",
+        @"})",
+
+        @"for (let i = 0; i < initialListenerCount; ++i)",
+        @"  port?.onDisconnect.addListener(() => { ++disconnectDispatchCount })",
+
+        @"port?.onDisconnect.addListener(() => {",
+        @"  ++disconnectDispatchCount",
+        @"  browser.test.assertEq(messageDispatchCount, initialListenerCount + 1, 'Should dispatch to the listeners registered when onMessage fired')",
+        @"  browser.test.assertEq(disconnectDispatchCount, initialListenerCount + 2, 'Should dispatch to the listeners registered when onDisconnect fired')",
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"port?.postMessage('Hello')"
+    ]);
+
+    auto manager = Util::loadExtension(runtimeManifest, @{ @"background.js": backgroundScript });
+
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forPermission:WKWebExtensionPermissionNativeMessaging];
+
+    manager.get().internalDelegate.connectUsingMessagePort = ^(WKWebExtensionMessagePort *messagePort) {
+        messagePort.messageHandler = ^(id message, NSError *error) {
+            [messagePort sendMessage:@"Received" completionHandler:^(NSError *) { }];
             [messagePort disconnectWithError:nil];
         };
     };
@@ -1731,19 +2039,17 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromWebPage)
 
     auto *webpageScript = Util::constructScript(@[
         @"<script>",
-        @"setTimeout(() => {",
         [NSString stringWithFormat:@"const port = browser?.runtime?.connect('%@', { name: 'testPort' })", uniqueIdentifier],
-        @"  browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
-        @"  browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
-        @"  browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
+        @"browser.test.assertEq(typeof port, 'object', 'Port should be an object')",
+        @"browser.test.assertEq(port?.name, 'testPort', 'Port name should be testPort')",
+        @"browser.test.assertEq(port?.sender, null, 'Port sender should be null')",
 
-        @"  port?.postMessage('Hello')",
+        @"port?.postMessage('Hello')",
 
-        @"  port?.onMessage.addListener((response) => {",
-        @"    browser.test.assertEq(response, 'Received')",
-        @"    port?.postMessage('Success')",
-        @"  })",
-        @"}, 1000)",
+        @"port?.onMessage.addListener((response) => {",
+        @"  browser.test.assertEq(response, 'Received')",
+        @"  port?.postMessage('Success')",
+        @"})",
         @"</script>"
     ]);
 
@@ -1798,17 +2104,15 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromWebPageWithImmediateMessage)
 
     auto *webpageScript = Util::constructScript(@[
         @"<script>",
-        @"setTimeout(() => {",
         [NSString stringWithFormat:@"const port = browser?.runtime?.connect('%@', { name: 'testPort' })", uniqueIdentifier],
-        @"  console.assert(typeof port === 'object', 'Port should be an object')",
-        @"  console.assert(port?.name === 'testPort', 'Port name should be testPort')",
-        @"  console.assert(port?.sender === null, 'Port sender should be null')",
+        @"console.assert(typeof port === 'object', 'Port should be an object')",
+        @"console.assert(port?.name === 'testPort', 'Port name should be testPort')",
+        @"console.assert(port?.sender === null, 'Port sender should be null')",
 
-        @"  port?.onMessage.addListener((message) => {",
-        @"    console.assert(message === 'Hello from Background', 'Should receive the correct message content')",
-        @"    browser.test.notifyPass()",
-        @"  })",
-        @"}, 1000)",
+        @"port?.onMessage.addListener((message) => {",
+        @"  console.assert(message === 'Hello from Background', 'Should receive the correct message content')",
+        @"  browser.test.notifyPass()",
+        @"})",
         @"</script>"
     ]);
 
@@ -1892,13 +2196,11 @@ TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPage)
 
     auto *webpageScript = Util::constructScript(@[
         @"<script>",
-        @"setTimeout(() => {",
         [NSString stringWithFormat:@"browser.runtime.sendMessage('%@', 'Hello', (response) => {", uniqueIdentifier],
         @"  browser.test.assertEq(response, 'Received')",
 
         @"  browser.test.notifyPass()",
         @"})",
-        @"}, 1000)",
         @"</script>"
     ]);
 
@@ -1981,9 +2283,7 @@ TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPageWithTabFrameAndAsyncReply)
         @"browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {",
         @"  browser.test.assertEq(message?.content, 'Hello from webpage', 'Should receive the correct message from the web page')",
 
-        @"  setTimeout(() => sendResponse({ content: 'Async reply from background' }), 500)",
-
-        @"  return true",
+        @"  sendResponse({ content: 'Async reply from background' })",
         @"})",
 
         @"browser.test.sendMessage('Load Tabs')"
@@ -2005,13 +2305,11 @@ TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPageWithTabFrameAndAsyncReply)
 
     auto *webpageScript = Util::constructScript(@[
         @"<script>",
-        @"setTimeout(() => {",
-        @"  browser.runtime.sendMessage('org.webkit.test.extension (SendMessageTest)', { content: 'Hello from webpage' }, (response) => {",
-        @"    browser.test.assertEq(response?.content, 'Async reply from background', 'Should receive the correct reply from the extension frame')",
+        @"browser.runtime.sendMessage('org.webkit.test.extension (SendMessageTest)', { content: 'Hello from webpage' }, (response) => {",
+        @"  browser.test.assertEq(response?.content, 'Async reply from background', 'Should receive the correct reply from the extension frame')",
 
-        @"    browser.test.notifyPass()",
-        @"  })",
-        @"}, 1000)",
+        @"  browser.test.notifyPass()",
+        @"})",
         @"</script>"
     ]);
 

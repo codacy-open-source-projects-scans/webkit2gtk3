@@ -34,6 +34,7 @@
 
 namespace WebCore {
 
+class ContentSecurityPolicyResponseHeaders;
 class EventLoopTaskGroup;
 class ScriptModuleLoader;
 class WorkerEventLoop;
@@ -53,7 +54,7 @@ public:
     USING_CAN_MAKE_WEAKPTR(ScriptExecutionContext);
 
     bool isClosing() const { return m_isClosing; }
-    RefPtr<WorkerOrWorkletThread> workerOrWorkletThread() const;
+    RefPtr<WorkerOrWorkletThread> LEGACY_NODELETE workerOrWorkletThread() const;
 
     WorkerOrWorkletScriptController* script() const { return m_script.get(); }
     void clearScript();
@@ -92,6 +93,8 @@ public:
 protected:
     WorkerOrWorkletGlobalScope(WorkerThreadType, PAL::SessionID, Ref<JSC::VM>&&, ReferrerPolicy, WorkerOrWorkletThread*, std::optional<uint64_t>, OptionSet<AdvancedPrivacyProtections>, std::optional<ScriptExecutionContextIdentifier> = std::nullopt);
 
+    void applyContentSecurityPolicyResponseHeaders(const ContentSecurityPolicyResponseHeaders&);
+
     // ScriptExecutionContext.
     bool isJSExecutionForbidden() const final;
 
@@ -104,7 +107,8 @@ private:
     void setTrustedTypesEnforcement(JSC::TrustedTypesEnforcement) final;
 
     // EventTarget.
-    ScriptExecutionContext* scriptExecutionContext() const final { return const_cast<WorkerOrWorkletGlobalScope*>(this); }
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    ScriptExecutionContext* scriptExecutionContext() const final { SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<WorkerOrWorkletGlobalScope*>(this); }
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
 

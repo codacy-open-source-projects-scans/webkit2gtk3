@@ -26,9 +26,9 @@
 #include "config.h"
 #include "APIJSHandle.h"
 
+#include "APIFrameInfo.h"
 #include "WebProcessMessages.h"
 #include "WebProcessProxy.h"
-#include <wtf/RuntimeApplicationChecks.h>
 
 namespace API {
 
@@ -39,16 +39,12 @@ Ref<JSHandle> JSHandle::create(WebKit::JSHandleInfo&& info)
 
 JSHandle::JSHandle(WebKit::JSHandleInfo&& info)
     : m_info(WTF::move(info))
+    , m_sourceFrame(FrameInfo::create(WebKit::FrameInfoData { m_info.frameInfo }))
 {
 }
 
 JSHandle::~JSHandle()
 {
-    // FIXME: Remove this once _WKRemoteObjectRegistry is no longer needed to help Safari transition away from the injected bundle.
-    // Once that's gone, we should only be in the UI process.
-    if (isInWebProcess())
-        return;
-
     if (RefPtr webProcess = WebKit::WebProcessProxy::processForIdentifier(m_info.identifier.processIdentifier()))
         webProcess->send(Messages::WebProcess::JSHandleDestroyed(m_info.identifier), 0);
 }

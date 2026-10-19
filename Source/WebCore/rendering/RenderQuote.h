@@ -22,23 +22,23 @@
 
 #pragma once
 
-#include "RenderInline.h"
+#include "RenderBoxModelObject.h"
 
 namespace WebCore {
 
-class RenderQuote final : public RenderInline {
+class RenderQuote final : public RenderBoxModelObject {
     WTF_MAKE_TZONE_ALLOCATED(RenderQuote);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderQuote);
 public:
-    RenderQuote(Document&, RenderStyle&&, QuoteType);
+    RenderQuote(Document&, Style::ComputedStyle&&, QuoteType);
     virtual ~RenderQuote();
 
     void updateRenderer(RenderTreeBuilder&, RenderQuote* previousQuote);
 
 private:
     ASCIILiteral renderName() const override { return "RenderQuote"_s; }
-    bool NODELETE isOpen() const;
-    void styleDidChange(Style::Difference, const RenderStyle*) override;
+    bool LEGACY_NODELETE isOpen() const;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle*) override;
     void insertedIntoTree() override;
     void willBeRemovedFromTree() override;
 

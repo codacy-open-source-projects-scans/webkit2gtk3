@@ -28,9 +28,13 @@
 #include "config.h"
 #include "StyleCanvasImage.h"
 
+#include "BitmapImage.h"
 #include "CSSCanvasValue.h"
+#include "DeprecatedCSSOMValue.h"
 #include "HTMLCanvasElement.h"
+#include "ImageQualityController.h"
 #include "InspectorInstrumentation.h"
+#include "RenderBoxModelObject.h"
 #include "RenderElement.h"
 #include "RenderObjectInlines.h"
 #include <wtf/TZoneMallocInlines.h>
@@ -40,7 +44,7 @@ namespace WebCore::Style {
 WTF_MAKE_TZONE_ALLOCATED_IMPL(CanvasImage);
 
 CanvasImage::CanvasImage(CustomIdent&& name)
-    : GeneratedImage { Type::CanvasImage, CanvasImage::isFixedSize }
+    : GeneratedImage { Type::CanvasImage }
     , m_name { WTF::move(name) }
 {
 }
@@ -48,7 +52,7 @@ CanvasImage::CanvasImage(CustomIdent&& name)
 CanvasImage::~CanvasImage()
 {
     if (m_element)
-        m_element->removeObserver(*this);
+        protect(m_element.get())->removeObserver(*this);
 }
 
 bool CanvasImage::operator==(const Image& other) const
@@ -62,9 +66,14 @@ bool CanvasImage::equals(const CanvasImage& other) const
     return m_name == other.m_name;
 }
 
-Ref<CSSValue> CanvasImage::computedStyleValue(const RenderStyle& style) const
+Ref<CSSValue> CanvasImage::computedStyleValue(const Style::ComputedStyle& style) const
 {
     return CSSCanvasValue::create(toCSS(m_name, style));
+}
+
+Ref<DeprecatedCSSOMValue> CanvasImage::computedStyleDeprecatedCSSOMValue(CSSValuePool&, const Style::ComputedStyle& style, CSSStyleDeclaration& owner) const
+{
+    return computedStyleValue(style)->createDeprecatedCSSOMWrapper(owner);
 }
 
 bool CanvasImage::isPending() const
@@ -76,16 +85,43 @@ void CanvasImage::load(CachedResourceLoader&, const ResourceLoaderOptions&)
 {
 }
 
-RefPtr<WebCore::Image> CanvasImage::image(const RenderElement* renderer, const FloatSize&, const GraphicsContext&, bool) const
+ImageDrawResult CanvasImage::draw(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const FloatRect& destination, const FloatRect& source, ImagePaintingOptions options, bool) const
 {
-    if (!renderer)
-        return &WebCore::Image::nullImage();
+    if (isPending())
+        return ImageDrawResult::DidNothing;
 
-    ASSERT(clients().contains(const_cast<RenderElement&>(*renderer)));
-    RefPtr element = this->element(renderer->document());
-    if (!element)
-        return nullptr;
-    return element->copiedImage();
+    RefPtr image = resolvedImage(renderer);
+    if (!image || !image->hasSomethingToDraw())
+        return ImageDrawResult::DidNothing;
+
+    return drawResolved(context, renderer, *image, ConcreteObjectSize::fixed(image->size()), destination, mapSourceToSize(source, concreteObjectSize, image->size(options.orientation())), options);
+}
+
+ImageDrawResult CanvasImage::drawAsPattern(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize, const FloatRect& destination, const FloatRect& tile, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options, bool) const
+{
+    RefPtr image = resolvedImage(renderer);
+    if (!image || context.paintingDisabled())
+        return ImageDrawResult::DidNothing;
+
+    return drawResolvedAsPattern(context, renderer, *image, ConcreteObjectSize::fixed(image->size()), destination, tile, patternTransform, phase, spacing, options);
+}
+
+ImageDrawResult CanvasImage::drawTiled(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize, const FloatRect& destination, const FloatPoint& phase, const FloatSize& tileSize, const FloatSize& spacing, ImagePaintingOptions options, bool) const
+{
+    RefPtr image = resolvedImage(renderer);
+    if (!image || context.paintingDisabled())
+        return ImageDrawResult::DidNothing;
+
+    return drawResolvedTiled(context, renderer, *image, NaturalDimensions::fixed(image->size()), ConcreteObjectSize::fixed(image->size()), destination, phase, tileSize, spacing, options);
+}
+
+ImageDrawResult CanvasImage::drawNinePiece(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize, const NinePieceGeometry& geometry, ImagePaintingOptions options) const
+{
+    RefPtr image = resolvedImage(renderer);
+    if (!image || context.paintingDisabled())
+        return ImageDrawResult::DidNothing;
+
+    return drawResolvedNinePiece(context, renderer, *image, ConcreteObjectSize::fixed(image->size()), geometry, options);
 }
 
 bool CanvasImage::knownToBeOpaque(const RenderElement&) const
@@ -94,31 +130,50 @@ bool CanvasImage::knownToBeOpaque(const RenderElement&) const
     return false;
 }
 
-FloatSize CanvasImage::fixedSize(const RenderElement& renderer) const
+bool CanvasImage::canDraw(const RenderElement& renderer) const
 {
-    if (auto* element = this->element(renderer.document()))
-        return FloatSize { element->size() };
-    return { };
+    RefPtr image = resolvedImage(renderer);
+    return image && image->hasSomethingToDraw();
+}
+
+bool CanvasImage::canDrawAtSize(const RenderElement& renderer, const FloatSize& size) const
+{
+    return !size.isEmpty() && canDraw(renderer);
+}
+
+InterpolationQuality CanvasImage::interpolationQualityForImageDraw(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const void* layer, const LayoutSize& size) const
+{
+    RefPtr image = resolvedImage(renderer);
+    if (!image)
+        return Image::interpolationQualityForImageDraw(context, renderer, concreteObjectSize, layer, size);
+    return ImageQualityController::chooseInterpolationQuality(context, renderer, *image, layer, size);
+}
+
+NaturalDimensions CanvasImage::naturalDimensions(const RenderElement& renderer, const ImageSizingContext&) const
+{
+    if (auto* element = this->element(protect(renderer.document())))
+        return NaturalDimensions::fixed(FloatSize { element->size() });
+    return NaturalDimensions::zero();
 }
 
 void CanvasImage::didAddClient(RenderElement& renderer)
 {
-    if (RefPtr element = this->element(renderer.document()))
+    if (RefPtr element = this->element(protect(renderer.document())))
         InspectorInstrumentation::didChangeCSSCanvasClientNodes(*element);
 }
 
 void CanvasImage::didRemoveClient(RenderElement& renderer)
 {
-    if (RefPtr element = this->element(renderer.document()))
+    if (RefPtr element = this->element(protect(renderer.document())))
         InspectorInstrumentation::didChangeCSSCanvasClientNodes(*element);
 }
 
-void CanvasImage::canvasChanged(CanvasBase& canvasBase, const FloatRect& changedRect)
+void CanvasImage::canvasContentsWillChange(CanvasBase& canvasBase, const FloatRect& changingRect)
 {
     ASSERT_UNUSED(canvasBase, is<HTMLCanvasElement>(canvasBase));
     ASSERT_UNUSED(canvasBase, m_element == &downcast<HTMLCanvasElement>(canvasBase));
 
-    auto imageChangeRect = enclosingIntRect(changedRect);
+    auto imageChangeRect = enclosingIntRect(changingRect);
     for (auto entry : clients()) {
         auto& client = entry.key;
         client.imageChanged(static_cast<WrappedImagePtr>(this), &imageChangeRect);
@@ -147,9 +202,18 @@ HTMLCanvasElement* CanvasImage::element(Document& document) const
 {
     if (!m_element) {
         m_element = document.getCSSCanvasElement(m_name.value);
-        m_element->addObserver(const_cast<CanvasImage&>(*this));
+        protect(m_element.get())->addObserver(const_cast<CanvasImage&>(*this));
     }
     return m_element.get();
+}
+
+RefPtr<BitmapImage> CanvasImage::resolvedImage(const RenderElement& renderer) const
+{
+    ASSERT(clients().contains(const_cast<RenderElement&>(renderer)));
+    RefPtr element = this->element(protect(renderer.document()));
+    if (!element)
+        return nullptr;
+    return element->copiedImage();
 }
 
 } // namespace WebCore::Style

@@ -89,7 +89,7 @@ protected:
 class ReferencePathOperation final : public PathOperation {
 public:
     static Ref<ReferencePathOperation> create(const Style::URL&, const AtomString& fragment, const RefPtr<SVGElement>);
-    WEBCORE_EXPORT static Ref<ReferencePathOperation> create(std::optional<Path>&&);
+    WEBCORE_EXPORT static Ref<ReferencePathOperation> LEGACY_NODELETE create(std::optional<Path>&&);
 
     Ref<PathOperation> clone() const final;
 
@@ -135,32 +135,20 @@ public:
 
     std::optional<Path> getPath(const TransformOperationData&, Style::ZoomFactor) const final;
 
-    bool operator==(const ShapePathOperation& other) const
-    {
-        return m_shape == other.m_shape
-            && m_referenceBox == other.m_referenceBox;
-    }
+    bool operator==(const ShapePathOperation&) const;
 
 private:
-    bool operator==(const PathOperation& other) const override
-    {
-        if (!isSameType(other))
-            return false;
-        return *this == uncheckedDowncast<ShapePathOperation>(other);
-    }
+    bool operator==(const PathOperation&) const override;
 
-    ShapePathOperation(Style::BasicShape shape, CSSBoxType referenceBox)
-        : PathOperation(Type::Shape, referenceBox)
-        , m_shape(WTF::move(shape))
-    {
-    }
+    ShapePathOperation(Style::BasicShape, CSSBoxType);
+    ~ShapePathOperation();
 
     Style::BasicShape m_shape;
 };
 
 class BoxPathOperation final : public PathOperation {
 public:
-    WEBCORE_EXPORT static Ref<BoxPathOperation> create(CSSBoxType);
+    WEBCORE_EXPORT static Ref<BoxPathOperation> LEGACY_NODELETE create(CSSBoxType);
 
     Ref<PathOperation> clone() const final;
 
@@ -187,8 +175,8 @@ private:
 
 class RayPathOperation final : public PathOperation {
 public:
-    WEBCORE_EXPORT static Ref<RayPathOperation> create(Style::RayFunction&&, CSSBoxType = CSSBoxType::BoxMissing);
-    WEBCORE_EXPORT static Ref<RayPathOperation> create(const Style::RayFunction&, CSSBoxType = CSSBoxType::BoxMissing);
+    WEBCORE_EXPORT static Ref<RayPathOperation> LEGACY_NODELETE create(Style::RayFunction&&, CSSBoxType = CSSBoxType::BoxMissing);
+    WEBCORE_EXPORT static Ref<RayPathOperation> LEGACY_NODELETE create(const Style::RayFunction&, CSSBoxType = CSSBoxType::BoxMissing);
 
     Ref<PathOperation> clone() const final;
 
@@ -201,18 +189,10 @@ public:
     double lengthForContainPath(const FloatRect& elementRect, double computedPathLength) const;
     std::optional<Path> getPath(const TransformOperationData&, Style::ZoomFactor) const final;
 
-    bool operator==(const RayPathOperation& other) const
-    {
-        return m_ray == other.m_ray;
-    }
+    bool operator==(const RayPathOperation&) const;
 
 private:
-    bool operator==(const PathOperation& other) const override
-    {
-        if (!isSameType(other))
-            return false;
-        return *this == uncheckedDowncast<RayPathOperation>(other);
-    }
+    bool operator==(const PathOperation&) const override;
 
     RayPathOperation(Style::RayFunction ray, CSSBoxType referenceBox)
         : PathOperation(Type::Ray, referenceBox)

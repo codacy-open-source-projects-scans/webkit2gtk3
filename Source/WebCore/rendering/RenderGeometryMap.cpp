@@ -30,8 +30,8 @@
 #include "RenderFragmentedFlow.h"
 #include "RenderLayer.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderView.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "TransformState.h"
 #include <wtf/SetForScope.h>
 
@@ -145,10 +145,10 @@ void RenderGeometryMap::pushMappingsToAncestor(const RenderElement* rendererArg,
     ASSERT(m_mapping.isEmpty() || m_mapping[0].m_renderer->isRenderView());
 }
 
-static bool NODELETE canMapBetweenRenderersViaLayers(const RenderLayerModelObject& renderer, const RenderLayerModelObject& ancestor)
+static bool LEGACY_NODELETE canMapBetweenRenderersViaLayers(const RenderLayerModelObject& renderer, const RenderLayerModelObject& ancestor)
 {
     for (const RenderElement* current = &renderer; ; current = current->parent()) {
-        const RenderStyle& style = current->style();
+        const Style::ComputedStyle& style = current->style();
         if (current->isFixedPositioned() || style.writingMode().isBlockFlipped())
             return false;
 

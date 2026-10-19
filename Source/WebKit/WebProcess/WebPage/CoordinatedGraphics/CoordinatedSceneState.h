@@ -26,6 +26,7 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS)
+#include <WebCore/CoordinatedCompositionReason.h>
 #include <atomic>
 #include <wtf/HashSet.h>
 #include <wtf/Lock.h>
@@ -53,9 +54,10 @@ public:
     void removeLayer(WebCore::CoordinatedPlatformLayer&);
 
     bool flush();
+    void flushPendingState();
+    void flushCompositingState(const OptionSet<WebCore::CompositionReason>&);
     void invalidate();
 
-    const HashSet<Ref<WebCore::CoordinatedPlatformLayer>>& committedLayers() LIFETIME_BOUND;
     void invalidateCommittedLayers();
 
     bool layersDidChange() const { return m_didChangeLayers; }
@@ -72,7 +74,8 @@ private:
     void commitPendingLayers();
 
     const Ref<WebCore::CoordinatedPlatformLayer> m_rootLayer;
-    HashSet<Ref<WebCore::CoordinatedPlatformLayer>> m_layers;
+    Lock m_layersLock;
+    HashSet<Ref<WebCore::CoordinatedPlatformLayer>> m_layers WTF_GUARDED_BY_LOCK(m_layersLock);
     HashSet<Ref<WebCore::CoordinatedPlatformLayer>> m_layersToRemove;
     Lock m_pendingLayersLock;
     HashSet<Ref<WebCore::CoordinatedPlatformLayer>> m_pendingLayers WTF_GUARDED_BY_LOCK(m_pendingLayersLock);
@@ -80,6 +83,7 @@ private:
     std::atomic<bool> m_didChangeLayers { false };
     HashSet<Ref<WebCore::CoordinatedPlatformLayer>> m_committedLayers;
     std::atomic<unsigned> m_pendingTiles { 0 };
+    Lock m_stateLock;
 };
 
 } // namespace WebKit

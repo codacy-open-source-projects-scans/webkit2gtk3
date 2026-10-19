@@ -34,14 +34,13 @@
 namespace WebCore {
 
 struct AcceleratedEffectShapeFunction;
-struct TransformOperationData;
 
 namespace Style {
 
 struct Path;
 
 // <coordinate-pair> = <length-percentage>{2}
-using CoordinatePair  = SpaceSeparatedPoint<LengthPercentage<CSS::AllUnzoomed>>;
+using CoordinatePair  = SpaceSeparatedPoint<LengthPercentage<>>;
 
 using CommandAffinity = CSS::CommandAffinity;
 using ArcSweep        = CSS::ArcSweep;
@@ -128,7 +127,7 @@ template<> struct Blending<AbsoluteControlPoint> {
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-move-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2412816773
 struct MoveCommand {
-    static constexpr auto name = CSSValueMove;
+    static constexpr auto name = CSSValueID::Move;
     using To = ToPosition;
     using By = ByCoordinatePair;
     Variant<To, By> toBy;
@@ -144,7 +143,7 @@ DEFINE_TYPE_MAPPING(CSS::MoveCommand, MoveCommand)
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-line-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2412816773
 struct LineCommand {
-    static constexpr auto name = CSSValueLine;
+    static constexpr auto name = CSSValueID::Line;
     using To = ToPosition;
     using By = ByCoordinatePair;
     Variant<To, By> toBy;
@@ -160,7 +159,7 @@ DEFINE_TYPE_MAPPING(CSS::LineCommand, LineCommand)
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-hv-line-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2426552611
 struct HLineCommand {
-    static constexpr auto name = CSSValueHline;
+    static constexpr auto name = CSSValueID::Hline;
     struct To {
         static constexpr CommandAffinity affinity = CSS::Keyword::To { };
         using Offset = TwoComponentPositionHorizontal;
@@ -171,7 +170,7 @@ struct HLineCommand {
     };
     struct By {
         static constexpr CommandAffinity affinity = CSS::Keyword::By { };
-        using Offset = LengthPercentage<CSS::AllUnzoomed>;
+        using Offset = LengthPercentage<>;
 
         Offset offset;
 
@@ -194,7 +193,7 @@ DEFINE_TYPE_MAPPING(CSS::HLineCommand, HLineCommand)
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-hv-line-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2426552611
 struct VLineCommand {
-    static constexpr auto name = CSSValueVline;
+    static constexpr auto name = CSSValueID::Vline;
     struct To {
         static constexpr CommandAffinity affinity = CSS::Keyword::To { };
         using Offset = TwoComponentPositionVertical;
@@ -205,7 +204,7 @@ struct VLineCommand {
     };
     struct By {
         static constexpr CommandAffinity affinity = CSS::Keyword::By { };
-        using Offset = LengthPercentage<CSS::AllUnzoomed>;
+        using Offset = LengthPercentage<>;
 
         Offset offset;
 
@@ -229,7 +228,7 @@ DEFINE_TYPE_MAPPING(CSS::VLineCommand, VLineCommand)
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-curve-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2412816773
 struct CurveCommand {
-    static constexpr auto name = CSSValueCurve;
+    static constexpr auto name = CSSValueID::Curve;
     struct To {
         static constexpr CommandAffinity affinity = CSS::Keyword::To { };
 
@@ -283,7 +282,7 @@ DEFINE_TYPE_MAPPING(CSS::CurveCommand::By, CurveCommand::By)
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-smooth-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2412816773
 struct SmoothCommand {
-    static constexpr auto name = CSSValueSmooth;
+    static constexpr auto name = CSSValueID::Smooth;
     struct To {
         static constexpr CommandAffinity affinity = CSS::Keyword::To { };
 
@@ -330,12 +329,12 @@ DEFINE_TYPE_MAPPING(CSS::SmoothCommand::By, SmoothCommand::By)
 // https://drafts.csswg.org/css-shapes-2/#typedef-shape-arc-command
 // Modified by https://github.com/w3c/csswg-drafts/issues/10649#issuecomment-2412816773
 struct ArcCommand {
-    static constexpr auto name = CSSValueArc;
+    static constexpr auto name = CSSValueID::Arc;
     using To = ToPosition;
     using By = ByCoordinatePair;
     Variant<To, By> toBy;
 
-    using SizeOfEllipse = MinimallySerializingSpaceSeparatedSize<LengthPercentage<CSS::AllUnzoomed>>;
+    using SizeOfEllipse = MinimallySerializingSpaceSeparatedSize<LengthPercentage<>>;
     SizeOfEllipse size;
 
     ArcSweep arcSweep;
@@ -389,9 +388,16 @@ struct Shape {
     Position startingPoint;
     Commands commands;
 
-    bool operator==(const Shape&) const = default;
+    Shape(std::optional<FillRule>, Position&&, Commands&&);
+    Shape(Shape&&);
+    Shape(const Shape&);
+    Shape& operator=(Shape&&);
+    Shape& operator=(const Shape&);
+    ~Shape();
+
+    bool operator==(const Shape&) const;
 };
-using ShapeFunction = FunctionNotation<CSSValueShape, Shape>;
+using ShapeFunction = FunctionNotation<CSSValueID::Shape, Shape>;
 
 template<size_t I> const auto& get(const Shape& value)
 {
@@ -406,7 +412,7 @@ template<size_t I> const auto& get(const Shape& value)
 DEFINE_TYPE_MAPPING(CSS::Shape, Shape)
 
 template<> struct PathComputation<Shape> { WebCore::Path operator()(const Shape&, const FloatRect&, ZoomFactor); };
-template<> struct WindRuleComputation<Shape> { WebCore::WindRule NODELETE operator()(const Shape&); };
+template<> struct WindRuleComputation<Shape> { WebCore::WindRule LEGACY_NODELETE operator()(const Shape&); };
 
 template<> struct Blending<Shape> {
     auto canBlend(const Shape&, const Shape&) -> bool;
@@ -424,7 +430,7 @@ std::optional<Shape> makeShapeFromPath(const Path&);
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-template<> struct Evaluation<ShapeFunction, AcceleratedEffectShapeFunction> { AcceleratedEffectShapeFunction operator()(const ShapeFunction&, const TransformOperationData&, ZoomFactor); };
+template<> struct Evaluation<ShapeFunction, AcceleratedEffectShapeFunction> { AcceleratedEffectShapeFunction operator()(const ShapeFunction&, const FloatRect&, ZoomFactor); };
 
 #endif
 

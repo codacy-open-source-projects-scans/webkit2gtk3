@@ -37,7 +37,10 @@ namespace WebCore {
 
 class StyleOriginatedAnimationEvent;
 class Element;
-class RenderStyle;
+
+namespace Style {
+class ComputedStyle;
+}
 
 class StyleOriginatedAnimation : public WebAnimation {
     WTF_MAKE_TZONE_ALLOCATED(StyleOriginatedAnimation);
@@ -47,7 +50,7 @@ public:
 
     bool isStyleOriginatedAnimation() const final { return true; }
 
-    const std::optional<const Styleable> NODELETE owningElement() const;
+    const std::optional<const Styleable> LEGACY_NODELETE owningElement() const;
 
     void cancelFromStyle(WebAnimation::Silently = WebAnimation::Silently::No);
 
@@ -64,7 +67,7 @@ public:
     void setTimeline(RefPtr<AnimationTimeline>&&) final;
     void cancel(WebAnimation::Silently = WebAnimation::Silently::No) final;
 
-    void tick() override;
+    void tick(WebAnimation::ShouldDispatchProgressEvent) override;
 
     bool canHaveGlobalPosition() final;
 
@@ -76,7 +79,7 @@ public:
 protected:
     StyleOriginatedAnimation(const Styleable&);
 
-    void initialize(const RenderStyle* oldStyle, const RenderStyle& newStyle, const Style::ResolutionContext&);
+    void initialize(const Style::ComputedStyle* oldStyle, const Style::ComputedStyle& newStyle, const Style::ResolutionContext&);
     virtual void syncPropertiesWithBackingAnimation();
     virtual Ref<StyleOriginatedAnimationEvent> createEvent(const AtomString& eventType, std::optional<Seconds> scheduledTime, double elapsedTime, const std::optional<Style::PseudoElementIdentifier>&) = 0;
 

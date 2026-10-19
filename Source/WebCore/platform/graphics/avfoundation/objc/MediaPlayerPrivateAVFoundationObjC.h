@@ -53,7 +53,6 @@ OBJC_CLASS NSArray;
 OBJC_CLASS NSMutableDictionary;
 OBJC_CLASS WebCoreAVFLoaderDelegate;
 OBJC_CLASS WebCoreAVFMovieObserver;
-OBJC_CLASS WebCoreAVFPullDelegate;
 
 typedef struct CGImage *CGImageRef;
 typedef struct CF_BRIDGED_TYPE(id) __CVBuffer *CVPixelBufferRef;
@@ -102,11 +101,11 @@ public:
 #endif
 
     void playerItemStatusDidChange(int);
-    void NODELETE playbackLikelyToKeepUpWillChange();
+    void LEGACY_NODELETE playbackLikelyToKeepUpWillChange();
     void playbackLikelyToKeepUpDidChange(bool);
-    void NODELETE playbackBufferEmptyWillChange();
+    void LEGACY_NODELETE playbackBufferEmptyWillChange();
     void playbackBufferEmptyDidChange(bool);
-    void NODELETE playbackBufferFullWillChange();
+    void LEGACY_NODELETE playbackBufferFullWillChange();
     void playbackBufferFullDidChange(bool);
     void loadedTimeRangesDidChange(RetainPtr<NSArray>&&);
     void seekableTimeRangesDidChange(RetainPtr<NSArray>&&, NSTimeInterval, NSTimeInterval);
@@ -121,8 +120,8 @@ public:
     void metadataDidArrive(const RetainPtr<NSArray>&, const MediaTime&);
     void firstFrameAvailableDidChange(bool);
     void trackEnabledDidChange(bool);
-    void NODELETE canPlayFastReverseDidChange(bool);
-    void NODELETE canPlayFastForwardDidChange(bool);
+    void LEGACY_NODELETE canPlayFastReverseDidChange(bool);
+    void LEGACY_NODELETE canPlayFastForwardDidChange(bool);
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void playbackTargetIsWirelessDidChange();
@@ -178,7 +177,7 @@ private:
     void setMuted(bool) final;
     void paint(GraphicsContext&, const FloatRect&) final;
     void paintCurrentFrameInContext(GraphicsContext&, const FloatRect&) final;
-    PlatformLayer* platformLayer() const final;
+    PlatformLayer* platformLayer() final;
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     RetainPtr<PlatformLayer> createVideoFullscreenLayer() final;
     void setVideoFullscreenLayer(PlatformLayer*, Function<void()>&& completionHandler) final;
@@ -241,6 +240,7 @@ private:
 
     bool hasContextRenderer() const final;
     bool hasLayerRenderer() const final;
+    bool hasVideoInlineLayer() const final;
 
 
     enum class ShouldAnimate : bool { No, Yes };
@@ -277,7 +277,7 @@ private:
     void paintWithVideoOutput(GraphicsContext&, const FloatRect&);
     RefPtr<VideoFrame> videoFrameForCurrentTime() final;
     RefPtr<NativeImage> nativeImageForCurrentTime() final;
-    DestinationColorSpace colorSpace() final;
+    ColorSpace colorSpace() final;
 
     enum class UpdateResult { Succeeded, Failed, TimedOut, ObjectDestroyed };
     UpdateResult waitForVideoOutputMediaDataWillChange();
@@ -398,17 +398,13 @@ private:
 #endif
 
 
-    void forEachResourceLoader(Function<void(WebCoreAVFResourceLoader&)>&&) const;
+    void forEachResourceLoader(NOESCAPE const Function<void(WebCoreAVFResourceLoader&)>&) const;
     void addResourceLoader(AVAssetResourceLoadingRequest *, Ref<WebCoreAVFResourceLoader>&&);
     RefPtr<WebCoreAVFResourceLoader> getResourceLoader(AVAssetResourceLoadingRequest *) const;
     RefPtr<WebCoreAVFResourceLoader> takeResourceLoader(AVAssetResourceLoadingRequest *);
 
-#if HAVE(AVPLAYER_PARTICIPATESINAUDIOSESSION)
-    void setParticipatesInAudioSession(bool);
-#endif
-
     void updateLayerAttachment();
-    bool shouldAttachLayerToPlayer();
+    bool LEGACY_NODELETE shouldAttachLayerToPlayer();
 
 #if PLATFORM(MAC)
     void screenReservedChanged(bool) final;
@@ -437,30 +433,28 @@ private:
 
     RetainPtr<AVAssetImageGenerator> m_imageGenerator;
     RefPtr<QueuedVideoOutput> m_videoOutput;
-    RetainPtr<WebCoreAVFPullDelegate> m_videoOutputDelegate;
     RetainPtr<CVPixelBufferRef> m_lastPixelBuffer;
     RefPtr<NativeImage> m_lastImage;
     std::unique_ptr<ImageRotationSessionVT> m_imageRotationSession;
-    std::unique_ptr<PixelBufferConformerCV> m_pixelBufferConformer;
+    const std::unique_ptr<PixelBufferConformerCV> m_pixelBufferConformer;
 
     friend class WebCoreAVFResourceLoader;
     mutable Lock m_resourceLoaderMapLock;
-    HashMap<RetainPtr<AVAssetResourceLoadingRequest>, Ref<WebCoreAVFResourceLoader>> m_resourceLoaderMap;
+    HashMap<RetainPtr<AVAssetResourceLoadingRequest>, Ref<WebCoreAVFResourceLoader>> m_resourceLoaderMap WTF_GUARDED_BY_LOCK(m_resourceLoaderMapLock);
     const RetainPtr<WebCoreAVFLoaderDelegate> m_loaderDelegate;
     MemoryCompactRobinHoodHashMap<String, RetainPtr<AVAssetResourceLoadingRequest>> m_keyURIToRequestMap;
-    MemoryCompactRobinHoodHashMap<String, RetainPtr<AVAssetResourceLoadingRequest>> m_sessionIDToRequestMap;
 
     RetainPtr<AVPlayerItemLegibleOutput> m_legibleOutput;
 
     Vector<Ref<AudioTrackPrivateAVFObjC>> m_audioTracks;
     Vector<Ref<VideoTrackPrivateAVFObjC>> m_videoTracks;
-    RefPtr<MediaSelectionGroupAVFObjC> m_audibleGroup;
-    RefPtr<MediaSelectionGroupAVFObjC> m_visualGroup;
+    const RefPtr<MediaSelectionGroupAVFObjC> m_audibleGroup;
+    const RefPtr<MediaSelectionGroupAVFObjC> m_visualGroup;
 
     ThreadSafeWeakPtr<InbandTextTrackPrivateAVF> m_currentTextTrack;
 
 #if ENABLE(DATACUE_VALUE)
-    RefPtr<InbandMetadataTextTrackPrivateAVF> m_metadataTrack;
+    const RefPtr<InbandMetadataTextTrackPrivateAVF> m_metadataTrack;
 #endif
 
     MemoryCompactRobinHoodHashMap<String, Ref<InbandChapterTrackPrivateAVFObjC>> m_chapterTracks;
@@ -520,7 +514,6 @@ private:
     bool m_cachedCanPlayFastForward { false };
     bool m_cachedCanPlayFastReverse { false };
     mutable bool m_cachedAssetIsLoaded { false };
-    mutable bool m_cachedTracksAreLoaded { false };
     mutable std::optional<bool> m_cachedAssetIsPlayable;
     mutable std::optional<bool> m_cachedTracksArePlayable;
     mutable std::optional<bool> m_cachedAssetIsHLS;
@@ -529,13 +522,11 @@ private:
     bool m_preservesPitch { true };
     bool m_shouldObserveTimeControlStatus { false };
     bool m_isInFullscreenOrPictureInPicture { false };
-    mutable std::optional<bool> m_tracksArePlayable;
     bool m_automaticallyWaitsToMinimizeStalling { false };
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     mutable bool m_allowsWirelessVideoPlayback { true };
     bool m_shouldPlayToPlaybackTarget { false };
 #endif
-    bool m_haveProcessedChapterTracks { false };
     bool m_waitForVideoOutputMediaDataWillChangeTimedOut { false };
     bool m_haveBeenAskedToPaint { false };
     uint64_t m_sampleCount { 0 };

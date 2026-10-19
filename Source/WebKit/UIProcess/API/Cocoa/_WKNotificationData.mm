@@ -30,13 +30,9 @@
 #import <WebCore/NotificationDirection.h>
 #import <WebCore/SecurityOriginData.h>
 #import <WebCore/WebCoreObjCExtras.h>
+#import <wtf/Borrow.h>
 #import <wtf/cocoa/SpanCocoa.h>
 #import <wtf/cocoa/VectorCocoa.h>
-
-static NSString *iconURLKey = @"iconURL";
-static NSString *tagKey = @"tag";
-static NSString *languageKey = @"language";
-static NSString *dataKey = @"data";
 
 @interface _WKNotificationData()
 - (instancetype)_init;
@@ -177,7 +173,7 @@ static NSString *dataKey = @"data";
 
 - (NSData *)data
 {
-    return toNSData(_coreData.data.span()).autorelease();
+    return toNSData(borrow(_coreData.data)->span()).autorelease();
 }
 
 - (NSString *)origin

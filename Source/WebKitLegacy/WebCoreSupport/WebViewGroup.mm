@@ -32,10 +32,9 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringHash.h>
 
-using namespace WebCore;
 
 // Any named groups will live for the lifetime of the process, thanks to the reference held by the RefPtr.
-static HashMap<String, RefPtr<WebViewGroup>>& NODELETE webViewGroups()
+static HashMap<String, RefPtr<WebViewGroup>>& LEGACY_NODELETE webViewGroups()
 {
     static NeverDestroyed<HashMap<String, RefPtr<WebViewGroup>>> webViewGroups;
 
@@ -70,7 +69,7 @@ WebViewGroup* WebViewGroup::get(const String& name)
 WebViewGroup::WebViewGroup(const String& name, const String& localStorageDatabasePath)
     : m_name(name)
     , m_localStorageDatabasePath(localStorageDatabasePath)
-    , m_userContentController(UserContentController::create())
+    , m_userContentController(WebCore::UserContentController::create())
     , m_visitedLinkStore(WebVisitedLinkStore::create())
 {
 }
@@ -95,10 +94,10 @@ void WebViewGroup::removeWebView(WebView *webView)
     m_webViews.remove(webView);
 }
 
-StorageNamespaceProvider& WebViewGroup::storageNamespaceProvider()
+WebCore::StorageNamespaceProvider& WebViewGroup::storageNamespaceProvider()
 {
     if (!m_storageNamespaceProvider)
-        m_storageNamespaceProvider = WebKit::WebStorageNamespaceProvider::create(m_localStorageDatabasePath);
+        lazyInitialize(m_storageNamespaceProvider, WebKit::WebStorageNamespaceProvider::create(m_localStorageDatabasePath));
 
     return *m_storageNamespaceProvider;
 }

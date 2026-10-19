@@ -38,11 +38,11 @@ namespace WGSL {
 
 // Zero values
 
-using ConstantResult = Expected<ConstantValue, String>;
+using ConstantResult = std::expected<ConstantValue, String>;
 using ConstantFunction = ConstantResult(*)(const Type*, const FixedVector<ConstantValue>&);
 
 #define CONSTANT_FUNCTION(name) \
-    [[maybe_unused]] static Expected<ConstantValue, String>(constant ## name)(const Type* resultType, const FixedVector<ConstantValue>& arguments)
+    [[maybe_unused]] static std::expected<ConstantValue, String>(constant ## name)(const Type* resultType, const FixedVector<ConstantValue>& arguments)
 
 #define CALL_(__tmp, __variable, __fnName, ...) \
     auto __tmp = constant##__fnName(__VA_ARGS__); \
@@ -269,7 +269,19 @@ template<Constraint constraint, typename Functor>
 template<typename U>
 struct StaticCast {
     template<typename T>
-    static U cast(T t) { return static_cast<U>(t); }
+    static U cast(T t)
+    {
+        if constexpr (std::is_integral_v<U> && !std::is_same_v<U, bool> && (std::is_floating_point_v<T> || std::is_same_v<T, half>)) {
+            if constexpr (std::is_same_v<T, half>) {
+                static const half max = 0x1.ffcp15;
+                static const half lowest = -max;
+                return U(std::clamp(t, std::max(T(std::numeric_limits<U>::min()), lowest), max));
+            } else if (std::is_same_v<T, float>)
+                return U(std::clamp(t, T(std::numeric_limits<U>::min()), T(std::numeric_limits<U>::max() - ((128 << (!std::is_signed_v<U>)) - 1))));
+        }
+
+        return static_cast<U>(t);
+    }
 };
 
 template<typename U>
@@ -504,8 +516,20 @@ CONSTANT_FUNCTION(Add)
         return { { result } };
     }
 
-    return constantBinaryOperation<Constraints::Number>(arguments, [&]<typename T>(T left, T right) -> T {
-        return left + right;
+    return constantBinaryOperation<Constraints::Number>(arguments, [&]<typename T>(T left, T right) -> ConstantResult {
+        if constexpr (std::is_same_v<T, int64_t>) {
+            // i32 and u32 wrap on overflow, but AbstractInt has no width to wrap to.
+            T result;
+            if (__builtin_add_overflow(left, right, &result)) [[unlikely]]
+                return makeUnexpected("addition overflow"_s);
+            return { { result } };
+        }
+        auto result = static_cast<T>(left + right);
+        if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, half>) {
+            if (!std::isfinite(static_cast<double>(result)))
+                return makeUnexpected("addition overflow"_s);
+        }
+        return { { result } };
     });
 }
 
@@ -529,8 +553,20 @@ CONSTANT_FUNCTION(Minus)
         return { { result } };
     }
 
-    return constantBinaryOperation<Constraints::Number>(arguments, [&]<typename T>(T left, T right) -> T {
-        return left - right;
+    return constantBinaryOperation<Constraints::Number>(arguments, [&]<typename T>(T left, T right) -> ConstantResult {
+        if constexpr (std::is_same_v<T, int64_t>) {
+            // i32 and u32 wrap on overflow, but AbstractInt has no width to wrap to.
+            T result;
+            if (__builtin_sub_overflow(left, right, &result)) [[unlikely]]
+                return makeUnexpected("subtraction overflow"_s);
+            return { { result } };
+        }
+        auto result = static_cast<T>(left - right);
+        if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, half>) {
+            if (!std::isfinite(static_cast<double>(result)))
+                return makeUnexpected("subtraction overflow"_s);
+        }
+        return { { result } };
     });
 }
 
@@ -605,8 +641,20 @@ CONSTANT_FUNCTION(Multiply)
         return { { result } };
     }
 
-    return constantBinaryOperation<Constraints::Number>(arguments, [&]<typename T>(T left, T right) -> T {
-        return left * right;
+    return constantBinaryOperation<Constraints::Number>(arguments, [&]<typename T>(T left, T right) -> ConstantResult {
+        if constexpr (std::is_same_v<T, int64_t>) {
+            // i32 and u32 wrap on overflow, but AbstractInt has no width to wrap to.
+            T result;
+            if (__builtin_mul_overflow(left, right, &result)) [[unlikely]]
+                return makeUnexpected("multiply overflow"_s);
+            return { { result } };
+        }
+        auto result = static_cast<T>(left * right);
+        if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, half>) {
+            if (!std::isfinite(static_cast<double>(result)))
+                return makeUnexpected("multiply overflow"_s);
+        }
+        return { { result } };
     });
 }
 
@@ -697,8 +745,19 @@ CONSTANT_FUNCTION(BitwiseShiftLeft)
     ASSERT(arguments.size() == 2);
     const auto& shift = [&]<typename T>(T left, uint32_t right) -> ConstantResult {
         constexpr auto bitSize = sizeof(T) * 8;
-        if (right >= bitSize)
-            return makeUnexpected(makeString("shift left value must be less than the bit width of the shifted value, which is "_s, bitSize));
+        if constexpr (std::is_same_v<T, int64_t>) {
+            // https://www.w3.org/TR/WGSL/#bit-expr
+            // An abstract-int shift left is defined as e1 * 2^e2, so the only rule is that the
+            // result has to be representable. Zero shifted by any amount at all is still zero.
+            if (right >= bitSize) {
+                if (left)
+                    return makeUnexpected("shift left overflows"_s);
+                return { left };
+            }
+        } else {
+            if (right >= bitSize)
+                return makeUnexpected(makeString("shift left value must be less than the bit width of the shifted value, which is "_s, bitSize));
+        }
 
         if constexpr (std::is_unsigned_v<T>) {
             uint64_t mask = -1ull << (bitSize - right);
@@ -734,8 +793,14 @@ CONSTANT_FUNCTION(BitwiseShiftRight)
     ASSERT(arguments.size() == 2);
     const auto& shift = [&]<typename T>(T left, uint32_t right) -> ConstantResult {
         constexpr auto bitSize = sizeof(T) * 8;
-        if (right >= bitSize)
-            return makeUnexpected(makeString("shift right value must be less than the bit width of the shifted value, which is "_s, bitSize));
+        if constexpr (std::is_same_v<T, int64_t>) {
+            // Abstract-int right shifts are permitted to shift by >= bitwidth
+            if (right >= bitSize)
+                return { left < 0 ? T(-1) : T(0) };
+        } else {
+            if (right >= bitSize)
+                return makeUnexpected(makeString("shift right value must be less than the bit width of the shifted value, which is "_s, bitSize));
+        }
         return { left >> right };
     };
 
@@ -934,10 +999,30 @@ CONSTANT_FUNCTION(Cross)
         auto v1 = std::get<T>(rhs.elements[1]);
         auto v2 = std::get<T>(rhs.elements[2]);
 
+        // Each product has to be representable in T on its own, so it is rounded back to T before
+        // being subtracted: half arithmetic promotes to float, which would otherwise hide a product
+        // that overflows f16 behind a difference that does not.
+        auto product = [](T left, T right) -> std::optional<T> {
+            auto result = static_cast<T>(left * right);
+            if (!std::isfinite(static_cast<double>(result)))
+                return std::nullopt;
+            return result;
+        };
+
+        std::array<std::optional<T>, 6> products {
+            product(u1, v2), product(u2, v1),
+            product(u2, v0), product(u0, v2),
+            product(u0, v1), product(u1, v0),
+        };
+        for (auto& value : products) {
+            if (!value) [[unlikely]]
+                return makeUnexpected("cross overflow"_s);
+        }
+
         ConstantVector result(3);
-        result.elements[0] = static_cast<T>(u1 * v2 - u2 * v1);
-        result.elements[1] = static_cast<T>(u2 * v0 - u0 * v2);
-        result.elements[2] = static_cast<T>(u0 * v1 - u1 * v0);
+        result.elements[0] = static_cast<T>(*products[0] - *products[1]);
+        result.elements[1] = static_cast<T>(*products[2] - *products[3]);
+        result.elements[2] = static_cast<T>(*products[4] - *products[5]);
         return { { result } };
     };
 
@@ -1033,7 +1118,7 @@ CONSTANT_FUNCTION(Dot)
     ConstantValue result = zeroValue(resultType);
     for (auto& element : product.toVector().elements)
         CALL_MOVE(result, Add, resultType,  { result, element });
-    return { { result } };
+    return result;
 }
 
 CONSTANT_FUNCTION(Dot4U8Packed)
@@ -1074,6 +1159,18 @@ CONSTANT_FUNCTION(Length)
 UNARY_OPERATION(Exp, Float, WRAP_STD(exp));
 UNARY_OPERATION(Exp2, Float, WRAP_STD(exp2));
 
+// https://www.w3.org/TR/WGSL/#extractBits-builtin
+// https://www.w3.org/TR/WGSL/#insertBits-builtin
+// offset + count must be at most the bit width of the operand. The sum is taken in 64 bits so that
+// two in-range u32 values cannot wrap past the limit.
+static std::optional<String> validateBitOffsetAndCount(uint64_t offset, uint64_t count)
+{
+    constexpr uint64_t bitWidth = 32;
+    if (offset + count > bitWidth)
+        return { makeString("the sum of offset ("_s, String::number(offset), ") and count ("_s, String::number(count), ") must be at most the bit width of the operand, which is "_s, String::number(bitWidth)) };
+    return std::nullopt;
+}
+
 CONSTANT_FUNCTION(ExtractBits)
 {
     // We can't use a TERNARY_OPERATION here since the arguments might not all have the same type
@@ -1082,6 +1179,8 @@ CONSTANT_FUNCTION(ExtractBits)
     ASSERT(arguments.size() == 3);
     auto offset = std::get<uint32_t>(arguments[1]);
     auto count = std::get<uint32_t>(arguments[2]);
+    if (auto error = validateBitOffsetAndCount(offset, count)) [[unlikely]]
+        return makeUnexpected(*error);
 
     const auto& extractBits = [&]<typename T>(T e) {
         constexpr unsigned w = 32;
@@ -1211,6 +1310,9 @@ CONSTANT_FUNCTION(Frexp)
 CONSTANT_FUNCTION(InsertBits)
 {
     UNUSED_PARAM(resultType);
+    if (auto error = validateBitOffsetAndCount(std::get<uint32_t>(arguments[2]), std::get<uint32_t>(arguments[3]))) [[unlikely]]
+        return makeUnexpected(*error);
+
     return scalarOrVector([&](auto eValue, auto newbitsValue, auto offset, auto count) -> ConstantValue {
         constexpr unsigned w = 32;
         unsigned o = std::min(std::get<uint32_t>(offset), w);
@@ -1244,13 +1346,17 @@ CONSTANT_FUNCTION(Ldexp)
     UNUSED_PARAM(resultType);
     return scalarOrVector([&](const auto& e1, auto& e2) -> ConstantResult {
         if (auto* abstractE1 = std::get_if<double>(&e1)) {
-            auto abstractE2 = std::get<int64_t>(e2);
             constexpr int64_t bias = 1023;
-            if (abstractE2 + bias <= 0)
+            int64_t e2Value;
+            if (auto* abstractE2 = std::get_if<int64_t>(&e2))
+                e2Value = *abstractE2;
+            else
+                e2Value = std::get<int32_t>(e2);
+            if (e2Value + bias <= 0)
                 return { static_cast<double>(0) };
-            if (abstractE2 > bias + 1)
+            if (e2Value > bias + 1)
                 return makeUnexpected(makeString("e2 must be less than or equal to "_s, bias + 1));
-            return { std::ldexp(*abstractE1, abstractE2) };
+            return { std::ldexp(*abstractE1, static_cast<int>(e2Value)) };
         }
 
         auto i32E2 = std::get<int32_t>(e2);
@@ -1278,7 +1384,24 @@ UNARY_OPERATION(Log, Float, WRAP_STD(log))
 UNARY_OPERATION(Log2, Float, WRAP_STD(log2))
 BINARY_OPERATION(Max, Number, WRAP_STD(max))
 BINARY_OPERATION(Min, Number, WRAP_STD(min))
-TERNARY_OPERATION(Mix, Number, [&]<typename T>(T e1, T e2, T e3) -> T { return  e1 * (1 - e3) + e2 * e3; })
+TERNARY_OPERATION(Mix, Number, [&]<typename T>(T e1, T e2, T e3) -> ConstantResult {
+    // https://www.w3.org/TR/WGSL/#mix-builtin
+    // Every step of e1 * (1 - e3) + e2 * e3 has to be representable in T, so the steps are taken
+    // one at a time and rounded back to T: written as a single expression, half arithmetic
+    // promotes to float and an intermediate that overflows f16 would go unnoticed.
+    auto oneMinusE3 = static_cast<T>(1 - e3);
+    auto scaledE1 = static_cast<T>(e1 * oneMinusE3);
+    auto scaledE2 = static_cast<T>(e2 * e3);
+    auto result = static_cast<T>(scaledE1 + scaledE2);
+    if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, half>) {
+        auto isFinite = [](T value) {
+            return std::isfinite(static_cast<double>(value));
+        };
+        if (!isFinite(oneMinusE3) || !isFinite(scaledE1) || !isFinite(scaledE2) || !isFinite(result))
+            return makeUnexpected("mix overflow"_s);
+    }
+    return { { result } };
+})
 
 CONSTANT_FUNCTION(Modf)
 {
@@ -1336,7 +1459,11 @@ CONSTANT_FUNCTION(Normalize)
 BINARY_OPERATION(Pow, Float, [&]<typename T>(T base, T exp) -> ConstantResult {
     if (base < 0)
         return makeUnexpected(makeString("pow called with negative base ("_s, String::number(base), ")"_s));
+    if (!base && exp <= 0)
+        return makeUnexpected(makeString("pow called with base 0 and non-positive exponent ("_s, String::number(exp), ")"_s));
     auto result = std::pow(base, exp);
+    if (!std::isfinite(result))
+        return makeUnexpected("pow overflow"_s);
     return { { T(result) } };
 });
 
@@ -1386,10 +1513,10 @@ CONSTANT_FUNCTION(Refract)
     const auto& refract = [&]<typename T>(T e3) -> ConstantResult {
         auto* elementType = std::get<Types::Vector>(*resultType).element;
         CALL(dot, Dot, elementType, { e2, e1 });
-        CALL(pow, Pow, elementType, { dot, static_cast<T>(2.0) });
-        CALL(sub, Minus, elementType, { static_cast<T>(1.0), pow });
-        CALL(pow2, Pow, elementType, { e3, static_cast<T>(2.0) });
-        CALL(mul, Multiply, elementType, { pow2, sub });
+        CALL(dotSquared, Multiply, elementType, { dot, dot });
+        CALL(sub, Minus, elementType, { static_cast<T>(1.0), dotSquared });
+        CALL(e3Squared, Multiply, elementType, { e3, e3 });
+        CALL(mul, Multiply, elementType, { e3Squared, sub });
         CALL(k, Minus, elementType, { static_cast<T>(1.0), mul });
         CALL(lt, Lt, elementType, { k, static_cast<T>(0.0) });
 
@@ -1768,7 +1895,7 @@ CONSTANT_FUNCTION(Bitcast)
 
 [[maybe_unused]] static bool containsZero(ConstantValue value, const Type* valueType)
 {
-    auto wrapped = [&]() -> Expected<bool, String> {
+    auto wrapped = [&]() -> std::expected<bool, String> {
         auto zero = zeroValue(valueType);
         CALL(equal, Equal, nullptr, { value, zero });
         CALL(any, Any, nullptr, { equal });
@@ -1787,7 +1914,7 @@ CONSTANT_FUNCTION(Bitcast)
 #undef CONSTANT_FUNCTION
 
 #define VALIDATION_FUNCTION(name) \
-    [[maybe_unused]] static std::optional<String>(validate ## name)(const FixedVector<std::optional<ConstantValue>>& arguments)
+    [[maybe_unused]] static std::optional<String>(validate ## name)(const FixedVector<std::optional<ConstantValue>>& arguments, const FixedVector<const Type*>& parameterTypes)
 
 #define CALL_(__tmp, __variable, __fnName, ...) \
     auto __tmp = constant##__fnName(__VA_ARGS__); \
@@ -1800,6 +1927,7 @@ CONSTANT_FUNCTION(Bitcast)
 
 VALIDATION_FUNCTION(Clamp)
 {
+    UNUSED_PARAM(parameterTypes);
     if (arguments[1] && arguments[2]) {
         CALL(gt, Gt, nullptr, { *arguments[1], *arguments[2] });
         CALL(any, Any, nullptr, { gt });
@@ -1810,8 +1938,71 @@ VALIDATION_FUNCTION(Clamp)
     return std::nullopt;
 }
 
+static bool containsInfinity(const ConstantValue& value)
+{
+    if (auto* f = std::get_if<float>(&value))
+        return std::isinf(*f);
+    if (auto* h = std::get_if<half>(&value))
+        return std::isinf(static_cast<float>(*h));
+    if (auto* d = std::get_if<double>(&value))
+        return std::isinf(*d);
+    if (auto* v = std::get_if<ConstantVector>(&value)) {
+        for (auto& element : v->elements) {
+            if (containsInfinity(element))
+                return true;
+        }
+    }
+    return false;
+}
+
+VALIDATION_FUNCTION(Add)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments[0] && arguments[1] && !arguments[0]->isMatrix()) {
+        auto result = constantBinaryOperation<Constraints::Number>({ *arguments[0], *arguments[1] }, [&]<typename T>(T left, T right) -> T {
+            return left + right;
+        });
+        if (!result)
+            return { result.error() };
+        if (containsInfinity(*result))
+            return { makeString("addition of ("_s, *arguments[0], ") and ("_s, *arguments[1], ") overflows"_s) };
+    }
+    return std::nullopt;
+}
+
+VALIDATION_FUNCTION(Minus)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments.size() == 2 && arguments[0] && arguments[1] && !arguments[0]->isMatrix()) {
+        auto result = constantBinaryOperation<Constraints::Number>({ *arguments[0], *arguments[1] }, [&]<typename T>(T left, T right) -> T {
+            return left - right;
+        });
+        if (!result)
+            return { result.error() };
+        if (containsInfinity(*result))
+            return { makeString("subtraction of ("_s, *arguments[0], ") and ("_s, *arguments[1], ") overflows"_s) };
+    }
+    return std::nullopt;
+}
+
+VALIDATION_FUNCTION(Multiply)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments[0] && arguments[1] && !arguments[0]->isMatrix() && !arguments[1]->isMatrix()) {
+        auto result = constantBinaryOperation<Constraints::Number>({ *arguments[0], *arguments[1] }, [&]<typename T>(T left, T right) -> T {
+            return left * right;
+        });
+        if (!result)
+            return { result.error() };
+        if (containsInfinity(*result))
+            return { makeString("multiplication of ("_s, *arguments[0], ") and ("_s, *arguments[1], ") overflows"_s) };
+    }
+    return std::nullopt;
+}
+
 VALIDATION_FUNCTION(Smoothstep)
 {
+    UNUSED_PARAM(parameterTypes);
     if (arguments[0] && arguments[1]) {
         CALL(equal, Equal, nullptr, { *arguments[0], *arguments[1] });
         CALL(any, Any, nullptr, { equal });
@@ -1819,6 +2010,218 @@ VALIDATION_FUNCTION(Smoothstep)
             return { makeString("smoothstep called with low ("_s, *arguments[0], ") equal high ("_s, *arguments[1], ")"_s) };
     }
 
+    return std::nullopt;
+}
+
+VALIDATION_FUNCTION(Divide)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments[0] && arguments[1]) {
+        auto result = constantDivide(nullptr, { *arguments[0], *arguments[1] });
+        if (!result)
+            return { result.error() };
+    } else if (arguments[1]) {
+        // right / right only errors for integer zero, which is exactly
+        // the case where division is invalid regardless of the dividend.
+        auto result = constantDivide(nullptr, { *arguments[1], *arguments[1] });
+        if (!result)
+            return { result.error() };
+    }
+
+    return std::nullopt;
+}
+
+VALIDATION_FUNCTION(Modulo)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments[0] && arguments[1]) {
+        auto result = constantModulo(nullptr, { *arguments[0], *arguments[1] });
+        if (!result)
+            return { result.error() };
+    } else if (arguments[1]) {
+        auto result = constantModulo(nullptr, { *arguments[1], *arguments[1] });
+        if (!result)
+            return { result.error() };
+    }
+
+    return std::nullopt;
+}
+
+static int32_t ldexpBiasForType(const Type* type)
+{
+    if (auto* vectorType = std::get_if<Types::Vector>(type))
+        type = vectorType->element;
+    if (auto* primitive = std::get_if<Types::Primitive>(type)) {
+        switch (primitive->kind) {
+        case Types::Primitive::F16:
+            return 15;
+        case Types::Primitive::F32:
+            return 127;
+        case Types::Primitive::AbstractFloat:
+        case Types::Primitive::AbstractInt:
+            return 1023;
+        default:
+            break;
+        }
+    }
+    RELEASE_ASSERT_NOT_REACHED();
+}
+
+VALIDATION_FUNCTION(Ldexp)
+{
+    if (!arguments[1])
+        return std::nullopt;
+
+    int32_t bias = ldexpBiasForType(parameterTypes[0]);
+    int32_t maxExponent = bias + 1;
+
+    auto checkScalar = [&](const ConstantValue& value) -> bool {
+        if (auto* i32 = std::get_if<int32_t>(&value))
+            return *i32 > maxExponent;
+        if (auto* abstractInt = std::get_if<int64_t>(&value))
+            return *abstractInt > maxExponent;
+        return false;
+    };
+
+    auto& e2 = *arguments[1];
+    if (auto* vec = std::get_if<ConstantVector>(&e2)) {
+        for (auto& element : vec->elements) {
+            if (checkScalar(element))
+                return { makeString("e2 must be less than or equal to "_s, maxExponent) };
+        }
+        return std::nullopt;
+    }
+    if (checkScalar(e2))
+        return { makeString("e2 must be less than or equal to "_s, maxExponent) };
+    return std::nullopt;
+}
+
+static bool shiftAmountExceedsBitWidth(const std::optional<ConstantValue>& lhs, const std::optional<ConstantValue>& rhs)
+{
+    if (!rhs)
+        return false;
+
+    unsigned bitWidth = 32;
+    if (lhs) {
+        auto& lhsValue = *lhs;
+        if (auto* vec = std::get_if<ConstantVector>(&lhsValue)) {
+            if (std::get_if<int64_t>(&vec->elements[0]))
+                bitWidth = 64;
+        } else if (std::get_if<int64_t>(&lhsValue))
+            bitWidth = 64;
+    }
+
+    auto checkScalarExceedsBitWidth = [&](const ConstantValue& value) -> bool {
+        if (auto* u = std::get_if<uint32_t>(&value))
+            return *u >= bitWidth;
+        return false;
+    };
+
+    if (auto* vec = std::get_if<ConstantVector>(&*rhs)) {
+        for (auto& element : vec->elements) {
+            if (checkScalarExceedsBitWidth(element))
+                return true;
+        }
+        return false;
+    }
+    return checkScalarExceedsBitWidth(*rhs);
+}
+
+VALIDATION_FUNCTION(BitwiseShiftLeft)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (shiftAmountExceedsBitWidth(arguments[0], arguments[1]))
+        return { "shift left value must be less than the bit width of the shifted value, which is 32"_s };
+    return std::nullopt;
+}
+
+VALIDATION_FUNCTION(BitwiseShiftRight)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (shiftAmountExceedsBitWidth(arguments[0], arguments[1]))
+        return { "shift right value must be less than the bit width of the shifted value, which is 32"_s };
+    return std::nullopt;
+}
+
+// Only checked when both the offset and the count are known: as const-expressions that is a
+// shader-creation error handled by constantExtractBits/constantInsertBits, and as
+// override-expressions the same call is validated again with the override values substituted in at
+// pipeline creation.
+static std::optional<String> validateBitOffsetAndCount(const std::optional<ConstantValue>& offset, const std::optional<ConstantValue>& count)
+{
+    if (!offset || !count)
+        return std::nullopt;
+    return validateBitOffsetAndCount(static_cast<uint64_t>(offset->integerValue()), static_cast<uint64_t>(count->integerValue()));
+}
+
+VALIDATION_FUNCTION(ExtractBits)
+{
+    UNUSED_PARAM(parameterTypes);
+    return validateBitOffsetAndCount(arguments[1], arguments[2]);
+}
+
+VALIDATION_FUNCTION(InsertBits)
+{
+    UNUSED_PARAM(parameterTypes);
+    return validateBitOffsetAndCount(arguments[2], arguments[3]);
+}
+
+// https://www.w3.org/TR/WGSL/#workgroupUniformLoad-builtin
+// The pointee has to be a concrete plain type with a fixed footprint and no atomics in it, which is
+// exactly what constructible means. A pointer straight at an atomic is the other overload of this
+// builtin, and is allowed.
+VALIDATION_FUNCTION(WorkgroupUniformLoad)
+{
+    UNUSED_PARAM(arguments);
+    auto* pointer = std::get_if<Types::Pointer>(parameterTypes[0]);
+    if (!pointer)
+        return std::nullopt;
+
+    auto* element = pointer->element;
+    if (std::holds_alternative<Types::Atomic>(*element) || element->isConstructible())
+        return std::nullopt;
+
+    return { makeString("the type of the argument to 'workgroupUniformLoad' must be constructible, but '"_s, *element, "' is not"_s) };
+}
+
+// https://www.w3.org/TR/WGSL/#subgroupShuffle-builtin
+// For subgroupShuffle{,Up,Down,Xor}, if the id/delta/mask argument is a const-expression
+// outside the range [0, 128) it is a shader-creation error. Non-const arguments are not
+// checked here (an out-of-range override is a pipeline-creation error handled separately).
+VALIDATION_FUNCTION(SubgroupShuffle)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments.size() == 2 && arguments[1]) {
+        auto id = arguments[1]->integerValue();
+        if (id < 0 || id >= 128)
+            return { makeString("the id argument of a subgroup shuffle must be in the range [0, 128), but was "_s, String::number(id)) };
+    }
+    return std::nullopt;
+}
+
+// https://www.w3.org/TR/WGSL/#subgroupBroadcast-builtin
+// subgroupBroadcast requires its id argument to be a const-expression in the range [0, 128).
+VALIDATION_FUNCTION(SubgroupBroadcast)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments.size() != 2 || !arguments[1])
+        return { "the id argument of subgroupBroadcast must be a const-expression"_s };
+    auto id = arguments[1]->integerValue();
+    if (id < 0 || id >= 128)
+        return { makeString("the id argument of subgroupBroadcast must be in the range [0, 128), but was "_s, String::number(id)) };
+    return std::nullopt;
+}
+
+// https://www.w3.org/TR/WGSL/#quadBroadcast-builtin
+// quadBroadcast requires its id argument to be a const-expression in the range [0, 4).
+VALIDATION_FUNCTION(QuadBroadcast)
+{
+    UNUSED_PARAM(parameterTypes);
+    if (arguments.size() != 2 || !arguments[1])
+        return { "the id argument of quadBroadcast must be a const-expression"_s };
+    auto id = arguments[1]->integerValue();
+    if (id < 0 || id >= 4)
+        return { makeString("the id argument of quadBroadcast must be in the range [0, 4), but was "_s, String::number(id)) };
     return std::nullopt;
 }
 

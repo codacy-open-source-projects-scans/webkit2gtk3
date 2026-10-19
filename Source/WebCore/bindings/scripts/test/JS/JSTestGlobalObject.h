@@ -21,6 +21,7 @@
 #pragma once
 
 #include "TestGlobalObject.h"
+#include <WebCore/JSDOMBindingFacade.h>
 #include <WebCore/JSDOMWrapper.h>
 #include <wtf/NeverDestroyed.h>
 
@@ -58,8 +59,12 @@ protected:
 
 class JSTestGlobalObjectOwner final : public JSC::WeakHandleOwner {
 public:
+    JSTestGlobalObjectOwner() = default;
     bool isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown>, void* context, JSC::AbstractSlotVisitor&, ASCIILiteral*) final;
     void finalize(JSC::Handle<JSC::Unknown>, void* context) final;
+
+private:
+    explicit JSTestGlobalObjectOwner(ClangVTableWorkaroundTag);
 };
 
 inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld&, TestGlobalObject*)

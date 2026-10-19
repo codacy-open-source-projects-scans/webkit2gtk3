@@ -37,7 +37,6 @@
 #include <JavaScriptCore/YarrPattern.h>
 #include <wtf/Atomics.h>
 #include <wtf/BitSet.h>
-#include <wtf/FixedVector.h>
 #include <wtf/StackCheck.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/UniqueRef.h>
@@ -57,14 +56,11 @@ class MatchingContextHolder;
 class YarrCodeBlock;
 
 enum class JITFailureReason : uint8_t {
-    DecodeSurrogatePair,
-    BackReference,
     Lookbehind,
-    VariableCountedParenthesisWithNonZeroMinimum,
-    ParenthesizedSubpattern,
     ParenthesisNestedTooDeep,
     ExecutableMemoryAllocationFailure,
     OffsetTooLarge,
+    GeneratedCodeSizeTooLarge,
 };
 
 class BoyerMooreFastCandidates {
@@ -82,7 +78,7 @@ public:
         m_isValid = false;
     }
 
-    bool NODELETE isEmpty() const { return m_characters.isEmpty(); }
+    bool LEGACY_NODELETE isEmpty() const { return m_characters.isEmpty(); }
     unsigned size() const { return m_characters.size(); }
     char32_t at(unsigned index) const { return m_characters.at(index); }
 
@@ -188,7 +184,7 @@ public:
         }
     }
 
-    void NODELETE setAll()
+    void LEGACY_NODELETE setAll()
     {
         m_count = mapSize;
     }
@@ -223,6 +219,7 @@ public:
     void clearMaps()
     {
         m_maps.clear();
+        m_latin1Tables.clear();
     }
 
     const std::span<BoyerMooreBitmap::Map::WordType> tryReuseBoyerMooreBitmap(const BoyerMooreBitmap::Map& map) const
@@ -234,8 +231,15 @@ public:
         return { };
     }
 
+    const uint8_t* addLatin1Table(const CharacterClass::ByteTable& table)
+    {
+        m_latin1Tables.append(makeUniqueRef<CharacterClass::ByteTable>(table));
+        return m_latin1Tables.last()->data.data();
+    }
+
 private:
     Vector<UniqueRef<BoyerMooreBitmap::Map>> m_maps;
+    Vector<UniqueRef<CharacterClass::ByteTable>> m_latin1Tables;
 };
 
 class YarrCodeBlock final : public YarrBoyerMooreData {
@@ -327,6 +331,17 @@ public:
     InlineStats& get8BitInlineStats() LIFETIME_BOUND { return m_matchOnly8Stats; }
     InlineStats& get16BitInlineStats() { return  m_matchOnly16Stats; }
 
+    const CharacterClassBitTable& addCharacterClassBitTable(const CharacterClass& characterClass)
+    {
+        auto table = makeUniqueRef<CharacterClassBitTable>(characterClass);
+        for (auto& stored : m_characterClassBitTables) {
+            if (stored.get() == table.get())
+                return stored.get();
+        }
+        m_characterClassBitTables.append(WTF::move(table));
+        return m_characterClassBitTables.last().get();
+    }
+
     MatchResult execute(std::span<const Latin1Character> input, unsigned start, int* output, MatchingContextHolder* matchingContext)
     {
         ASSERT(has8BitCode());
@@ -414,6 +429,7 @@ public:
         m_matchOnly16 = MacroAssemblerCodeRef<YarrMatchOnly16BitPtrTag>();
         m_failureReason = std::nullopt;
         clearMaps();
+        m_characterClassBitTables.clear();
     }
 
     void dumpSimpleName(PrintStream&) const;
@@ -425,25 +441,17 @@ private:
     MacroAssemblerCodeRef<YarrMatchOnly16BitPtrTag> m_matchOnly16;
     InlineStats m_matchOnly8Stats;
     InlineStats m_matchOnly16Stats;
+    Vector<UniqueRef<CharacterClassBitTable>> m_characterClassBitTables;
     RegExp* m_regExp { nullptr };
 
     std::optional<JITFailureReason> m_failureReason;
 };
 
-enum class JITCompileMode : uint8_t {
-    MatchOnly,
-    IncludeSubpatterns,
-    InlineTest
-};
-void jitCompile(YarrPattern&, StringView patternString, CharSize, std::optional<StringView> sampleString, VM*, YarrCodeBlock& jitObject, JITCompileMode);
-
-#if ENABLE(YARR_JIT_REGEXP_TEST_INLINE)
-
+void jitCompile(YarrPattern&, StringView patternString, CharSize, std::optional<StringView> sampleString, VM*, YarrCodeBlock& jitObject, ExecutionMode);
 
 class YarrJITRegisters;
 
-void jitCompileInlinedTest(StackCheck*, StringView, OptionSet<Yarr::Flags>, CharSize, VM*, YarrBoyerMooreData&, CCallHelpers&, YarrJITRegisters&);
-#endif
+void jitCompileInlinedTest(StackCheck*, StringView, OptionSet<Yarr::Flags>, CharSize, VM*, YarrBoyerMooreData&, CCallHelpers&, YarrJITRegisters&, unsigned reservedFrameSizeInBytes);
 
 } } // namespace JSC::Yarr
 

@@ -50,22 +50,26 @@ template<typename T> inline DoublyLinkedListNode<T>::DoublyLinkedListNode()
 
 template<typename T> inline void DoublyLinkedListNode<T>::setPrev(T* prev)
 {
-    static_cast<T*>(this)->m_prev = prev;
+    // T derives from DoublyLinkedListNode<T> (CRTP), so this is always a T.
+    SUPPRESS_MEMORY_UNSAFE_CAST static_cast<T*>(this)->m_prev = prev;
 }
 
 template<typename T> inline void DoublyLinkedListNode<T>::setNext(T* next)
 {
-    static_cast<T*>(this)->m_next = next;
+    // T derives from DoublyLinkedListNode<T> (CRTP), so this is always a T.
+    SUPPRESS_MEMORY_UNSAFE_CAST static_cast<T*>(this)->m_next = next;
 }
 
 template<typename T> inline T* DoublyLinkedListNode<T>::prev() const
 {
-    return static_cast<const T*>(this)->m_prev;
+    // T derives from DoublyLinkedListNode<T> (CRTP), so this is always a T.
+    SUPPRESS_MEMORY_UNSAFE_CAST return static_cast<const T*>(this)->m_prev;
 }
 
 template<typename T> inline T* DoublyLinkedListNode<T>::next() const
 {
-    return static_cast<const T*>(this)->m_next;
+    // T derives from DoublyLinkedListNode<T> (CRTP), so this is always a T.
+    SUPPRESS_MEMORY_UNSAFE_CAST return static_cast<const T*>(this)->m_next;
 }
 
 template<typename T>
@@ -84,6 +88,7 @@ public:
 
     void push(T*);
     void append(T*);
+    void insertAfter(T* existingNode, T* newNode);
     void remove(T*);
     void append(DoublyLinkedList<T>&);
 
@@ -159,6 +164,19 @@ template<typename T> inline void DoublyLinkedList<T>::append(T* node)
     m_tail->setNext(node);
     node->setPrev(m_tail);
     m_tail = node;
+}
+
+template<typename T> inline void DoublyLinkedList<T>::insertAfter(T* existingNode, T* newNode)
+{
+    ASSERT(existingNode);
+    ASSERT(!newNode->prev() && !newNode->next());
+    newNode->setPrev(existingNode);
+    newNode->setNext(existingNode->next());
+    if (existingNode->next())
+        existingNode->next()->setPrev(newNode);
+    else
+        m_tail = newNode;
+    existingNode->setNext(newNode);
 }
 
 template<typename T> inline DoublyLinkedList<T> DoublyLinkedList<T>::splitAt(size_t toKeep)

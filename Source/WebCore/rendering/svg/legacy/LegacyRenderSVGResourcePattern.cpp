@@ -29,19 +29,20 @@
 #include "LegacyRenderSVGRoot.h"
 #include "LocalFrameView.h"
 #include "NativeImage.h"
-#include "RenderStyle+GettersInlines.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGFitToViewBox.h"
 #include "SVGRenderingContext.h"
 #include "SVGResources.h"
 #include "SVGResourcesCache.h"
+#include "StyleComputedStyle+GettersInlines.h"
+#include "StylePrimitiveNumericTypes+Evaluation.h"
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyRenderSVGResourcePattern);
 
-LegacyRenderSVGResourcePattern::LegacyRenderSVGResourcePattern(SVGPatternElement& element, RenderStyle&& style)
+LegacyRenderSVGResourcePattern::LegacyRenderSVGResourcePattern(SVGPatternElement& element, Style::ComputedStyle&& style)
     : LegacyRenderSVGResourceContainer(Type::LegacySVGResourcePattern, element, WTF::move(style))
 {
 }
@@ -76,7 +77,7 @@ void LegacyRenderSVGResourcePattern::collectPatternAttributes(PatternAttributes&
 
     while (current) {
         Ref pattern = current->patternElement();
-        pattern->collectPatternAttributes(attributes);
+        pattern->collectOwnPatternAttributes(attributes);
 
         auto* resources = SVGResourcesCache::cachedResourcesForRenderer(*current);
         ASSERT_IMPLIES(resources && resources->linkedResource(), is<LegacyRenderSVGResourcePattern>(resources->linkedResource()));
@@ -133,7 +134,7 @@ PatternData* LegacyRenderSVGResourcePattern::buildPattern(RenderElement& rendere
     if (!patternTransform.isIdentity())
         patternData->transform = patternTransform * patternData->transform;
 
-    // Account for text drawing resetting the context to non-scaled, see SVGInlineTextBox::paintTextWithShadows.
+    // Account for text drawing resetting the context to non-scaled, see SVGTextBoxPainter::paintTextWithShadows.
     if (resourceMode.contains(RenderSVGResourceMode::ApplyToText)) {
         auto textScale = computeTextPaintingScale(renderer);
         if (textScale != 1)
@@ -149,7 +150,7 @@ PatternData* LegacyRenderSVGResourcePattern::buildPattern(RenderElement& rendere
     return m_patternMap.set(renderer, WTF::move(patternData)).iterator->value.get();
 }
 
-auto LegacyRenderSVGResourcePattern::applyResource(RenderElement& renderer, const RenderStyle& style, GraphicsContext*& context, OptionSet<RenderSVGResourceMode> resourceMode) -> OptionSet<ApplyResult>
+auto LegacyRenderSVGResourcePattern::applyResource(RenderElement& renderer, const Style::ComputedStyle& style, GraphicsContext*& context, OptionSet<RenderSVGResourceMode> resourceMode) -> OptionSet<ApplyResult>
 {
     ASSERT(context);
     ASSERT(!resourceMode.isEmpty());
@@ -176,13 +177,13 @@ auto LegacyRenderSVGResourcePattern::applyResource(RenderElement& renderer, cons
     context->save();
 
     if (resourceMode.contains(RenderSVGResourceMode::ApplyToFill)) {
-        context->setAlpha(style.fillOpacity().value.value);
+        context->setAlpha(Style::evaluate<float>(style.fillOpacity()));
         context->setFillPattern(*patternData->pattern);
         context->setFillRule(style.fillRule());
     } else if (resourceMode.contains(RenderSVGResourceMode::ApplyToStroke)) {
         if (style.vectorEffect() == VectorEffect::NonScalingStroke)
             patternData->pattern->setPatternSpaceTransform(transformOnNonScalingStroke(&renderer, patternData->transform));
-        context->setAlpha(style.strokeOpacity().value.value);
+        context->setAlpha(Style::evaluate<float>(style.strokeOpacity()));
         context->setStrokePattern(*patternData->pattern);
         SVGRenderSupport::applyStrokeStyleToContext(*context, style, renderer);
     }
@@ -214,7 +215,7 @@ void LegacyRenderSVGResourcePattern::postApplyResource(RenderElement&, GraphicsC
     context->restore();
 }
 
-static inline FloatRect calculatePatternBoundaries(const PatternAttributes& attributes,
+static inline FloatRect legacyCalculatePatternBoundaries(const PatternAttributes& attributes,
                                                    const FloatRect& objectBoundingBox,
                                                    const SVGPatternElement& patternElement)
 {
@@ -228,7 +229,7 @@ bool LegacyRenderSVGResourcePattern::buildTileImageTransform(RenderElement& rend
                                                        AffineTransform& tileImageTransform) const
 {
     FloatRect objectBoundingBox = renderer.objectBoundingBox();
-    patternBoundaries = calculatePatternBoundaries(attributes, objectBoundingBox, patternElement); 
+    patternBoundaries = legacyCalculatePatternBoundaries(attributes, objectBoundingBox, patternElement);
     if (patternBoundaries.width() <= 0 || patternBoundaries.height() <= 0)
         return false;
 

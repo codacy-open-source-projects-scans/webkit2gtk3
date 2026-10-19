@@ -30,11 +30,11 @@
 #include <WebCore/LayoutRect.h>
 #include <WebCore/Node.h>
 #include <WebCore/NodeDocument.h>
+#include <WebCore/NodeInlinesLight.h>
 #include <WebCore/PseudoElement.h>
 #include <WebCore/RenderBox.h>
 #include <WebCore/ShadowRoot.h>
 #include <WebCore/TreeScopeInlines.h>
-#include <WebCore/WebCoreOpaqueRoot.h>
 
 namespace WebCore {
 
@@ -167,7 +167,7 @@ inline Node& Node::rootNode() const
 {
     if (isInTreeScope())
         return treeScope().rootNode();
-    return traverseToRootNode();
+    return *m_shadowIncludingRoot;
 }
 
 inline void Node::setParentNode(ContainerNode* parent)
@@ -217,6 +217,18 @@ inline void Node::setTreeScopeRecursively(TreeScope& newTreeScope)
     }
 }
 
+inline void Node::setTreeScopeRecursivelyToMatch(const Node& node)
+{
+    if (m_treeScope != &node.treeScope()) [[unlikely]]
+        setTreeScopeRecursively(protect(node.treeScope()));
+}
+
+inline void Node::setTreeScopeRecursivelyToDocument()
+{
+    if (m_treeScope != &document()) [[unlikely]]
+        setTreeScopeRecursively(protect(document()));
+}
+
 inline ContainerNode* Node::parentNodeGuaranteedHostFree() const
 {
     ASSERT(!isShadowRoot());
@@ -238,22 +250,13 @@ inline NodeClass& Node::traverseToRootNodeInternal(const NodeClass& node)
     return *current;
 }
 
-inline void Node::relaxAdoptionRequirement()
-{
-#if ASSERT_ENABLED
-    ASSERT_WITH_SECURITY_IMPLICATION(!deletionHasBegun());
-    ASSERT(m_adoptionIsRequired);
-    m_adoptionIsRequired = false;
-#endif
-}
-
 inline IntRect Node::pixelSnappedAbsoluteBoundingRect(bool* isReplaced)
 {
     return snappedIntRect(absoluteBoundingRect(isReplaced));
 }
 
 // Used in Node::addSubresourceAttributeURLs() and in addSubresourceStyleURLs()
-inline void addSubresourceURL(ListHashSet<URL>& urls, const URL& url)
+inline void addSubresourceURL(OrderedHashSet<URL>& urls, const URL& url)
 {
     if (!url.isNull())
         urls.add(url);

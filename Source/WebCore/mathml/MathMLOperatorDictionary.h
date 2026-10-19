@@ -27,6 +27,7 @@
 
 #if ENABLE(MATHML)
 
+#include <array>
 #include <optional>
 #include <unicode/utypes.h>
 #include <wtf/Forward.h>
@@ -46,7 +47,8 @@ enum Flag {
 };
 const unsigned allFlags = Accent | Fence | LargeOp | MovableLimits | Separator | Stretchy | Symmetric;
 struct Property {
-    MathMLOperatorDictionary::Form form;
+    // Default form is "infix".
+    MathMLOperatorDictionary::Form form { MathMLOperatorDictionary::Form::Infix };
     // Default leading and trailing spaces are "thickmathspace".
     unsigned short leadingSpaceInMathUnit { 5 };
     unsigned short trailingSpaceInMathUnit { 5 };
@@ -54,6 +56,7 @@ struct Property {
     unsigned short flags { 0 };
 };
 std::optional<Property> search(char32_t, Form, bool explicitForm);
+std::optional<Property> search(std::array<char16_t, 2>, Form, bool explicitForm);
 bool isVertical(char32_t);
 }
 

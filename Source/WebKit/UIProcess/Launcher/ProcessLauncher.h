@@ -93,7 +93,7 @@ struct ProcessLaunchOptions {
     bool shouldMakeProcessLaunchFailForTesting { false };
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
-    HashMap<CString, SandboxPermission> extraSandboxPaths { };
+    HashMap<UTF8CString, SandboxPermission> extraSandboxPaths { };
 #if ENABLE(DEVELOPER_MODE)
     String processCmdPrefix { };
 #endif
@@ -151,7 +151,7 @@ public:
     bool isLaunching() const { return m_isLaunching; }
     ProcessID processID() const { return m_processID; }
 
-    void terminateProcess();
+    void terminateProcess(const String& reason = { });
     void invalidate();
 
 #if USE(EXTENSIONKIT)

@@ -38,7 +38,6 @@
 #include "CCallHelpers.h"
 #include "DisallowMacroScratchRegisterUsage.h"
 #include "Reg.h"
-#include <wtf/ListDump.h>
 #include <wtf/SequesteredMalloc.h>
 #include <wtf/TZoneMallocInlines.h>
 
@@ -436,7 +435,7 @@ void GenerateAndAllocateRegisters::prepareForGeneration()
             auto flushToFreeList = [&] {
                 for (auto* stackSlot : toFree)
                     freeSlots.append(stackSlot);
-                toFree.clear();
+                toFree.shrink(0);
             };
 
             for (Tmp tmp : m_liveness->liveAtHead(block))
@@ -585,8 +584,9 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
 
     Disassembler* disassembler = m_code.disassembler();
     PCToOriginMap& pcToOriginMap = m_code.proc().pcToOriginMap();
+    bool shouldPreserveB3Origins = m_code.shouldPreserveB3Origins();
     auto addItem = [&](Inst& inst) {
-        if (!m_code.shouldPreserveB3Origins())
+        if (!shouldPreserveB3Origins)
             return;
         if (inst.origin)
             pcToOriginMap.appendItem(m_jit->labelIgnoringWatchpoints(), inst.origin->origin());
@@ -612,15 +612,14 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
             if (disassembler)
                 disassembler->startEntrypoint(*m_jit); 
 
-            m_code.prologueGeneratorForEntrypoint(*entrypointIndex)->run(*m_jit, m_code);
+            m_code.prologueGeneratorForEntrypoint(*entrypointIndex)->run(*m_jit, m_code, context);
 
             if (disassembler)
                 disassembler->endEntrypoint(*m_jit); 
         } else
             ASSERT(!m_code.isEntrypoint(block));
 
-        auto startLabel = m_jit->labelIgnoringWatchpoints();
-
+        auto startLabel = disassembler ? m_jit->labelIgnoringWatchpoints() : CCallHelpers::Label();
         {
             auto iter = m_blocksAfterTerminalPatchForSpilling.find(block);
             if (iter != m_blocksAfterTerminalPatchForSpilling.end()) {
@@ -665,7 +664,7 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
         for (size_t instIndex = 0; instIndex < block->size(); ++instIndex) {
             checkConsistency();
 
-            if (instIndex && !isReplayingSameInst)
+            if (instIndex && !isReplayingSameInst && disassembler)
                 startLabel = m_jit->labelIgnoringWatchpoints();
 
             context.indexInBlock = instIndex;
@@ -684,11 +683,6 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
                     return true;
                 if (inst.kind.opcode == MoveDouble)
                     return true;
-                // on 32 bit, a Move32 doesn't have the same zero-extending
-                // semantics it does on 64-bit, so we can treat it exactly like
-                // a Move
-                if (is32Bit() && inst.kind.opcode == Move32)
-                    return true;
                 return false;
             })();
 
@@ -697,9 +691,9 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
                 if (!isOrdinaryMove)
                     return true;
 
-                ASSERT(inst.args.size() >= 2);
-                Arg source = inst.args[0];
-                Arg dest = inst.args[1];
+                ASSERT(inst.args().size() >= 2);
+                Arg source = inst.args()[0];
+                Arg dest = inst.args()[1];
                 if (!source.isTmp() || !dest.isTmp())
                     return true;
 
@@ -997,9 +991,8 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
                 }
             }
 
-            auto endLabel = m_jit->labelIgnoringWatchpoints();
             if (disassembler)
-                disassembler->addInst(&inst, startLabel, endLabel);
+                disassembler->addInst(&inst, startLabel, m_jit->labelIgnoringWatchpoints());
 
             ++m_globalInstIndex;
         }

@@ -40,6 +40,7 @@
 #include "JSDOMConvertSequences.h"
 #include "JSHTMLElementWrapperFactory.h"
 #include "JSMathMLElementWrapperFactory.h"
+#include "JSNodeCustom.h"
 #include "JSNodeList.h"
 #include "JSSVGElementWrapperFactory.h"
 #include "MathMLElement.h"
@@ -71,7 +72,7 @@ JSValue toJS(JSGlobalObject*, JSDOMGlobalObject* globalObject, Element& element)
 {
     if (auto* wrapper = getCachedWrapper(globalObject->world(), element))
         return wrapper;
-    return createNewElementWrapper(globalObject, element);
+    return createNewElementWrapper(globalObjectForNode(element, globalObject), element);
 }
 
 JSValue toJSNewlyCreated(JSGlobalObject*, JSDOMGlobalObject* globalObject, Ref<Element>&& element)
@@ -83,7 +84,7 @@ JSValue toJSNewlyCreated(JSGlobalObject*, JSDOMGlobalObject* globalObject, Ref<E
         ASSERT(!globalObject->vm().exceptionForInspection());
     }
     ASSERT(!getCachedWrapper(globalObject->world(), element));
-    return createNewElementWrapper(globalObject, WTF::move(element));
+    return createNewElementWrapper(globalObjectForNode(element, globalObject), WTF::move(element));
 }
 
 static JSValue getElementsArrayAttribute(JSGlobalObject& lexicalGlobalObject, const JSElement& thisObject, const QualifiedName& attributeName)
@@ -96,11 +97,11 @@ static JSValue getElementsArrayAttribute(JSGlobalObject& lexicalGlobalObject, co
     if (cachedObjectValue)
         cachedObject = asObject(cachedObjectValue);
     else {
-        cachedObject = constructEmptyObject(vm, thisObject.realm()->nullPrototypeObjectStructure());
+        cachedObject = JSC::constructEmptyObject(vm, thisObject.realm()->nullPrototypeObjectStructure());
         const_cast<JSElement&>(thisObject).putDirect(vm, builtinNames(vm).cachedAttrAssociatedElementsPrivateName(), cachedObject);
     }
 
-    std::optional<Vector<Ref<Element>>> elements = thisObject.wrapped().getElementsArrayAttributeForBindings(attributeName);
+    std::optional<Vector<Ref<Element>>> elements = protect(thisObject.wrapped())->getElementsArrayAttributeForBindings(attributeName);
     auto propertyName = PropertyName(Identifier::fromString(vm, attributeName.toString()));
     JSValue cachedValue = cachedObject->getDirect(vm, propertyName);
     if (!cachedValue.isEmpty()) {

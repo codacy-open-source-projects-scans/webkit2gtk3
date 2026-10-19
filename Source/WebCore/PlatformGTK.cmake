@@ -1,10 +1,22 @@
 include(platform/Adwaita.cmake)
-include(platform/GCrypt.cmake)
+include(platform/CoordinatedGraphics.cmake)
 include(platform/GStreamer.cmake)
 include(platform/ImageDecoders.cmake)
 include(platform/Skia.cmake)
 include(platform/Soup.cmake)
-include(platform/TextureMapper.cmake)
+
+if (USE_OPENSSL)
+    include(platform/OpenSSL.cmake)
+    list(APPEND WebCore_LIBRARIES OpenSSL::Crypto)
+    # The OpenSSL backend uses APIs deprecated in OpenSSL 3, see bug 245146.
+    list(APPEND WebCore_PRIVATE_DEFINITIONS OPENSSL_API_COMPAT=0x10100000L)
+else ()
+    include(platform/GCrypt.cmake)
+endif ()
+
+if (USE_TEXTURE_MAPPER)
+    include(platform/TextureMapper.cmake)
+endif ()
 
 list(APPEND WebCore_UNIFIED_SOURCE_LIST_FILES
     "SourcesGTK.txt"
@@ -48,6 +60,9 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/glib/SelectionData.h
     platform/glib/SystemSettings.h
 
+    platform/graphics/DMABufBuffer.h
+    platform/graphics/DMABufBufferAttributes.h
+
     platform/graphics/egl/PlatformDisplayDefault.h
     platform/graphics/egl/PlatformDisplaySurfaceless.h
 
@@ -57,10 +72,6 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/x11/XErrorTrapper.h
 
     platform/text/enchant/TextCheckerEnchant.h
-)
-
-list(APPEND WebCore_PRIVATE_LIBRARIES
-    Tasn1::Tasn1
 )
 
 list(APPEND WebCore_LIBRARIES
@@ -173,6 +184,16 @@ if (USE_LIBHYPHEN)
     list(APPEND WebCore_PRIVATE_LIBRARIES Hyphen::Hyphen)
 endif ()
 
-if (USE_LIBSECRET)
-    list(APPEND WebCore_PRIVATE_LIBRARIES Secret::Secret)
+if (USE_VULKAN)
+    list(APPEND WebCore_PRIVATE_LIBRARIES volk::volk)
+    list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/platform/graphics/vulkan"
+    )
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+        platform/graphics/vulkan/VulkanHandle.h
+        platform/graphics/vulkan/VulkanStructure.h
+        platform/graphics/vulkan/VulkanTypes.h
+        platform/graphics/vulkan/VulkanUtilities.h
+        platform/graphics/vulkan/VulkanVolk.h
+    )
 endif ()

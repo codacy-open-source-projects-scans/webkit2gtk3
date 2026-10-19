@@ -31,7 +31,7 @@
 
 #if USE(SANDBOX_VERSION_3)
 (with-filter (mac-policy-name "Sandbox")
-    (allow system-mac-syscall (mac-syscall-number 5)))
+    (allow system-mac-syscall (mac-syscall-number 5 65)))
 
 (with-filter (mac-policy-name "vnguard")
     (allow system-mac-syscall (mac-syscall-number 1)))
@@ -231,11 +231,10 @@
        (literal "/private/var/run/syslog"))
 
 (allow ipc-posix-shm-read*
-    (ipc-posix-name "apple.shm.notification_center")
 #if !ENABLE(CFPREFS_DIRECT_MODE)
     (ipc-posix-name-prefix "apple.cfprefs.")
 #endif
-)
+    (ipc-posix-name "apple.shm.notification_center"))
 
 #if ENABLE(SET_WEBCONTENT_PROCESS_INFORMATION_IN_NETWORK_PROCESS)
 (allow mach-lookup (global-name "com.apple.coreservices.launchservicesd"))
@@ -244,8 +243,7 @@
 #if !ENABLE(CFPREFS_DIRECT_MODE)
 (allow mach-lookup
     (global-name "com.apple.cfprefsd.agent")
-    (global-name "com.apple.cfprefsd.daemon")
-)
+    (global-name "com.apple.cfprefsd.daemon"))
 #endif
 
 (allow mach-lookup
@@ -256,6 +254,7 @@
 (define (system-network)
     (allow file-read*
          (literal "/Library/Preferences/com.apple.networkd.plist")
+         (literal "/Library/Preferences/com.apple.networkextension.uuidcache.plist")
          (literal "/private/var/db/nsurlstoraged/dafsaData.bin"))
     (deny mach-lookup 
          (global-name "com.apple.SystemConfiguration.PPPController")
@@ -329,9 +328,7 @@
         "Removable"
         "acpi-pmcap-offset"
         "driver-child-bundle"
-        "iommu-selection"
-    )
-)
+        "iommu-selection"))
 
 (deny mach-lookup (xpc-service-name-prefix ""))
 
@@ -382,8 +379,7 @@
     (subpath (param "WEBKIT2_FRAMEWORK_DIR")))
 
 (allow file-read-data
-    (literal "/usr/local/lib/log") ; <rdar://problem/36629495>
-)
+    (literal "/usr/local/lib/log")) ; <rdar://problem/36629495>
 
 (read-only-and-issue-extensions (extension "com.apple.app-sandbox.read"))
 (read-write-and-issue-extensions (extension "com.apple.app-sandbox.read-write"))
@@ -463,8 +459,7 @@
 (allow file-read* (subpath "/private/var/db/mds/system")) ;; FIXME: This should be removed when <rdar://problem/9538414> is fixed.
 (with-filter (uid 0)
     (allow file-write* 
-        (subpath "/private/var/db/mds/system")) ;; FIXME: This should be removed when <rdar://problem/9538414> is fixed.
-)
+        (subpath "/private/var/db/mds/system"))) ;; FIXME: This should be removed when <rdar://problem/9538414> is fixed.
 
 (shared-preferences-read
     "com.apple.crypto"
@@ -494,10 +489,11 @@
        (ipc-posix-name "com.apple.AppleDatabaseChanged"))
 
 (system-network)
-(allow network-outbound
-    ;; Local mDNSResponder for DNS, arbitrary outbound TCP
-    (literal "/private/var/run/mDNSResponder")
-    (remote tcp))
+(with-filter (require-not (state-flag "BlockNetworkAccess"))
+    (allow network-outbound
+        ;; Local mDNSResponder for DNS, arbitrary outbound TCP
+        (literal "/private/var/run/mDNSResponder")
+        (remote tcp)))
 
 (with-filter (uid 0)
     (allow mach-lookup
@@ -515,7 +511,6 @@
     "com.apple.Kerberos"
     "edu.mit.Kerberos")
 (allow file-read*
-    (literal "/private/etc/services")
     (literal "/private/etc/hosts")
     (subpath "/Library/KerberosPlugins/GSSAPI")
     (subpath "/Library/KerberosPlugins/KerberosFrameworkPlugins"))
@@ -565,11 +560,12 @@
         (set! allow orig-allow))))
 
 ;; FIXME should be removed when <rdar://problem/30498072> is fixed.
-(allow network* 
-    (local udp)
-    (remote udp)
-    (local tcp)
-    (remote tcp))
+(with-filter (require-not (state-flag "BlockNetworkAccess"))
+    (allow network*
+        (local udp)
+        (remote udp)
+        (local tcp)
+        (remote tcp)))
 
 ;; For reporting progress for active downloads <rdar://problem/44405661>
 (allow mach-lookup
@@ -806,24 +802,14 @@
         thread_resume
         thread_suspend))
 
-(when (defined? 'syscall-mig)
+(deny syscall-mig)
 #if HAVE(MACH_RANGE_CREATE)
-    (when (defined? 'mach_vm_range_create)
-        (allow syscall-mig (kernel-mig-routine mach_vm_range_create)))
+(when (defined? 'mach_vm_range_create)
+    (allow syscall-mig (kernel-mig-routine mach_vm_range_create)))
 #endif
-    (allow syscall-mig (allowed-mig-syscalls)))
+(allow syscall-mig (allowed-mig-syscalls))
 
 #if HAVE(SANDBOX_MESSAGE_FILTERING)
-(when (and (equal? (param "ENABLE_SANDBOX_MESSAGE_FILTER") "YES") (and (defined? 'mach-kernel-endpoint) (not (defined? 'syscall-mig))))
-    (allow mach-kernel-endpoint
-        (apply-message-filter
-            (deny mach-message-send (with telemetry))
-#if HAVE(MACH_RANGE_CREATE)
-            (when (defined? 'mach_vm_range_create)
-                (allow mach-message-send (kernel-mig-routine mach_vm_range_create))) ;; <rdar://105161083>
-#endif
-            (allow mach-message-send (allowed-mig-syscalls)))))
-
 (when (and (equal? (param "ENABLE_SANDBOX_MESSAGE_FILTER") "YES") (defined? 'syscall-mach))
     (deny syscall-mach)
     (allow syscall-mach
@@ -884,9 +870,21 @@
 
 #if HAVE(WEBCONTENTRESTRICTIONS) && PLATFORM(MAC)
 (allow mach-lookup
+#if HAVE(WEBCONTENTRESTRICTIONS_ASK_TO)
+    (global-name "com.apple.DeviceConfigurationAgent.consumer")
+#endif
     (global-name "com.apple.familycontrols"))
 #endif
 
-#if HAVE(ENHANCED_SECURITY_LINKS) && __has_include(<WebKitAdditions/EnhancedSecurityLinks-macos.sb>)
-#include <WebKitAdditions/EnhancedSecurityLinks-macos.sb>
+#if HAVE(ENHANCED_SECURITY_LINKS)
+(with-filter (require-not (state-flag "BlockEnhancedSecurityLinks"))
+    ;; <rdar://problem/162785415>
+    (allow mach-lookup
+        (global-name "com.apple.imagent.EnhancedLinkSecurityStore")))
 #endif
+
+(when (defined? 'asr-parser-enter)
+    (with-filter (asr-parser-domain ASR_DOMAIN_IMAGES)
+        (deny (with telemetry-backtrace) asr-parser-enter)
+        (allow (with telemetry-backtrace) asr-parser-enter
+           (asr-parser-name "com.apple.imageio.png"))))

@@ -38,8 +38,11 @@ class ContainerNode;
 class Document;
 class Element;
 class Node;
-class RenderStyle;
 class Text;
+
+namespace Style {
+class ComputedStyle;
+}
 
 class RenderTreeUpdater {
 public:
@@ -63,13 +66,13 @@ private:
     void createTextRenderer(Text&, const Style::TextUpdate*);
     void updateElementRenderer(Element&, const Style::ElementUpdate&);
     void updateSVGRenderer(Element&);
-    void updateRendererStyle(RenderElement&, RenderStyle&&, Style::DifferenceResult);
+    void updateRendererStyle(RenderElement&, Style::ComputedStyle&&, Style::DifferenceResult);
     void updateRenderViewStyle();
-    void createRenderer(Element&, RenderStyle&&);
+    void createRenderer(Element&, Style::ComputedStyle&&);
     void updateBeforeDescendants(Element&, const Style::ElementUpdate*);
     void updateAfterDescendants(Element&, const Style::ElementUpdate*);
     bool textRendererIsNeeded(const Text& textNode);
-    void NODELETE storePreviousRenderer(Node&);
+    void LEGACY_NODELETE storePreviousRenderer(Node&);
 
     void destroyAndCancelAnimationsForSubtree(RenderElement&);
 
@@ -78,16 +81,16 @@ private:
         const Style::ElementUpdate* update { nullptr };
         std::optional<RenderTreePosition> renderTreePosition;
 
-        bool didCreateOrDestroyChildRenderer { false };
         RenderObject* previousChildRenderer { nullptr };
+        bool didCreateOrDestroyChildRenderer { false };
         bool hasPrecedingInFlowChild { false };
 
         Parent(ContainerNode& root);
         Parent(Element&, const Style::ElementUpdate*);
     };
     Parent& parent() LIFETIME_BOUND { return m_parentStack.last(); }
-    Parent& NODELETE renderingParent();
-    RenderTreePosition& NODELETE renderTreePosition();
+    Parent& LEGACY_NODELETE renderingParent();
+    RenderTreePosition& LEGACY_NODELETE renderTreePosition();
 
     GeneratedContent& generatedContent() LIFETIME_BOUND { return m_generatedContent; }
     ViewTransition& viewTransition() LIFETIME_BOUND { return m_viewTransition; }
@@ -110,7 +113,7 @@ private:
 
     void updateRebuildRoots();
 
-    RenderView& NODELETE renderView();
+    RenderView& LEGACY_NODELETE renderView();
 
     const Ref<Document> m_document;
     std::unique_ptr<Style::Update> m_styleUpdate;

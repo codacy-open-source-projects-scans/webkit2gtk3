@@ -26,6 +26,7 @@
 #pragma once
 
 #include "APIObject.h"
+#include <WebCore/SecurityOriginData.h>
 #include <wtf/Markable.h>
 #include <wtf/URL.h>
 #include <wtf/UUID.h>
@@ -34,6 +35,7 @@
 namespace WebKit {
 
 enum class UnifiedOriginStorageLevel : uint8_t;
+enum class TimeBasedEvictionMode : uint8_t;
 
 namespace WebPushD {
 struct WebPushDaemonConnectionConfiguration;
@@ -69,6 +71,18 @@ public:
 
     std::optional<double> originQuotaRatio() const { return m_originQuotaRatio; }
     void setOriginQuotaRatio(std::optional<double> ratio) { m_originQuotaRatio = ratio; }
+
+    static TimeBasedEvictionMode defaultTimeBasedEvictionMode();
+    TimeBasedEvictionMode timeBasedEvictionMode() const { return m_timeBasedEvictionMode; }
+    void setTimeBasedEvictionMode(TimeBasedEvictionMode mode) { m_timeBasedEvictionMode = mode; }
+    Seconds timeBasedEvictionThreshold() const { return m_timeBasedEvictionThreshold; }
+    void setTimeBasedEvictionThreshold(Seconds threshold) { m_timeBasedEvictionThreshold = threshold; }
+    std::optional<Seconds> lastModificationTimeUpdateIntervalOverride() const { return m_lastModificationTimeUpdateIntervalOverride; }
+    void setLastModificationTimeUpdateIntervalOverride(std::optional<Seconds> interval) { m_lastModificationTimeUpdateIntervalOverride = interval; }
+    std::optional<Seconds> timeBasedEvictionIntervalOverride() const { return m_timeBasedEvictionIntervalOverride; }
+    void setTimeBasedEvictionIntervalOverride(std::optional<Seconds> interval) { m_timeBasedEvictionIntervalOverride = interval; }
+    const Vector<WebCore::SecurityOriginData>& mockPushSubscriptionOriginsForTesting() const { return m_mockPushSubscriptionOriginsForTesting; }
+    void setMockPushSubscriptionOriginsForTesting(Vector<WebCore::SecurityOriginData>&& origins) { m_mockPushSubscriptionOriginsForTesting = WTF::move(origins); }
 
     std::optional<double> totalQuotaRatio() const { return m_totalQuotaRatio; }
     void setTotalQuotaRatio(std::optional<double> ratio) { m_totalQuotaRatio = ratio; }
@@ -209,11 +223,14 @@ public:
     bool allLoadsBlockedByDeviceManagementRestrictionsForTesting() const { return m_allLoadsBlockedByDeviceManagementRestrictionsForTesting; }
     void setAllLoadsBlockedByDeviceManagementRestrictionsForTesting(bool blocked) { m_allLoadsBlockedByDeviceManagementRestrictionsForTesting = blocked; }
 
-    WebPushD::WebPushDaemonConnectionConfiguration NODELETE webPushDaemonConnectionConfiguration() const;
+    WebPushD::WebPushDaemonConnectionConfiguration LEGACY_NODELETE webPushDaemonConnectionConfiguration() const;
 
     const String& dataConnectionServiceType() const LIFETIME_BOUND { return m_dataConnectionServiceType; }
     void setDataConnectionServiceType(String&& type) { m_dataConnectionServiceType = WTF::move(type); }
-    
+
+    const String& ipAddressSpaceOverridesForTesting() const LIFETIME_BOUND { return m_ipAddressSpaceOverridesForTesting; }
+    void setIPAddressSpaceOverridesForTesting(String&& overrides) { m_ipAddressSpaceOverridesForTesting = WTF::move(overrides); }
+
     bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
     void setSuppressesConnectionTerminationOnSystemChange(bool suppresses) { m_suppressesConnectionTerminationOnSystemChange = suppresses; }
 
@@ -239,6 +256,9 @@ public:
     
     bool allowsHSTSWithUntrustedRootCertificate() const { return m_allowsHSTSWithUntrustedRootCertificate; }
     void setAllowsHSTSWithUntrustedRootCertificate(bool allows) { m_allowsHSTSWithUntrustedRootCertificate = allows; }
+
+    bool qualifiedServerTrustDebugEnabledForTesting() const { return m_qualifiedServerTrustDebugEnabledForTesting; }
+    void setQualifiedServerTrustDebugEnabledForTesting(bool enabled) { m_qualifiedServerTrustDebugEnabledForTesting = enabled; }
     
     void setPCMMachServiceName(String&& name) { m_pcmMachServiceName = WTF::move(name); }
     const String& pcmMachServiceName() const LIFETIME_BOUND { return m_pcmMachServiceName; }
@@ -260,6 +280,12 @@ public:
     const String& enhancedSecurityDirectory() const LIFETIME_BOUND { return m_directories.enhancedSecurityDirectory; }
     void setEnhancedSecurityDirectory(String&& directory) { m_directories.enhancedSecurityDirectory = WTF::move(directory); }
 
+    const String& isolatedSitesDirectory() const LIFETIME_BOUND { return m_directories.isolatedSitesDirectory; }
+    void setIsolatedSitesDirectory(String&& directory) { m_directories.isolatedSitesDirectory = WTF::move(directory); }
+
+    std::optional<unsigned> overridePersistentNotificationMinimumLifetimeForTesting() const { return m_overrideServiceWorkerRegistrationCountTestingValue; }
+    void setOverridePersistentNotificationMinimumLifetimeForTesting(unsigned count) { m_overrideServiceWorkerRegistrationCountTestingValue = count; }
+
     struct Directories {
         String alternativeServicesDirectory;
         String cacheStorageDirectory;
@@ -271,6 +297,7 @@ public:
         String generalStorageDirectory;
         String hstsStorageDirectory;
         String indexedDBDatabaseDirectory;
+        String isolatedSitesDirectory;
         String javaScriptConfigurationDirectory;
         String localStorageDirectory;
         String mediaCacheDirectory;
@@ -303,6 +330,11 @@ private:
     Directories m_directories;
     uint64_t m_perOriginStorageQuota;
     std::optional<double> m_originQuotaRatio;
+    TimeBasedEvictionMode m_timeBasedEvictionMode { defaultTimeBasedEvictionMode() };
+    Seconds m_timeBasedEvictionThreshold { 180 * 24_h };
+    std::optional<Seconds> m_lastModificationTimeUpdateIntervalOverride;
+    std::optional<Seconds> m_timeBasedEvictionIntervalOverride;
+    Vector<WebCore::SecurityOriginData> m_mockPushSubscriptionOriginsForTesting;
     std::optional<double> m_totalQuotaRatio;
     std::optional<uint64_t> m_standardVolumeCapacity;
     std::optional<uint64_t> m_volumeCapacityOverride;
@@ -316,6 +348,7 @@ private:
     String m_sourceApplicationSecondaryIdentifier;
     String m_boundInterfaceIdentifier;
     String m_dataConnectionServiceType;
+    String m_ipAddressSpaceOverridesForTesting;
     URL m_httpProxy;
     URL m_httpsProxy;
     bool m_deviceManagementRestrictionsEnabled { false };
@@ -339,6 +372,7 @@ private:
     URL m_standaloneApplicationURL;
     bool m_enableInAppBrowserPrivacyForTesting { false };
     bool m_allowsHSTSWithUntrustedRootCertificate { false };
+    bool m_qualifiedServerTrustDebugEnabledForTesting { false };
     bool m_trackingPreventionDebugModeEnabled { false };
 #if ENABLE(DECLARATIVE_WEB_PUSH)
     bool m_isDeclarativeWebPushEnabled { false };

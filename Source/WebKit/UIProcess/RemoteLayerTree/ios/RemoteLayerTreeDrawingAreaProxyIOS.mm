@@ -30,6 +30,8 @@
 
 #import "CAFrameRateRangeUtilities.h"
 #import "PageClient.h"
+#import "RemoteLayerTreeCommitBundle.h"
+#import "RemoteLayerTreeScrollingPerformanceData.h"
 #import "RemoteScrollingCoordinatorProxyIOS.h"
 #import "WebPageProxy.h"
 #import "WebPreferences.h"
@@ -40,9 +42,20 @@
 #import <WebCore/LocalFrameView.h>
 #import <WebCore/ScrollView.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
+#import <wtf/MonotonicTime.h>
 #import <wtf/TZoneMallocInlines.h>
 
 constexpr WebCore::FramesPerSecond DisplayLinkFramesPerSecond = 60;
+
+namespace WebKit {
+
+struct ForcedDisplayRefreshState {
+    RetainPtr<NSTimer> timer;
+    Seconds interval;
+    MonotonicTime deadline;
+};
+
+} // namespace WebKit
 
 @interface WKDisplayLinkHandler : NSObject {
     WeakPtr<WebKit::RemoteLayerTreeDrawingAreaProxy> _drawingAreaProxy;
@@ -51,6 +64,8 @@ constexpr WebCore::FramesPerSecond DisplayLinkFramesPerSecond = 60;
     WebCore::FramesPerSecond _preferredFramesPerSecond;
     BOOL _wantsHighFrameRate;
     WebCore::DisplayUpdate _currentUpdate;
+    WebKit::ForcedDisplayRefreshState _forcedRefreshStateWhileDisplayIsNotUpdating;
+    MonotonicTime _lastDisplayLinkFireTime;
 #if ENABLE(TIMER_DRIVEN_DISPLAY_REFRESH_FOR_TESTING)
     RetainPtr<NSTimer> _updateTimer;
     std::optional<WebCore::FramesPerSecond> _overrideFrameRate;
@@ -63,6 +78,12 @@ constexpr WebCore::FramesPerSecond DisplayLinkFramesPerSecond = 60;
 - (void)invalidate;
 - (void)schedule;
 - (WebCore::FramesPerSecond)nominalFramesPerSecond;
+- (void)startForcedDisplayRefreshWindowWithInterval:(Seconds)interval duration:(Seconds)duration;
+- (void)_stopForcedDisplayRefresh;
+- (void)_forcedRefreshTimerFired;
+
+@property (nonatomic, readonly) BOOL _needsForcedDisplayRefresh;
+
 // The methods setPreferredFramesPerSecond and setWantsHighFrameRate provide the data that
 // will let WKDisplayLinkHandler compute the effective frames per second for its managed
 // CADisplayLink. The value provided by setPreferredFramesPerSecond identify the frames
@@ -134,15 +155,67 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)displayLinkFired:(CADisplayLink *)sender
 {
     ASSERT(isUIThread());
+
+    _lastDisplayLinkFireTime = MonotonicTime::now();
+
+    if (RefPtr drawingArea = _drawingAreaProxy)
+        drawingArea->didRefreshDisplay();
+
+    _currentUpdate = _currentUpdate.nextUpdate();
+}
+
+- (void)startForcedDisplayRefreshWindowWithInterval:(Seconds)interval duration:(Seconds)duration
+{
+    _forcedRefreshStateWhileDisplayIsNotUpdating.deadline = MonotonicTime::now() + duration;
+
+    if (_forcedRefreshStateWhileDisplayIsNotUpdating.interval == interval)
+        return;
+
+    [_forcedRefreshStateWhileDisplayIsNotUpdating.timer invalidate];
+    _forcedRefreshStateWhileDisplayIsNotUpdating.timer = [NSTimer scheduledTimerWithTimeInterval:interval.seconds() target:self selector:@selector(_forcedRefreshTimerFired) userInfo:nil repeats:YES];
+    _forcedRefreshStateWhileDisplayIsNotUpdating.interval = interval;
+}
+
+- (void)_stopForcedDisplayRefresh
+{
+    [_forcedRefreshStateWhileDisplayIsNotUpdating.timer invalidate];
+    _forcedRefreshStateWhileDisplayIsNotUpdating = { };
+}
+
+- (void)_forcedRefreshTimerFired
+{
+    ASSERT(isUIThread());
+
+    if (MonotonicTime::now() >= _forcedRefreshStateWhileDisplayIsNotUpdating.deadline) {
+        [self _stopForcedDisplayRefresh];
+        return;
+    }
+
+    if (![self _needsForcedDisplayRefresh])
+        return;
+
     if (RefPtr drawingArea = _drawingAreaProxy)
         drawingArea->didRefreshDisplay();
     _currentUpdate = _currentUpdate.nextUpdate();
+}
+
+- (BOOL)_needsForcedDisplayRefresh
+{
+    if (_displayLink && [_displayLink isPaused])
+        return NO;
+
+    if (!_lastDisplayLinkFireTime)
+        return YES;
+
+    auto expectedInterval = _preferredFramesPerSecond ? Seconds { 1.0 / _preferredFramesPerSecond } : _forcedRefreshStateWhileDisplayIsNotUpdating.interval;
+    return (MonotonicTime::now() - _lastDisplayLinkFireTime) >= std::max(_forcedRefreshStateWhileDisplayIsNotUpdating.interval, 2 * expectedInterval);
 }
 
 #if ENABLE(TIMER_DRIVEN_DISPLAY_REFRESH_FOR_TESTING)
 - (void)timerFired
 {
     ASSERT(isUIThread());
+    _lastDisplayLinkFireTime = MonotonicTime::now();
     if (RefPtr drawingArea = _drawingAreaProxy)
         drawingArea->didRefreshDisplay();
     _currentUpdate = _currentUpdate.nextUpdate();
@@ -155,6 +228,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     [displayLink removeObserver:self forKeyPath:@"display.refreshRate" context:displayRefreshRateObservationContext];
     [displayLink invalidate];
     _displayLink = nullptr;
+
+    // NSTimer retains its target, so this must be torn down here or the handler leaks.
+    [self _stopForcedDisplayRefresh];
 
 #if ENABLE(TIMER_DRIVEN_DISPLAY_REFRESH_FOR_TESTING)
     [_updateTimer invalidate];
@@ -286,14 +362,15 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     _screenForDisplayLink = [self _screenForDisplayLink];
 
+ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+    // FIXME: UIScreen version deprecated rdar://177874054
     if (_screenForDisplayLink)
         _displayLink = [protect(_screenForDisplayLink) displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
     else {
-ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         // FIXME: CoreAnimation version deprecated rdar://164090713
         _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
-ALLOW_DEPRECATED_DECLARATIONS_END
     }
+ALLOW_DEPRECATED_DECLARATIONS_END
 
     [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
     [_displayLink addObserver:self forKeyPath:@"display.refreshRate" options:NSKeyValueObservingOptionNew context:displayRefreshRateObservationContext];
@@ -336,7 +413,7 @@ DelegatedScrollingMode RemoteLayerTreeDrawingAreaProxyIOS::delegatedScrollingMod
 WKDisplayLinkHandler *RemoteLayerTreeDrawingAreaProxyIOS::displayLinkHandler()
 {
     if (!m_displayLinkHandler)
-        m_displayLinkHandler = adoptNS([[WKDisplayLinkHandler alloc] initWithDrawingAreaProxy:this]);
+        lazyInitialize(m_displayLinkHandler, adoptNS([[WKDisplayLinkHandler alloc] initWithDrawingAreaProxy:this]));
     return m_displayLinkHandler.get();
 }
 
@@ -375,6 +452,11 @@ void RemoteLayerTreeDrawingAreaProxyIOS::pauseDisplayRefreshCallbacks()
 {
     m_needsDisplayRefreshCallbacksForDrawing = false;
     pauseDisplayLinkIfNeeded();
+}
+
+void RemoteLayerTreeDrawingAreaProxyIOS::startForcedDisplayRefreshWindow(Seconds interval, Seconds duration)
+{
+    [protect(displayLinkHandler()) startForcedDisplayRefreshWindowWithInterval:interval duration:duration];
 }
 
 void RemoteLayerTreeDrawingAreaProxyIOS::scheduleDisplayRefreshCallbacksForMonotonicAnimations()
@@ -447,6 +529,26 @@ UIView *RemoteLayerTreeDrawingAreaProxyIOS::viewWithLayerIDForTesting(WebCore::P
     if (RefPtr node = m_remoteLayerTreeHost->nodeForID(layerID))
         return node->uiView();
     return nil;
+}
+
+void RemoteLayerTreeDrawingAreaProxyIOS::didCommitLayerTree(IPC::Connection&, const RemoteLayerTreeTransaction& transaction, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>& mainFrameData, const TransactionID&)
+{
+    if (!mainFrameData)
+        return;
+
+    RefPtr page = this->page();
+    if (!page)
+        return;
+
+    CheckedRef scrollingCoordinatorProxy = *page->scrollingCoordinatorProxy();
+    page->setScrollPerformanceDataCollectionEnabled(scrollingCoordinatorProxy->scrollingPerformanceTestingEnabled());
+
+    if (transaction.createdLayers().size() > 0) {
+        if (auto* scrollPerfData = page->scrollingPerformanceData()) {
+            auto visibleRect = WebCore::FloatRect(transaction.scrollPosition(), mainFrameData->baseLayoutViewportSize);
+            scrollPerfData->didCommitLayerTree(visibleRect);
+        }
+    }
 }
 
 } // namespace WebKit

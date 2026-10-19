@@ -47,6 +47,7 @@
 #include "JSExecStateInstrumentation.h"
 #include "JSHTMLElement.h"
 #include "ScriptExecutionContext.h"
+#include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/WeakInlines.h>
 
@@ -54,7 +55,7 @@ namespace WebCore {
 using namespace JSC;
 
 JSCustomElementInterface::JSCustomElementInterface(const QualifiedName& name, JSObject* constructor, JSDOMGlobalObject* globalObject)
-    : ActiveDOMCallback(globalObject->scriptExecutionContext())
+    : ActiveDOMCallback(protect(globalObject->scriptExecutionContext()))
     , m_name(name)
     , m_constructor(constructor)
     , m_isolatedWorld(globalObject->world())
@@ -85,8 +86,8 @@ Ref<Element> JSCustomElementInterface::constructElementWithFallback(Document& do
 Ref<Element> JSCustomElementInterface::constructElementWithFallback(Document& document, CustomElementRegistry& registry, const QualifiedName& name)
 {
     if (auto element = tryToConstructCustomElement(document, registry, name.localName(), ParserConstructElementWithEmptyStack::No)) {
-        if (!name.prefix().isNull())
-            element->setPrefix(name.prefix());
+        if (!name.prefix().isEmpty())
+            element->setPrefixForCustomElementUpgrade(name.prefix());
         return element.releaseNonNull();
     }
 
@@ -125,14 +126,18 @@ RefPtr<Element> JSCustomElementInterface::tryToConstructCustomElement(Document& 
         return nullptr;
 
     RefPtr contextDocument = downcast<Document>(scriptExecutionContext());
-    auto* lexicalGlobalObject = scriptExecutionContext()->globalObject();
+    auto* lexicalGlobalObject = protect(scriptExecutionContext())->globalObject();
     ASSERT(lexicalGlobalObject);
     if (!lexicalGlobalObject)
         return nullptr;
-    auto* oldRegistry = contextDocument->activeCustomElementRegistry();
-    contextDocument->setActiveCustomElementRegistry(&registry);
-    auto element = constructCustomElementSynchronously(document, vm, *lexicalGlobalObject, m_constructor.get(), localName, parserConstructElementWithEmptyStack);
-    contextDocument->setActiveCustomElementRegistry(oldRegistry);
+    auto* constructor = m_constructor.get();
+    RefPtr previousRegistry = contextDocument->activeCustomElementConstructorRegistry(constructor);
+    contextDocument->addToActiveCustomElementConstructorMap(constructor, registry);
+    RefPtr element = constructCustomElementSynchronously(document, vm, *lexicalGlobalObject, constructor, localName, parserConstructElementWithEmptyStack);
+    if (previousRegistry)
+        contextDocument->addToActiveCustomElementConstructorMap(constructor, *previousRegistry);
+    else
+        contextDocument->removeFromActiveCustomElementConstructorMap(constructor);
     EXCEPTION_ASSERT(!!scope.exception() == !element);
     if (!element) {
         auto* exception = scope.exception();
@@ -163,7 +168,7 @@ static RefPtr<Element> constructCustomElementSynchronously(Document& document, V
     RETURN_IF_EXCEPTION(scope, nullptr);
 
     if (parserConstructElementWithEmptyStack == ParserConstructElementWithEmptyStack::Yes)
-        document.eventLoop().performMicrotaskCheckpoint(vm);
+        protect(document.eventLoop())->performMicrotaskCheckpoint(vm);
 
     ASSERT(!newElement.isEmpty());
     RefPtr wrappedElement = JSHTMLElement::toWrapped(vm, newElement);
@@ -223,7 +228,7 @@ void JSCustomElementInterface::upgradeElement(Element& element)
     CheckedPtr context = scriptExecutionContext();
     if (!context)
         return;
-    auto* globalObject = toJSDOMWindow(downcast<Document>(*context).frame(), m_isolatedWorld);
+    auto* globalObject = toJSDOMWindow(protect(downcast<Document>(*context).frame()), m_isolatedWorld);
     if (!globalObject)
         return;
     JSGlobalObject* lexicalGlobalObject = globalObject;
@@ -254,16 +259,20 @@ void JSCustomElementInterface::upgradeElement(Element& element)
     if (m_isFormAssociated)
         downcast<HTMLMaybeFormAssociatedCustomElement>(element).willUpgradeFormAssociated();
 
-    auto* oldRegistry = document->activeCustomElementRegistry();
-    document->setActiveCustomElementRegistry(registry.get());
+    auto* constructor = m_constructor.get();
+    RefPtr previousRegistry = document->activeCustomElementConstructorRegistry(constructor);
+    document->addToActiveCustomElementConstructorMap(constructor, *registry);
 
     MarkedArgumentBuffer args;
     ASSERT(!args.hasOverflowed());
     JSExecState::instrumentFunction(context.get(), constructData);
-    JSValue returnedElement = construct(lexicalGlobalObject, m_constructor.get(), constructData, args);
+    JSValue returnedElement = construct(lexicalGlobalObject, constructor, constructData, args);
     InspectorInstrumentation::didCallFunction(context.get());
 
-    document->setActiveCustomElementRegistry(oldRegistry);
+    if (previousRegistry)
+        document->addToActiveCustomElementConstructorMap(constructor, *previousRegistry);
+    else
+        document->removeFromActiveCustomElementConstructorMap(constructor);
 
     m_constructionStack.removeLast();
 
@@ -301,7 +310,7 @@ void JSCustomElementInterface::invokeCallback(Element& element, JSObject* callba
     VM& vm = m_isolatedWorld->vm();
     JSLockHolder lock(vm);
 
-    auto* globalObject = toJSDOMWindow(downcast<Document>(*context).frame(), m_isolatedWorld);
+    auto* globalObject = toJSDOMWindow(protect(downcast<Document>(*context).frame()), m_isolatedWorld);
     if (!globalObject)
         return;
     JSGlobalObject* lexicalGlobalObject = globalObject;
@@ -466,6 +475,7 @@ void JSCustomElementInterface::visitJSFunctionsInGCThread(Visitor& visitor) cons
     visitor.append(m_constructor);
     visitor.append(m_connectedCallback);
     visitor.append(m_disconnectedCallback);
+    visitor.append(m_connectedMoveCallback);
     visitor.append(m_adoptedCallback);
     visitor.append(m_attributeChangedCallback);
     visitor.append(m_formAssociatedCallback);

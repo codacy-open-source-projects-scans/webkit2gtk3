@@ -29,6 +29,7 @@
 #include "MessageSender.h"
 #include "SharedPreferencesForWebProcess.h"
 #include "WebPageProxyIdentifier.h"
+#include <WebCore/CrossOriginEmbedderPolicyValue.h>
 #include <WebCore/SharedWorkerIdentifier.h>
 #include <WebCore/SharedWorkerObjectIdentifier.h>
 #include <WebCore/Site.h>
@@ -59,17 +60,19 @@ struct SharedPreferencesForWebProcess;
 class WebSharedWorkerServerToContextConnection final : public IPC::MessageSender, public IPC::MessageReceiver, public RefCounted<WebSharedWorkerServerToContextConnection> {
     WTF_MAKE_TZONE_ALLOCATED(WebSharedWorkerServerToContextConnection);
 public:
-    static Ref<WebSharedWorkerServerToContextConnection> create(NetworkConnectionToWebProcess&, const WebCore::Site&, WebSharedWorkerServer&);
+    static Ref<WebSharedWorkerServerToContextConnection> create(NetworkConnectionToWebProcess&, const WebCore::Site&, WebSharedWorkerServer&, WebCore::CrossOriginEmbedderPolicyValue);
 
     ~WebSharedWorkerServerToContextConnection();
 
     void ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }
 
-    std::optional<WebCore::ProcessIdentifier> NODELETE webProcessIdentifier() const;
+    std::optional<WebCore::ProcessIdentifier> LEGACY_NODELETE webProcessIdentifier() const;
     const WebCore::RegistrableDomain& registrableDomain() const LIFETIME_BOUND { return m_site.domain(); }
     const WebCore::Site& site() const LIFETIME_BOUND { return m_site; }
-    IPC::Connection* NODELETE ipcConnection() const;
+    IPC::Connection* LEGACY_NODELETE ipcConnection() const;
+
+    WebCore::CrossOriginEmbedderPolicyValue crossOriginEmbedderPolicyValue() const { return m_crossOriginEmbedderPolicyValue; }
 
     void terminateWhenPossible() { m_shouldTerminateWhenPossible = true; }
 
@@ -87,10 +90,10 @@ public:
     void addSharedWorkerObject(WebCore::SharedWorkerObjectIdentifier);
     void removeSharedWorkerObject(WebCore::SharedWorkerObjectIdentifier);
 
-    std::optional<SharedPreferencesForWebProcess> NODELETE sharedPreferencesForWebProcess() const;
+    std::optional<SharedPreferencesForWebProcess> LEGACY_NODELETE sharedPreferencesForWebProcess() const;
 
 private:
-    WebSharedWorkerServerToContextConnection(NetworkConnectionToWebProcess&, const WebCore::Site&, WebSharedWorkerServer&);
+    WebSharedWorkerServerToContextConnection(NetworkConnectionToWebProcess&, const WebCore::Site&, WebSharedWorkerServer&, WebCore::CrossOriginEmbedderPolicyValue);
 
     void idleTerminationTimerFired();
     void connectionIsNoLongerNeeded();
@@ -109,6 +112,7 @@ private:
     HashMap<WebCore::ProcessIdentifier, HashSet<WebCore::SharedWorkerObjectIdentifier>> m_sharedWorkerObjects;
     WebCore::Timer m_idleTerminationTimer;
     bool m_shouldTerminateWhenPossible { false };
+    WebCore::CrossOriginEmbedderPolicyValue m_crossOriginEmbedderPolicyValue { WebCore::CrossOriginEmbedderPolicyValue::UnsafeNone };
 };
 
 } // namespace WebKit

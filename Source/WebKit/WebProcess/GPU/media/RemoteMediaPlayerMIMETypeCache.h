@@ -33,6 +33,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/StringHash.h>
 
@@ -53,7 +54,7 @@ public:
     HashSet<String>& supportedTypes();
     WebCore::MediaPlayerEnums::SupportsType supportsTypeAndCodecs(const WebCore::MediaEngineSupportParameters&);
     void addSupportedTypes(const Vector<String>&);
-    bool NODELETE isEmpty() const;
+    bool LEGACY_NODELETE isEmpty() const;
 
 private:
     Ref<RemoteMediaPlayerManager> manager() const;

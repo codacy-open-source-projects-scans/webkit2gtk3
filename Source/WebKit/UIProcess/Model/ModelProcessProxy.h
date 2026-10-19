@@ -42,6 +42,12 @@
 #include "LayerHostingContext.h"
 #endif
 
+#if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)
+#include "LogStream.h"
+#include "LogStreamIdentifier.h"
+#include "ScopedActiveMessageReceiveQueue.h"
+#endif
+
 #if PLATFORM(VISION) && ENABLE(GPU_PROCESS)
 namespace IPC {
 class SharedFileHandle;
@@ -54,6 +60,7 @@ class WebProcessProxy;
 class WebsiteDataStore;
 struct ModelProcessConnectionParameters;
 struct ModelProcessCreationParameters;
+struct SecurityFlags;
 struct SharedPreferencesForWebProcess;
 
 class ModelProcessProxy final : public AuxiliaryProcessProxy {
@@ -68,6 +75,7 @@ public:
 
     void createModelProcessConnection(WebProcessProxy&, IPC::Connection::Handle&& connectionIdentifier, ModelProcessConnectionParameters&&);
     void sharedPreferencesForWebProcessDidChange(WebProcessProxy&, SharedPreferencesForWebProcess&&, CompletionHandler<void()>&&);
+    void securityFlagsDidChange(const SecurityFlags&);
 
     void updateProcessAssertion();
 
@@ -80,7 +88,7 @@ public:
 private:
     explicit ModelProcessProxy();
 
-    void terminateWebProcess(WebCore::ProcessIdentifier);
+    void terminateWebProcess(WebCore::ProcessIdentifier, IPC::MessageName);
 
     Type type() const final { return Type::Model; }
 
@@ -96,12 +104,14 @@ private:
     void modelProcessExited(ProcessTerminationReason);
 
     // ProcessThrottlerClient
-    ASCIILiteral clientName() const final { return "ModelProcess"_s; }
     void sendPrepareToSuspend(IsSuspensionImminent, double remainingRunTime, CompletionHandler<void()>&&) final;
     void sendProcessDidResume(ResumeReason) final;
 
     // ProcessLauncher::Client
     void didFinishLaunching(ProcessLauncher*, IPC::Connection::Identifier&&) override;
+#if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)
+    RefPtr<XPCEventHandler> xpcEventHandler() const final;
+#endif
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
@@ -134,6 +144,7 @@ private:
 #if PLATFORM(VISION) && ENABLE(GPU_PROCESS)
     bool m_didInitializeSharedSimulationConnection { false };
 #endif
+
 };
 
 } // namespace WebKit

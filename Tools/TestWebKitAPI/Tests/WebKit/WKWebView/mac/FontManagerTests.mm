@@ -242,7 +242,7 @@ TEST(FontManagerTests, ChangeFontWithPanel)
     [fontManager modifyFontViaPanel:fontPanel];
     EXPECT_WK_STREQ("bar", [webView selectedText]);
     EXPECT_WK_STREQ("<span id=\"bar\" style=\"font-size: 10px;\"><font face=\"Times New Roman\" size=\"1\"><b>bar</b></font></span>", [webView stringByEvaluatingJavaScript:@"bar.outerHTML"]);
-    EXPECT_WK_STREQ("\"Times New Roman\"", [webView stringByEvaluatingJavaScript:@"getComputedStyle(bar.firstChild.firstChild)['font-family']"]);
+    EXPECT_WK_STREQ("Times New Roman", [webView stringByEvaluatingJavaScript:@"getComputedStyle(bar.firstChild.firstChild)['font-family']"]);
     EXPECT_WK_STREQ("10px", [webView stringByEvaluatingJavaScript:@"getComputedStyle(bar.firstChild.firstChild)['font-size']"]);
     EXPECT_WK_STREQ("700", [webView stringByEvaluatingJavaScript:@"getComputedStyle(bar.firstChild.firstChild)['font-weight']"]);
     expectSameAttributes(smallBoldTimesFont, fontManager.selectedFont);
@@ -623,7 +623,7 @@ TEST(FontManagerTests, SelectionSpanningTwoFontsDoesReportMultipleFonts)
     EXPECT_TRUE([fontManager isMultiple]);
 }
 
-TEST(FontManagerTests, SelectionSpanningBRDoesReportMultipleFonts)
+TEST(FontManagerTests, SelectionSpanningBRDoesNotReportMultipleFonts)
 {
     NSFontManager *fontManager = NSFontManager.sharedFontManager;
 
@@ -633,7 +633,20 @@ TEST(FontManagerTests, SelectionSpanningBRDoesReportMultipleFonts)
     [webView waitForNextPresentationUpdate];
 
     EXPECT_WK_STREQ([[fontManager selectedFont] fontName], "Helvetica");
-    EXPECT_TRUE([fontManager isMultiple]);
+    EXPECT_FALSE([fontManager isMultiple]);
+}
+
+TEST(FontManagerTests, SelectionContainingOnlyBRStillReportsAFont)
+{
+    RetainPtr fontManager = [NSFontManager sharedFontManager];
+
+    RetainPtr webView = webViewForFontManagerTesting(fontManager, @"<body contenteditable><div id=empty style='font-family: Helvetica'><br></div></body>");
+    [webView stringByEvaluatingJavaScript:@"getSelection().selectAllChildren(empty)"];
+    [webView waitForNextPresentationUpdate];
+    [webView waitForNextPresentationUpdate];
+
+    EXPECT_WK_STREQ([[fontManager selectedFont] fontName], "Helvetica");
+    EXPECT_FALSE([fontManager isMultiple]);
 }
 
 } // namespace TestWebKitAPI

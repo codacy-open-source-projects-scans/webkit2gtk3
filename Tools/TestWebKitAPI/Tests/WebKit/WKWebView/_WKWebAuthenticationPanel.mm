@@ -357,7 +357,7 @@ static void checkFrameInfo(WKFrameInfo *frame, bool isMainFrame, NSString *url, 
 
 #if USE(APPLE_INTERNAL_SDK) || PLATFORM(IOS) || PLATFORM(VISION)
 
-bool addKeyToKeychain(const String& privateKeyBase64, const String& rpId, const String& userHandleBase64, bool synchronizable = false)
+bool addKeyToKeychain(const String& privateKeyBase64, const String& rpId, const String& userHandleBase64, bool synchronizable = false, const String& credentialIdBase64 = "SMSXHngF7hEOsElA73C3RY+8bR4="_s)
 {
     NSDictionary* options = @{
         (id)kSecAttrKeyType: (id)kSecAttrKeyTypeECSECPrimeRandom,
@@ -379,7 +379,7 @@ bool addKeyToKeychain(const String& privateKeyBase64, const String& rpId, const 
     if (keyError)
         return false;
 
-    RetainPtr credentialID = adoptNS([[NSData alloc] initWithBase64EncodedString:@"SMSXHngF7hEOsElA73C3RY+8bR4=" options:0]);
+    RetainPtr credentialID = adoptNS([[NSData alloc] initWithBase64EncodedString:credentialIdBase64.createNSString().get() options:0]);
     RetainPtr addQuery = adoptNS([[NSMutableDictionary alloc] init]);
     [addQuery setDictionary:@{
         (id)kSecValueRef: (id)key.get(),
@@ -454,12 +454,7 @@ TEST(WebAuthenticationPanel, NfcHardwareBusyRetry)
 }
 #endif
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_NoPanelHidSuccess)
-#else
 TEST(WebAuthenticationPanel, NoPanelHidSuccess)
-#endif
 {
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid" withExtension:@"html"];
 
@@ -470,12 +465,7 @@ TEST(WebAuthenticationPanel, NoPanelHidSuccess)
     [webView waitForMessage:@"Succeeded!"];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_PanelHidSuccess1)
-#else
 TEST(WebAuthenticationPanel, PanelHidSuccess1)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid" withExtension:@"html"];
@@ -494,12 +484,7 @@ TEST(WebAuthenticationPanel, PanelHidSuccess1)
     checkPanel([delegate panel], @"", @[adoptNS([[NSNumber alloc] initWithInt:_WKWebAuthenticationTransportUSB]).get()], _WKWebAuthenticationTypeGet);
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_PanelHidSuccess2)
-#else
 TEST(WebAuthenticationPanel, PanelHidSuccess2)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-make-credential-hid" withExtension:@"html"];
@@ -565,12 +550,7 @@ TEST(WebAuthenticationPanel, PanelRacy2)
 }
 #endif // HAVE(NEAR_FIELD)
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_PanelTwice)
-#else
 TEST(WebAuthenticationPanel, PanelTwice)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid" withExtension:@"html"];
@@ -578,10 +558,14 @@ TEST(WebAuthenticationPanel, PanelTwice)
     auto webView = setUpTestWebViewForTestAuthenticationPanel();
     RetainPtr delegate = adoptNS([[TestWebAuthenticationPanelUIDelegate alloc] init]);
     [webView setUIDelegate:delegate.get()];
+#if PLATFORM(IOS_FAMILY)
+    [webView focusInWindow];
+#endif
     [webView focus];
 
     [webView loadRequest:[NSURLRequest requestWithURL:testURL.get()]];
     Util::run(&webAuthenticationPanelRan);
+    [webView waitForMessage:@"Succeeded!"];
     Util::run(&webAuthenticationPanelSucceded);
 
     reset();
@@ -758,12 +742,7 @@ TEST(WebAuthenticationPanel, PanelHidCancel)
     EXPECT_TRUE(webAuthenticationPanelFailed);
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_PanelHidCtapNoCredentialsFound)
-#else
 TEST(WebAuthenticationPanel, PanelHidCtapNoCredentialsFound)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-no-credentials" withExtension:@"html"];
@@ -793,12 +772,7 @@ TEST(WebAuthenticationPanel, PanelU2fCtapNoCredentialsFound)
     Util::run(&webAuthenticationPanelUpdateNoCredentialsFound);
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_FakePanelHidSuccess)
-#else
 TEST(WebAuthenticationPanel, FakePanelHidSuccess)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid" withExtension:@"html"];
@@ -830,12 +804,7 @@ TEST(WebAuthenticationPanel, FakePanelHidCtapNoCredentialsFound)
     [webView waitForMessage:@"Operation timed out."];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_NullPanelHidSuccess)
-#else
 TEST(WebAuthenticationPanel, NullPanelHidSuccess)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid" withExtension:@"html"];
@@ -901,12 +870,7 @@ TEST(WebAuthenticationPanel, PanelHidCancelReloadNoCrash)
     [webView waitForMessage:@"Operation timed out."];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_PanelHidSuccessCancelNoCrash)
-#else
 TEST(WebAuthenticationPanel, PanelHidSuccessCancelNoCrash)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid" withExtension:@"html"];
@@ -921,12 +885,7 @@ TEST(WebAuthenticationPanel, PanelHidSuccessCancelNoCrash)
     [webView waitForMessage:@"Succeeded!"];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_PanelHidCtapNoCredentialsFoundCancelNoCrash)
-#else
 TEST(WebAuthenticationPanel, PanelHidCtapNoCredentialsFoundCancelNoCrash)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-no-credentials" withExtension:@"html"];
@@ -1133,12 +1092,7 @@ TEST(WebAuthenticationPanel, MakeCredentialPinInvalidErrorAndRetry)
     EXPECT_TRUE(webAuthenticationPanelUpdatePINInvalid);
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_GetAssertionPin)
-#else
 TEST(WebAuthenticationPanel, GetAssertionPin)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-pin" withExtension:@"html"];
@@ -1153,12 +1107,7 @@ TEST(WebAuthenticationPanel, GetAssertionPin)
     [webView waitForMessage:@"Succeeded!"];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_GetAssertionInternalUV)
-#else
 TEST(WebAuthenticationPanel, GetAssertionInternalUV)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-internal-uv" withExtension:@"html"];
@@ -1172,12 +1121,7 @@ TEST(WebAuthenticationPanel, GetAssertionInternalUV)
     [webView waitForMessage:@"Succeeded!"];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_GetAssertionInternalUVPinFallback)
-#else
 TEST(WebAuthenticationPanel, GetAssertionInternalUVPinFallback)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-internal-uv-pin-fallback" withExtension:@"html"];
@@ -1192,12 +1136,7 @@ TEST(WebAuthenticationPanel, GetAssertionInternalUVPinFallback)
     [webView waitForMessage:@"Succeeded!"];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_GetAssertionPinAuthBlockedError)
-#else
 TEST(WebAuthenticationPanel, GetAssertionPinAuthBlockedError)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-pin-auth-blocked-error" withExtension:@"html"];
@@ -1213,12 +1152,7 @@ TEST(WebAuthenticationPanel, GetAssertionPinAuthBlockedError)
     EXPECT_FALSE(webAuthenticationPanelUpdatePINInvalid);
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_GetAssertionPinInvalidErrorAndRetry)
-#else
 TEST(WebAuthenticationPanel, GetAssertionPinInvalidErrorAndRetry)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-pin-invalid-error-retry" withExtension:@"html"];
@@ -1267,12 +1201,7 @@ TEST(WebAuthenticationPanel, MultipleAccountsNullDelegate)
     [webView waitForMessage:@"Operation timed out."];
 }
 
-// FIXME rdar://145102423
-#if PLATFORM(IOS) && !defined(NDEBUG)
-TEST(WebAuthenticationPanel, DISABLED_MultipleAccounts)
-#else
 TEST(WebAuthenticationPanel, MultipleAccounts)
-#endif
 {
     reset();
     RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-hid-multiple-accounts" withExtension:@"html"];
@@ -1377,7 +1306,7 @@ TEST(WebAuthenticationPanel, LAMakeCredentialAllowLocalAuthenticator)
 
     localAuthenticatorPolicy = _WKLocalAuthenticatorPolicyAllow;
     [webView loadRequest:[NSURLRequest requestWithURL:testURL.get()]];
-    [webView waitForMessage:@"Succeeded!"];
+    [webView waitForMessages:@[@"Succeeded!"]];
     checkPanel([delegate panel], @"", @[adoptNS([[NSNumber alloc] initWithInt:_WKWebAuthenticationTransportUSB]).get(), adoptNS([[NSNumber alloc] initWithInt:_WKWebAuthenticationTransportInternal]).get()], _WKWebAuthenticationTypeCreate);
     cleanUpKeychain();
 }
@@ -1470,7 +1399,7 @@ TEST(WebAuthenticationPanel, LAGetAssertionMultipleOrder)
     [webView focus];
 
     ASSERT_TRUE(addKeyToKeychain(testES256PrivateKeyBase64, emptyString(), testUserEntityBundleBase64));
-    ASSERT_TRUE(addKeyToKeychain(testES256PrivateKeyBase64Alternate, emptyString(), "omJpZEoAAQIDBAUGBwgJZG5hbWVkSmFuZQ=="_s/* { "id": h'00010203040506070809', "name": "Jane" } */));
+    ASSERT_TRUE(addKeyToKeychain(testES256PrivateKeyBase64Alternate, emptyString(), "omJpZEoAAQIDBAUGBwgJZG5hbWVkSmFuZQ=="_s/* { "id": h'00010203040506070809', "name": "Jane" } */, false, "AAECAwQFBgcICQoLDA0ODxAREhM="_s));
 
     [webView loadRequest:[NSURLRequest requestWithURL:testURL.get()]];
     [webView waitForMessage:@"Succeeded!"];
@@ -1489,7 +1418,7 @@ TEST(WebAuthenticationPanel, LAGetAssertionMultipleOrder)
 
 TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMinimum)
 {
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
 
@@ -1522,7 +1451,7 @@ TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMinimum)
 
 TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMaximumDefault)
 {
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr parameters1 = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
     RetainPtr parameters2 = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
@@ -1573,7 +1502,7 @@ TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMaximumDefault)
 
 TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMaximum1)
 {
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr parameters1 = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
     RetainPtr parameters2 = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
@@ -1643,7 +1572,7 @@ TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMaximum1)
 
 TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMaximum2)
 {
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr parameters1 = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
     RetainPtr parameters2 = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
@@ -1718,7 +1647,7 @@ TEST(WebAuthenticationPanel, MakeCredentialSPITimeout)
 {
     reset();
 
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsIdentifier = toNSData(identifier);
     NSData *nsHash = [NSData dataWithBytes:hash length:sizeof(hash)];
@@ -1748,7 +1677,7 @@ TEST(WebAuthenticationPanel, MakeCredentialLA)
 {
     reset();
 
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
@@ -1785,7 +1714,7 @@ TEST(WebAuthenticationPanel, MakeCredentialLAClientDataHashMediation)
 {
     reset();
 
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
@@ -1822,7 +1751,7 @@ TEST(WebAuthenticationPanel, MakeCredentialLAAttestationFalback)
 {
     reset();
 
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
@@ -1866,7 +1795,7 @@ TEST(WebAuthenticationPanel, PublicKeyCredentialRequestOptionsMinimun)
 
 TEST(WebAuthenticationPanel, PublicKeyCredentialRequestOptionsMaximumDefault)
 {
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr descriptor = adoptNS([[_WKPublicKeyCredentialDescriptor alloc] initWithIdentifier:nsIdentifier.get()]);
     RetainPtr extensions = adoptNS([[_WKAuthenticationExtensionsClientInputs alloc] init]);
@@ -1890,7 +1819,7 @@ TEST(WebAuthenticationPanel, PublicKeyCredentialRequestOptionsMaximumDefault)
 
 TEST(WebAuthenticationPanel, PublicKeyCredentialRequestOptionsMaximum)
 {
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
 
     RetainPtr options = adoptNS([[_WKPublicKeyCredentialRequestOptions alloc] init]);
@@ -2260,7 +2189,7 @@ TEST(WebAuthenticationPanel, EncodeCTAPCreation)
 {
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
 
@@ -2281,7 +2210,7 @@ TEST(WebAuthenticationPanel, EncodeCTAPCreationTrimmedParametersGetInfoNoneES256
 {
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr es256Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
     RetainPtr rs256Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
@@ -2306,7 +2235,7 @@ TEST(WebAuthenticationPanel, EncodeCTAPCreationTrimmedParametersGetInfoNoneRS256
 {
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr rs256Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
     RetainPtr ec2Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@2]);
@@ -2330,7 +2259,7 @@ TEST(WebAuthenticationPanel, EncodeCTAPCreationTrimmedParametersGetInfoSupportsE
 {
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr es256Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-7]);
     RetainPtr rs256Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
@@ -2355,7 +2284,7 @@ TEST(WebAuthenticationPanel, EncodeCTAPCreationTrimmedParametersGetInfoSupportsD
 {
     uint8_t hash[] = { 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04 };
     RetainPtr nsHash = adoptNS([[NSData alloc] initWithBytes:hash length:sizeof(hash)]);
-    auto identifier = std::to_array<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
+    auto identifier = WTF::toArray<uint8_t>({ 0x01, 0x02, 0x03, 0x04 });
     RetainPtr nsIdentifier = toNSData(identifier);
     RetainPtr rs256Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@-257]);
     RetainPtr ec2Parameters = adoptNS([[_WKPublicKeyCredentialParameters alloc] initWithAlgorithm:@2]);

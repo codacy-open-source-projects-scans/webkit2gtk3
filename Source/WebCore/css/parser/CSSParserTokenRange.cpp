@@ -36,7 +36,7 @@
 
 namespace WebCore {
 
-CSSParserToken& CSSParserTokenRange::eofToken()
+SUPPRESS_NODELETE CSSParserToken& CSSParserTokenRange::eofToken()
 {
     static NeverDestroyed<CSSParserToken> eofToken(EOFToken);
     return eofToken.get();
@@ -105,7 +105,7 @@ void CSSParserTokenRange::trimTrailingWhitespace()
 const CSSParserToken& CSSParserTokenRange::consumeLast() LIFETIME_BOUND
 {
     if (atEnd())
-        eofToken();
+        return eofToken();
     return WTF::consumeLast(m_tokens);
 }
 

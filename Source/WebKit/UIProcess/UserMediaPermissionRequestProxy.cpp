@@ -23,6 +23,7 @@
 #include "APIUIClient.h"
 #include "MediaPermissionUtilities.h"
 #include "UserMediaPermissionRequestManagerProxy.h"
+#include "WebPageProxy.h"
 #include <WebCore/CaptureDeviceManager.h>
 #include <WebCore/RealtimeMediaSourceCenter.h>
 #include <WebCore/SecurityOrigin.h>
@@ -62,6 +63,15 @@ UserMediaPermissionRequestProxy::~UserMediaPermissionRequestProxy()
 UserMediaPermissionRequestManagerProxy* UserMediaPermissionRequestProxy::manager() const
 {
     return m_manager.get();
+}
+
+bool UserMediaPermissionRequestProxy::willUseEchoCancellation() const
+{
+#if ENABLE(MEDIA_STREAM)
+    return requiresAudioCapture() && m_request.audioConstraints.willUseEchoCancellation();
+#else
+    return false;
+#endif
 }
 
 #if ENABLE(MEDIA_STREAM)

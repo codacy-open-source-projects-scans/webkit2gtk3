@@ -61,13 +61,15 @@ using namespace WebCore;
 #define RTC_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - NetworkRTCProvider::" fmt, this, ##__VA_ARGS__)
 #define RTC_RELEASE_LOG_ERROR(fmt, ...) RELEASE_LOG_ERROR(Network, "%p - NetworkRTCProvider::" fmt, this, ##__VA_ARGS__)
 
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
+
 NetworkRTCProvider::NetworkRTCProvider(NetworkConnectionToWebProcess& connection)
     : m_connection(&connection)
     , m_ipcConnection(connection.connection())
     , m_rtcMonitor(*this)
     , m_sharedPreferences(connection.sharedPreferencesForWebProcessValue())
 #if PLATFORM(COCOA)
-    , m_sourceApplicationAuditToken(connection.networkProcess().sourceApplicationAuditToken())
+    , m_sourceApplicationAuditToken(NetworkProcess::singleton().sourceApplicationAuditToken())
     , m_rtcNetworkThreadQueue(WorkQueue::create("NetworkRTCProvider Queue"_s, WorkQueue::QOS::UserInitiated))
 #else
     , m_packetSocketFactory(makeUniqueRefWithoutFastMallocCheck<webrtc::BasicPacketSocketFactory>(rtcNetworkThread().socketserver()))
@@ -113,13 +115,32 @@ void NetworkRTCProvider::close()
     });
 }
 
+static constexpr size_t maximumHostnameLength = 255;
+
+static bool isInvalidRTCAddress(const webrtc::SocketAddress& address)
+{
+    auto& hostname = address.hostname();
+    if (address.ipaddr().IsNil() && hostname.empty())
+        return true;
+    if (hostname.length() > maximumHostnameLength)
+        return true;
+    // Hostnames are handed to platform APIs as null-terminated strings, so an embedded null byte would
+    // silently truncate the hostname, possibly down to the empty string.
+    return hostname.find('\0') != std::string::npos;
+}
+
 void NetworkRTCProvider::sendToSocket(LibWebRTCSocketIdentifier identifier, std::span<const uint8_t> data, RTCNetwork::SocketAddress&& address, RTCPacketOptions&& options)
 {
     assertIsRTCNetworkThread();
     auto iterator = m_sockets.find(identifier);
     if (iterator == m_sockets.end())
         return;
-    iterator->second->sendTo(data, address.rtcAddress(), options.options);
+    auto rtcAddress = address.rtcAddress();
+    if (isInvalidRTCAddress(rtcAddress)) {
+        RELEASE_LOG_ERROR(WebRTC, "NetworkRTCProvider::sendToSocket invalid address");
+        return;
+    }
+    iterator->second->sendTo(data, rtcAddress, options.options);
 }
 
 void NetworkRTCProvider::closeSocket(LibWebRTCSocketIdentifier identifier)
@@ -175,6 +196,8 @@ void NetworkRTCProvider::dispatch(Function<void()>&& callback)
 
 void NetworkRTCProvider::createResolver(LibWebRTCResolverIdentifier identifier, String&& address)
 {
+    MESSAGE_CHECK(!address.isNull());
+
     if (!isMainRunLoop()) {
         callOnMainRunLoop([this, protectedThis = Ref { *this }, identifier, address = WTF::move(address).isolatedCopy()]() mutable {
             if (!m_connection)
@@ -210,11 +233,9 @@ void NetworkRTCProvider::createResolver(LibWebRTCResolverIdentifier identifier, 
 
         auto ipAddresses = WTF::compactMap(result.value(), [](auto& address) -> std::optional<RTCNetwork::IPAddress> {
             if (address.isIPv4())
-                // FIXME: Remove SUPPRESS_MEMORY_UNSAFE_CAST once rdar://144236356 is fixed.
-                SUPPRESS_MEMORY_UNSAFE_CAST return RTCNetwork::IPAddress { webrtc::IPAddress { address.ipv4Address() } };
+                return RTCNetwork::IPAddress { webrtc::IPAddress { address.ipv4Address() } };
             if (address.isIPv6())
-                // FIXME: Remove SUPPRESS_MEMORY_UNSAFE_CAST once rdar://144236356 is fixed.
-                SUPPRESS_MEMORY_UNSAFE_CAST return RTCNetwork::IPAddress { webrtc::IPAddress { address.ipv6Address() } };
+                return RTCNetwork::IPAddress { webrtc::IPAddress { address.ipv6Address() } };
             return std::nullopt;
         });
 
@@ -266,7 +287,14 @@ void NetworkRTCProvider::createUDPSocket(LibWebRTCSocketIdentifier identifier, c
         return;
     }
 
-    auto socket = makeUnique<NetworkRTCUDPSocketCocoa>(identifier, *this, address.rtcAddress(), m_ipcConnection.copyRef(), String(attributedBundleIdentifierFromPageIdentifier(pageIdentifier)), flags, WTF::move(domain));
+    auto rtcAddress = address.rtcAddress();
+    if (isInvalidRTCAddress(rtcAddress)) {
+        RELEASE_LOG_ERROR(WebRTC, "NetworkRTCProvider::createUDPSocket invalid local address");
+        signalSocketIsClosed(identifier);
+        return;
+    }
+
+    auto socket = makeUnique<NetworkRTCUDPSocketCocoa>(identifier, *this, rtcAddress, m_ipcConnection.copyRef(), String(attributedBundleIdentifierFromPageIdentifier(pageIdentifier)), flags, WTF::move(domain));
     addSocket(identifier, WTF::move(socket));
 }
 
@@ -279,7 +307,14 @@ void NetworkRTCProvider::createClientTCPSocket(LibWebRTCSocketIdentifier identif
         return;
     }
 
-    auto socket = NetworkRTCTCPSocketCocoa::createClientTCPSocket(identifier, *this, remoteAddress.rtcAddress(), options, attributedBundleIdentifierFromPageIdentifier(pageIdentifier), flags, domain, m_ipcConnection.copyRef());
+    auto rtcRemoteAddress = remoteAddress.rtcAddress();
+    if (isInvalidRTCAddress(rtcRemoteAddress)) {
+        RELEASE_LOG_ERROR(WebRTC, "NetworkRTCProvider::createClientTCPSocket invalid remote address");
+        signalSocketIsClosed(identifier);
+        return;
+    }
+
+    auto socket = NetworkRTCTCPSocketCocoa::createClientTCPSocket(identifier, *this, rtcRemoteAddress, options, attributedBundleIdentifierFromPageIdentifier(pageIdentifier), flags, domain, m_ipcConnection.copyRef());
     if (socket)
         addSocket(identifier, WTF::move(socket));
     else
@@ -403,6 +438,7 @@ void NetworkRTCProvider::updateSharedPreferencesForWebProcess(const SharedPrefer
 
 #undef RTC_RELEASE_LOG
 #undef RTC_RELEASE_LOG_ERROR
+#undef MESSAGE_CHECK
 
 } // namespace WebKit
 

@@ -48,20 +48,20 @@ struct FontFamilyName {
 
 // MARK: - Conversion
 
-template<> struct ToCSS<FontFamilyName> { auto operator()(const FontFamilyName&, const RenderStyle&) -> CSS::FontFamilyName; };
-template<> struct ToStyle<CSS::FontFamilyName> { auto operator()(const CSS::FontFamilyName&, const BuilderState&) -> FontFamilyName; };
+template<> struct ToCSS<FontFamilyName> { CSS::FontFamilyName LEGACY_NODELETE operator()(const FontFamilyName&, const Style::ComputedStyle&); };
+template<> struct ToStyle<CSS::FontFamilyName> { FontFamilyName LEGACY_NODELETE operator()(const CSS::FontFamilyName&, const BuilderState&); };
 
 template<> struct CSSValueCreation<FontFamilyName> {
-    auto operator()(CSSValuePool&, const RenderStyle&, const FontFamilyName&) -> Ref<CSSValue>;
+    auto operator()(CSSValuePool&, const Style::ComputedStyle&, const FontFamilyName&) -> Ref<CSSValue>;
 };
 template<> struct CSSValueConversion<FontFamilyName> {
-    auto operator()(BuilderState&, const CSSFontFamilyNameValue&) -> FontFamilyName;
+    FontFamilyName LEGACY_NODELETE operator()(BuilderState&, const CSSFontFamilyNameValue&);
     auto operator()(BuilderState&, const CSSValue&) -> FontFamilyName;
 };
 
 // MARK: - Serialization
 
-template<> struct Serialize<FontFamilyName> { void operator()(StringBuilder&, const CSS::SerializationContext&, const RenderStyle&, const FontFamilyName&); };
+template<> struct Serialize<FontFamilyName> { void operator()(StringBuilder&, const CSS::SerializationContext&, const Style::ComputedStyle&, const FontFamilyName&); };
 
 // MARK: - Logging
 

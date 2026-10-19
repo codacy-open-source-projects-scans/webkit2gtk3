@@ -61,15 +61,15 @@ AudioTrackPrivateGStreamer::AudioTrackPrivateGStreamer(ThreadSafeWeakPtr<MediaPl
     ensureDebugCategoryInitialized();
 }
 
-AudioTrackPrivateGStreamer::AudioTrackPrivateGStreamer(ThreadSafeWeakPtr<MediaPlayerPrivateGStreamer>&& player, unsigned index, GstStream* stream)
-    : TrackPrivateBaseGStreamer(WTF::move(player), GStreamerTrackType::Audio, this, index, stream)
+AudioTrackPrivateGStreamer::AudioTrackPrivateGStreamer(ThreadSafeWeakPtr<MediaPlayerPrivateGStreamer>&& player, unsigned index, GRefPtr<GstStream>&& stream)
+    : TrackPrivateBaseGStreamer(WTF::move(player), GStreamerTrackType::Audio, this, index, WTF::move(stream))
 {
     ensureDebugCategoryInitialized();
 
-    auto caps = adoptGRef(gst_stream_get_caps(m_data->m_stream.get()));
+    GRefPtr caps = adoptGRef(gst_stream_get_caps(m_data->m_stream.get()));
     updateConfigurationFromCaps(WTF::move(caps));
 
-    auto tags = adoptGRef(gst_stream_get_tags(m_data->m_stream.get()));
+    GRefPtr tags = adoptGRef(gst_stream_get_tags(m_data->m_stream.get()));
     updateConfigurationFromTags(WTF::move(tags));
 }
 
@@ -128,11 +128,9 @@ void AudioTrackPrivateGStreamer::updateConfigurationFromCaps(GRefPtr<GstCaps>&& 
         setConfiguration(WTF::move(configuration));
     });
 
-#if GST_CHECK_VERSION(1, 20, 0)
     auto mimeCodec = GMallocString::unsafeAdoptFromUTF8(gst_codec_utils_caps_get_mime_codec(caps.get()));
     if (mimeCodec)
         configuration.codec = mimeCodec.span();
-#endif
 
     if (areEncryptedCaps(caps.get())) {
         const auto* structure = gst_caps_get_structure(caps.get(), 0);

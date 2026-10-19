@@ -78,7 +78,7 @@ TransferString::TransferString(CFStringRef string)
 
 std::optional<TransferString> TransferString::createCopy(std::span<const Latin1Character> span8)
 {
-    auto handle = WebCore::SharedMemoryHandle::createCopy(span8, WebCore::SharedMemoryProtection::ReadOnly);
+    auto handle = WebCore::SharedMemoryHandle::createCopy(byteCast<uint8_t>(span8), WebCore::SharedMemoryProtection::ReadOnly);
     if (!handle)
         return std::nullopt;
     return std::optional<TransferString> { std::in_place, SharedSpan8 { WTF::move(*handle) } };
@@ -108,7 +108,8 @@ std::optional<String> TransferString::release(size_t maxCopySizeInBytes) && // N
             if (!memory)
                 return std::nullopt;
             if (memory->size() > maxCopySizeInBytes) {
-                Ref<StringImpl> impl = ExternalStringImpl::create(byteCast<Latin1Character>(memory->span()), [memory = memory.releaseNonNull()] (auto...) mutable { });
+                auto span = byteCast<Latin1Character>(memory->span());
+                Ref<StringImpl> impl = ExternalStringImpl::create(span, [memory = memory.releaseNonNull()] (auto...) mutable { });
                 return std::optional<String> { std::in_place, String { WTF::move(impl) } };
             }
             return std::optional<String> { std::in_place, String { byteCast<Latin1Character>(memory->span()) } };
@@ -118,7 +119,8 @@ std::optional<String> TransferString::release(size_t maxCopySizeInBytes) && // N
             if (!memory || (memory->size() % sizeof(char16_t)))
                 return std::nullopt;
             if (memory->size() > maxCopySizeInBytes) {
-                Ref<StringImpl> impl = ExternalStringImpl::create(spanReinterpretCast<const char16_t>(memory->span()), [memory = memory.releaseNonNull()] (auto...) mutable { });
+                auto span = spanReinterpretCast<const char16_t>(memory->span());
+                Ref<StringImpl> impl = ExternalStringImpl::create(span, [memory = memory.releaseNonNull()] (auto...) mutable { });
                 return std::optional<String> { std::in_place, String { WTF::move(impl) } };
             }
             return std::optional<String> { std::in_place, String { spanReinterpretCast<const char16_t>(memory->span()) } };
@@ -153,6 +155,8 @@ TransferString::IPCData TransferString::toIPCData() const LIFETIME_BOUND
         }
     );
 }
+
+TransferString::TransferString(TransferString&&) = default;
 
 TransferString::TransferString(const TransferString& other)
 {

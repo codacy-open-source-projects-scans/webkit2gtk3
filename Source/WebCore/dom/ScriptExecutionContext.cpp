@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2026 Apple Inc. All rights reserved.
  * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
 
 #include "CSSValuePool.h"
 #include "CachedScript.h"
+#include "ClientOrigin.h"
 #include "CommonVM.h"
 #include "ContentSecurityPolicy.h"
 #include "ContextDestructionObserverInlines.h"
@@ -68,6 +69,7 @@
 #include "ScriptDisallowedScope.h"
 #include "ScriptExecutionContextInlines.h"
 #include "ScriptTrackingPrivacyCategory.h"
+#include "SecurityOrigin.h"
 #include "ServiceWorker.h"
 #include "ServiceWorkerGlobalScope.h"
 #include "ServiceWorkerProvider.h"
@@ -89,7 +91,7 @@
 #include <JavaScriptCore/JSGlobalObject.h>
 #include <JavaScriptCore/JSPromise.h>
 #include <JavaScriptCore/ScriptCallStack.h>
-#include <JavaScriptCore/SourceTaintedOrigin.h>
+#include <JavaScriptCore/SourceTaintedness.h>
 #include <JavaScriptCore/StackVisitor.h>
 #include <JavaScriptCore/StrongInlines.h>
 #include <JavaScriptCore/StructureInlines.h>
@@ -100,6 +102,7 @@
 #include <wtf/Lock.h>
 #include <wtf/MainThread.h>
 #include <wtf/Ref.h>
+#include <wtf/RunLoop.h>
 #include <wtf/SetForScope.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
@@ -110,7 +113,7 @@ using namespace Inspector;
 static std::atomic<CrossOriginMode> globalCrossOriginMode { CrossOriginMode::Shared };
 
 static Lock allScriptExecutionContextsMapLock;
-static HashMap<ScriptExecutionContextIdentifier, WeakRef<ScriptExecutionContext>>& NODELETE allScriptExecutionContextsMap() WTF_REQUIRES_LOCK(allScriptExecutionContextsMapLock)
+static HashMap<ScriptExecutionContextIdentifier, WeakRef<ScriptExecutionContext>>& LEGACY_NODELETE allScriptExecutionContextsMap() WTF_REQUIRES_LOCK(allScriptExecutionContextsMapLock)
 {
     static NeverDestroyed<HashMap<ScriptExecutionContextIdentifier, WeakRef<ScriptExecutionContext>>> contexts;
     ASSERT(allScriptExecutionContextsMapLock.isLocked());
@@ -212,9 +215,9 @@ ScriptExecutionContext::~ScriptExecutionContext()
         Locker locker { allScriptExecutionContextsMapLock };
         ASSERT_WITH_MESSAGE(!allScriptExecutionContextsMap().contains(m_identifier), "A ScriptExecutionContext subclass instance implementing postTask should have already removed itself from the map");
     }
+#endif // ASSERT_ENABLED
 
     m_inScriptExecutionContextDestructor = true;
-#endif // ASSERT_ENABLED
 
     auto callbacks = WTF::move(m_notificationCallbacks);
     for (auto& callback : callbacks.values())
@@ -231,9 +234,7 @@ ScriptExecutionContext::~ScriptExecutionContext()
 
     setContentSecurityPolicy(nullptr);
 
-#if ASSERT_ENABLED
     m_inScriptExecutionContextDestructor = false;
-#endif
 }
 
 void ScriptExecutionContext::resumeAllMessagePortsSoon()
@@ -280,13 +281,13 @@ void ScriptExecutionContext::dispatchMessagePortEvents()
 
     if (dispatchAll) {
         m_messagePorts.forEach([](auto& messagePort) {
-            if (messagePort.started())
+            if (messagePort.isStarted())
                 messagePort.dispatchMessages();
         });
     } else {
         for (auto& portIdentifier : portsToDispatch) {
             m_messagePorts.forEach([&portIdentifier](auto& messagePort) {
-                if (messagePort.identifier() == portIdentifier && messagePort.started())
+                if (messagePort.identifier() == portIdentifier && messagePort.isStarted())
                     messagePort.dispatchMessages();
             });
         }
@@ -348,6 +349,12 @@ JSC::ScriptExecutionStatus ScriptExecutionContext::jscScriptExecutionStatus() co
     if (activeDOMObjectsAreStopped())
         return JSC::ScriptExecutionStatus::Stopped;
     return JSC::ScriptExecutionStatus::Running;
+}
+
+// https://html.spec.whatwg.org/multipage/webappapis.html#encoding-parsing-a-url
+URL ScriptExecutionContext::encodingParseURL(const String& url) const
+{
+    return parseURL(url);
 }
 
 URL ScriptExecutionContext::currentSourceURL(CallStackPosition position) const
@@ -415,6 +422,7 @@ void ScriptExecutionContext::suspendActiveDOMObjects(ReasonForSuspension why)
     }
 
     m_activeDOMObjectsAreSuspended = true;
+    m_reasonForSuspendingActiveDOMObjects = why;
 
     forEachMicrotaskGlobalObject([](auto& globalObject) {
         globalObject.setMicrotaskRunnability(JSC::QueuedTaskResult::Suspended);
@@ -424,8 +432,6 @@ void ScriptExecutionContext::suspendActiveDOMObjects(ReasonForSuspension why)
         activeDOMObject.suspend(why);
         return ShouldContinue::Yes;
     });
-
-    m_reasonForSuspendingActiveDOMObjects = why;
 }
 
 void ScriptExecutionContext::resumeActiveDOMObjects(ReasonForSuspension why)
@@ -443,6 +449,7 @@ void ScriptExecutionContext::resumeActiveDOMObjects(ReasonForSuspension why)
     vm().deferredWorkTimer->didResumeScriptExecutionOwner();
 
     m_activeDOMObjectsAreSuspended = false;
+    m_reasonForSuspendingActiveDOMObjects = std::nullopt;
 
     forEachMicrotaskGlobalObject([](auto& globalObject) {
         globalObject.setMicrotaskRunnability(JSC::QueuedTaskResult::Executed);
@@ -475,7 +482,7 @@ void ScriptExecutionContext::suspendActiveDOMObjectIfNeeded(ActiveDOMObject& act
 {
     ASSERT(m_activeDOMObjects.contains(activeDOMObject));
     if (m_activeDOMObjectsAreSuspended)
-        activeDOMObject.suspend(m_reasonForSuspendingActiveDOMObjects);
+        activeDOMObject.suspend(*m_reasonForSuspendingActiveDOMObjects);
     if (m_activeDOMObjectsAreStopped)
         activeDOMObject.stop();
 }
@@ -524,7 +531,7 @@ bool ScriptExecutionContext::canIncludeErrorDetails(CachedScript* script, const 
     // Errors from module scripts are never muted.
     if (fromModule)
         return true;
-    URL completeSourceURL = completeURL(sourceURL);
+    URL completeSourceURL = encodingParseURL(sourceURL);
     if (completeSourceURL.protocolIsData())
         return true;
     if (script) {
@@ -645,16 +652,15 @@ bool ScriptExecutionContext::dispatchErrorEvent(const String& errorMessage, int 
 
 int ScriptExecutionContext::circularSequentialID()
 {
-    ++m_circularSequentialID;
-    if (m_circularSequentialID <= 0)
-        m_circularSequentialID = 1;
-    return m_circularSequentialID;
+    if (m_circularSequentialID == std::numeric_limits<int>::max())
+        m_circularSequentialID = 0;
+    return ++m_circularSequentialID;
 }
 
 PublicURLManager& ScriptExecutionContext::publicURLManager()
 {
     if (!m_publicURLManager)
-        m_publicURLManager = PublicURLManager::create(this);
+        lazyInitialize(m_publicURLManager, PublicURLManager::create(this));
     return *m_publicURLManager;
 }
 
@@ -745,13 +751,15 @@ JSC::JSGlobalObject* ScriptExecutionContext::globalObject() const
 
 String ScriptExecutionContext::domainForCachePartition() const
 {
-    if (!m_domainForCachePartition.isNull())
-        return m_domainForCachePartition;
-
     if (m_storageBlockingPolicy != StorageBlockingPolicy::BlockThirdParty)
         return emptyString();
 
     return protect(topOrigin())->domainForCachePartition();
+}
+
+bool ScriptExecutionContext::shouldBlockThirdPartyStorage() const
+{
+    return m_storageBlockingPolicy == StorageBlockingPolicy::BlockThirdParty;
 }
 
 bool ScriptExecutionContext::allowsMediaDevices() const
@@ -761,7 +769,7 @@ bool ScriptExecutionContext::allowsMediaDevices() const
     if (!document)
         return false;
     RefPtr page = document->page();
-    return page ? !page->settings().mediaCaptureRequiresSecureConnection() : false;
+    return page && !page->settings().mediaCaptureRequiresSecureConnection();
 #else
     return false;
 #endif
@@ -928,7 +936,12 @@ void ScriptExecutionContext::postTaskToResponsibleDocument(Function<void(Documen
         callback(document.releaseNonNull());
 }
 
-static bool NODELETE isOriginEquivalentToLocal(const SecurityOrigin& origin)
+ClientOrigin ScriptExecutionContext::storageClientOrigin() const
+{
+    return { storageTopOrigin().data(), securityOrigin()->data() };
+}
+
+static bool LEGACY_NODELETE isOriginEquivalentToLocal(const SecurityOrigin& origin)
 {
     return origin.isLocal() && !origin.needsStorageAccessFromFileURLsQuirk() && !origin.hasUniversalAccess();
 }
@@ -954,7 +967,7 @@ ScriptExecutionContext::HasResourceAccess ScriptExecutionContext::canAccessResou
     case ResourceType::SessionStorage:
         if (m_storageBlockingPolicy == StorageBlockingPolicy::BlockAll)
             return HasResourceAccess::No;
-        if ((m_storageBlockingPolicy == StorageBlockingPolicy::BlockThirdParty) && !protect(topOrigin())->isSameOriginAs(*origin) && !origin->hasUniversalAccess())
+        if ((m_storageBlockingPolicy == StorageBlockingPolicy::BlockThirdParty) && !protect(storageTopOrigin())->isSameOriginAs(*origin) && !origin->hasUniversalAccess())
             return HasResourceAccess::DefaultForThirdParty;
         return HasResourceAccess::Yes;
     }
@@ -1014,23 +1027,32 @@ public:
 private:
     explicit ScriptExecutionContextDispatcher(ScriptExecutionContext& context)
         : m_identifier(context.identifier())
-        , m_threadId(context.isWorkerGlobalScope() ? Thread::currentSingleton().uid() : 1)
+        , m_workerThreadId(context.isWorkerGlobalScope() ? std::optional { Thread::currentSingleton().uid() } : std::nullopt)
     {
     }
 
     // GuaranteedSerialFunctionDispatcher
     void dispatch(Function<void()>&& callback) final
     {
-        if (m_threadId == 1) {
+        if (!m_workerThreadId) {
             callOnMainThread(WTF::move(callback));
             return;
         }
         ScriptExecutionContext::postTaskTo(m_identifier, WTF::move(callback));
     }
-    bool isCurrent() const final { return m_threadId == Thread::currentSingleton().uid(); }
+    bool isCurrent() const final
+    {
+        return m_workerThreadId ? *m_workerThreadId == Thread::currentSingleton().uid() : isMainThread();
+    }
+    void dispatchAfter(Seconds delay, Function<void()>&& callback) final
+    {
+        RunLoop::mainSingleton().dispatchAfter(delay, [protectedThis = Ref { *this }, callback = WTF::move(callback)] mutable {
+            protectedThis->dispatch(WTF::move(callback));
+        });
+    }
 
     ScriptExecutionContextIdentifier m_identifier;
-    const uint32_t m_threadId { 1 };
+    const std::optional<uint32_t> m_workerThreadId;
 };
 
 GuaranteedSerialFunctionDispatcher& ScriptExecutionContext::nativePromiseDispatcher()
@@ -1059,7 +1081,7 @@ bool ScriptExecutionContext::requiresScriptTrackingPrivacyProtection(ScriptTrack
         break;
     }
 
-    RefPtr document = dynamicDowncast<Document>(*this);
+    auto* document = dynamicDowncast<Document>(*this);
     if (!document)
         return true;
 
@@ -1067,11 +1089,8 @@ bool ScriptExecutionContext::requiresScriptTrackingPrivacyProtection(ScriptTrack
     if (!page)
         return true;
 
-    if (category == ScriptTrackingPrivacyCategory::NetworkRequests && !page->settings().scriptTrackingPrivacyNetworkRequestBlockingEnabled())
-        return false;
-
     bool shouldApplyConsistently = (category == ScriptTrackingPrivacyCategory::QueryParameters && document->quirks().needsConsistentQueryParameterFilteringQuirk(taintedURL))
-        || (category != ScriptTrackingPrivacyCategory::NetworkRequests && document->quirks().mayBenefitFromFingerprintingProtectionQuirk(taintedURL));
+        || document->quirks().mayBenefitFromFingerprintingProtectionQuirk(taintedURL);
     if (!shouldEnableScriptTrackingPrivacy(category, advancedPrivacyProtections(), shouldApplyConsistently))
         return false;
 

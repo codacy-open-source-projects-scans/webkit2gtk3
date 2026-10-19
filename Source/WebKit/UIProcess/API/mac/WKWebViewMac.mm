@@ -34,6 +34,7 @@
 #if PLATFORM(MAC)
 
 #import "AppKitSPI.h"
+#import "CompletionHandlerCallChecker.h"
 #import "PDFPluginIdentifier.h"
 #import "WKAPICast.h"
 #import "WKIntelligenceTextEffectCoordinator.h"
@@ -50,6 +51,7 @@
 #import "_WKWarningView.h"
 #import <WebCore/CGWindowUtilities.h>
 #import <WebCore/CornerRadii.h>
+#import <WebCore/FloatPoint.h>
 #import <WebCore/FrameIdentifier.h>
 #import <WebCore/LegacyNSPasteboardTypes.h>
 #import <WebKit/WKUIDelegatePrivate.h>
@@ -58,6 +60,7 @@
 #import <pal/spi/mac/NSViewSPI.h>
 #import <wtf/StdLibExtras.h>
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
+#import <wtf/cocoa/TypeCastsCocoa.h>
 
 #if USE(APPLE_INTERNAL_SDK) && __has_include(<WebKitAdditions/WKWebViewMacAdditionsBefore.mm>)
 #import <WebKitAdditions/WKWebViewMacAdditionsBefore.mm>
@@ -95,7 +98,7 @@ std::optional<WebCore::ScrollbarOverlayStyle> toCoreScrollbarStyle(_WKOverlayScr
     return std::nullopt;
 }
 
-static WebCore::FloatBoxExtent NODELETE coreBoxExtentsFromEdgeInsets(NSEdgeInsets insets)
+static WebCore::FloatBoxExtent LEGACY_NODELETE coreBoxExtentsFromEdgeInsets(NSEdgeInsets insets)
 {
     return {
         static_cast<float>(insets.top),
@@ -397,7 +400,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
 ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
 - (void)changeColor:(id)sender
-ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
+ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 {
     _impl->changeFontColorFromSender(sender);
 }
@@ -709,6 +712,11 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
     _impl->hasMarkedTextWithCompletionHandler(completionHandlerPtr);
 }
 
+- (void)isMarkedTextRequiredForCompositionWithCompletionHandler:(void(^)(BOOL isMarkedTextRequiredForComposition))completionHandlerPtr
+{
+    _impl->isMarkedTextRequiredForCompositionWithCompletionHandler(completionHandlerPtr);
+}
+
 - (void)attributedSubstringForProposedRange:(NSRange)nsRange completionHandler:(void(^)(NSAttributedString *attrString, NSRange actualRange))completionHandlerPtr
 {
     _impl->attributedSubstringForProposedRange(nsRange, completionHandlerPtr);
@@ -765,14 +773,19 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
 
 - (void)showWritingTools:(id)sender
 {
-    WTRequestedTool tool = (WTRequestedTool)[sender tag];
+    WTRequestedTool tool = (WTRequestedTool)[(id<NSValidatedUserInterfaceItem>)sender tag];
     if (tool == -1)
         tool = WTRequestedToolIndex;
 
     _impl->showWritingTools(tool);
 }
 
-#endif
+- (BOOL)allowsWritingToolsAffordance
+{
+    return _impl->shouldAllowWritingToolsAffordance();
+}
+
+#endif // ENABLE(WRITING_TOOLS)
 
 #if ENABLE(DRAG_SUPPORT)
 ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
@@ -813,8 +826,12 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 }
 #endif // ENABLE(DRAG_SUPPORT)
 
+// FIXME: This is no longer actually called. Should it instead be replaced by `-[NSView _hitTestToBlockWindowResizing:forResizeDirection:]`? Or removed entirely?
+// This was originally added to resolve <rdar://9211232>.
 - (BOOL)_windowResizeMouseLocationIsInVisibleScrollerThumb:(NSPoint)point
 {
+    // FIXME: Consider using the new `isPointInScrollbar` path, which works for both axes,
+    // and leverages UI-side scrolling instead of cached web content information.
     return _impl->windowResizeMouseLocationIsInVisibleScrollerThumb(NSPointToCGPoint(point));
 }
 
@@ -866,6 +883,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         return;
 
     WebCore::CornerRadii newRadii;
+ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
     if (RetainPtr<NSViewCornerRadii> radii = self._effectiveCornerRadii) {
         newRadii = WebCore::CornerRadii {
             static_cast<float>([radii topLeft]),
@@ -874,6 +892,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             static_cast<float>([radii bottomRight])
         };
     }
+ALLOW_NEW_API_WITHOUT_GUARDS_END
 
     if (_lastViewCornerRadii == newRadii)
         return;
@@ -882,13 +901,16 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     _page->setScrollbarAvoidanceCornerRadii(WTF::move(newRadii));
 }
 
+ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
 - (NSViewCornerConfiguration *)_cornerConfiguration
 {
     if (self.enclosingScrollView)
         return [super _cornerConfiguration];
 
-    return [NSViewCornerConfiguration configurationWithRadius:_NSCornerRadius.containerConcentricRadius];
+    // Newer SDKs type this parameter as NSViewCornerRadius, but it must receive an _NSCornerRadius.
+    SUPPRESS_MEMORY_UNSAFE_CAST return [NSViewCornerConfiguration configurationWithRadius:(id)_NSCornerRadius.containerConcentricRadius];
 }
+ALLOW_NEW_API_WITHOUT_GUARDS_END
 
 #endif
 
@@ -1096,6 +1118,11 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     return _impl->dragSourceOperationMask(session, context);
 }
 
+- (void)draggingSession:(NSDraggingSession *)session willBeginAtPoint:(NSPoint)screenPoint
+{
+    _impl->draggingSessionWillBegin(session, screenPoint);
+}
+
 - (void)draggingSession:(NSDraggingSession *)session endedAtPoint:(NSPoint)screenPoint operation:(NSDragOperation)operation
 {
     _impl->draggingSessionEnded(session, screenPoint, operation);
@@ -1181,6 +1208,41 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     return _impl->hasScrolledContentsUnderTitlebar();
 }
 
+- (BOOL)respondsToSelector:(SEL)selector
+{
+#if ENABLE(SCROLL_POCKET_IN_FULLSCREEN)
+    if (selector == @selector(setFullScreenTitlebarOverlayHeight:))
+        return [self _scrollPocketInFullscreenEnabled];
+#endif
+    return [super respondsToSelector:selector];
+}
+
+#if ENABLE(SCROLL_POCKET_IN_FULLSCREEN)
+
+- (CGFloat)fullScreenTitlebarOverlayHeight
+{
+    if (![self _scrollPocketInFullscreenEnabled])
+        return 0;
+
+    if (!_impl)
+        return 0;
+
+    return _impl->fullScreenTitlebarOverlayHeight();
+}
+
+- (void)setFullScreenTitlebarOverlayHeight:(CGFloat)fullScreenTitlebarOverlayHeight
+{
+    if (![self _scrollPocketInFullscreenEnabled])
+        return;
+
+    if (!_impl)
+        return;
+
+    _impl->setFullScreenTitlebarOverlayHeight(fullScreenTitlebarOverlayHeight);
+}
+
+#endif
+
 #pragma mark – NSAdaptiveImageGlyph
 
 #if ENABLE(MULTI_REPRESENTATION_HEIC)
@@ -1235,6 +1297,10 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         return;
 
     _impl->effectiveAppearanceDidChange();
+
+#if ENABLE(HORIZONTAL_BANNER_VIEW_OVERLAYS)
+    [self _updateAppearanceForSystemBackgroundColorExtensionViews];
+#endif
 }
 
 @end
@@ -1440,6 +1506,45 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         [uiDelegate _webView:self didPerformDragOperation:handled];
 }
 
+#if ENABLE(DRAG_SOURCE_CUSTOMIZATION)
+- (void)_web_draggingItemsForDraggingItem:(NSDraggingItem *)draggingItem atLocation:(NSPoint)viewLocation completionHandler:(void (^)(NSArray<NSDraggingItem *> *draggingItems))completionHandler
+{
+    RetainPtr uiDelegate = static_cast<id<WKUIDelegatePrivate>>([self UIDelegate]);
+    if (![uiDelegate respondsToSelector:@selector(_webView:draggingItemsForDraggingItem:atLocation:completionHandler:)]) {
+        completionHandler(nil);
+        return;
+    }
+    [uiDelegate _webView:self draggingItemsForDraggingItem:draggingItem atLocation:viewLocation completionHandler:makeBlockPtr([completionHandler = makeBlockPtr(completionHandler), checker = WebKit::CompletionHandlerCallChecker::create(uiDelegate, @selector(_webView:draggingItemsForDraggingItem:atLocation:completionHandler:))](NSArray<NSDraggingItem *> *draggingItems) {
+        if (checker->completionHandlerHasBeenCalled())
+            return;
+        checker->didCallCompletionHandler();
+        completionHandler(draggingItems);
+    }).get()];
+}
+
+- (NSDragOperation)_web_dragSourceOperationMaskForDraggingContext:(NSDraggingContext)context defaultMask:(NSDragOperation)defaultMask
+{
+    RetainPtr uiDelegate = static_cast<id<WKUIDelegatePrivate>>([self UIDelegate]);
+    if (![uiDelegate respondsToSelector:@selector(_webView:sourceOperationMaskForDraggingContext:defaultOperationMask:)])
+        return defaultMask;
+    return [uiDelegate _webView:self sourceOperationMaskForDraggingContext:context defaultOperationMask:defaultMask];
+}
+
+- (void)_web_draggingSession:(NSDraggingSession *)session willBeginAtPoint:(NSPoint)point
+{
+    RetainPtr uiDelegate = static_cast<id<WKUIDelegatePrivate>>([self UIDelegate]);
+    if ([uiDelegate respondsToSelector:@selector(_webView:draggingSession:willBeginAtPoint:)])
+        [uiDelegate _webView:self draggingSession:session willBeginAtPoint:point];
+}
+
+- (void)_web_draggingSession:(NSDraggingSession *)session endedAtPoint:(NSPoint)point operation:(NSDragOperation)operation
+{
+    RetainPtr uiDelegate = static_cast<id<WKUIDelegatePrivate>>([self UIDelegate]);
+    if ([uiDelegate respondsToSelector:@selector(_webView:draggingSession:endedAtPoint:operation:)])
+        [uiDelegate _webView:self draggingSession:session endedAtPoint:point operation:operation];
+}
+#endif
+
 #endif // ENABLE(DRAG_SUPPORT)
 
 - (void)_web_dismissContentRelativeChildWindows
@@ -1461,6 +1566,11 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)_web_gestureEventWasNotHandledByWebCore:(NSEvent *)event
 {
     [self _gestureEventWasNotHandledByWebCore:event];
+}
+
+- (void)_web_magnificationGestureEventWasNotHandledByWebCoreWithPhase:(NSEventPhase)phase magnification:(CGFloat)magnification locationInWindow:(NSPoint)locationInWindow
+{
+    [self _magnificationGestureEventWasNotHandledByWebCoreWithPhase:phase magnification:magnification locationInWindow:locationInWindow];
 }
 
 - (void)_takeFindStringFromSelectionInternal:(id)sender
@@ -1509,7 +1619,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         if (!receiver)
             return;
 
-        for (NSString *typeIdentifier in [receiver fileTypes]) {
+        // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+        for (SUPPRESS_UNRETAINED_LOCAL NSString *typeIdentifier in [receiver fileTypes]) {
             RetainPtr type = [UTType typeWithIdentifier:typeIdentifier];
             if (!type)
                 continue;
@@ -1524,7 +1635,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         if (!filenames)
             return { };
 
-        for (id name in filenames.get()) {
+        // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+        for (SUPPRESS_UNRETAINED_LOCAL id name in filenames.get()) {
             RetainPtr pathExtension = [dynamic_objc_cast<NSString>(name) pathExtension];
             if (![pathExtension length])
                 continue;
@@ -1774,7 +1886,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 #if ENABLE(CONTENT_INSET_BACKGROUND_FILL)
     _impl->updateTopScrollPocketStyle();
-    _impl->updateScrollPocketVisibilityWhenScrolledToTop();
+    _impl->updateScrollPocketVisibilityWhenScrolledToTopAndNonEditable();
     _impl->updateTopScrollPocketCaptureColor();
 #endif
 }
@@ -1994,6 +2106,11 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     _impl->gestureEventWasNotHandledByWebCoreFromViewOnly(event);
 }
 
+- (void)_magnificationGestureEventWasNotHandledByWebCoreWithPhase:(NSEventPhase)phase magnification:(CGFloat)magnification locationInWindow:(NSPoint)locationInWindow
+{
+    _impl->magnificationGestureEventWasNotHandledByWebCoreFromViewOnly(phase, magnification, locationInWindow);
+}
+
 - (double)minimumMagnification
 {
     return _page->minPageZoomFactor();
@@ -2188,37 +2305,5 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     SUPPRESS_RETAINPTR_CTOR_ADOPT return [[NSImage alloc] initWithCGImage:snapshot.get() size:NSZeroSize];
 }
 @end
-
-#if ENABLE(PDF_HUD)
-
-@implementation WKWebView (WKPDFHUD)
-
-- (void)_pdfZoomIn:(WebKit::PDFPluginIdentifier)pluginIdentifier frameIdentifier:(WebCore::FrameIdentifier)frameIdentifier
-{
-    if (RefPtr page = _page)
-        page->pdfZoomIn(pluginIdentifier, frameIdentifier);
-}
-
-- (void)_pdfZoomOut:(WebKit::PDFPluginIdentifier)pluginIdentifier frameIdentifier:(WebCore::FrameIdentifier)frameIdentifier
-{
-    if (RefPtr page = _page)
-        page->pdfZoomOut(pluginIdentifier, frameIdentifier);
-}
-
-- (void)_pdfOpenWithPreview:(WebKit::PDFPluginIdentifier)pluginIdentifier frameIdentifier:(WebCore::FrameIdentifier)frameIdentifier
-{
-    if (RefPtr page = _page)
-        page->pdfOpenWithPreview(pluginIdentifier, frameIdentifier);
-}
-
-- (void)_pdfSaveToPDF:(WebKit::PDFPluginIdentifier)pluginIdentifier frameIdentifier:(WebCore::FrameIdentifier)frameIdentifier
-{
-    if (RefPtr page = _page)
-        page->pdfSaveToPDF(pluginIdentifier, frameIdentifier);
-}
-
-@end
-
-#endif // ENABLE(PDF_HUD)
 
 #endif // PLATFORM(MAC)

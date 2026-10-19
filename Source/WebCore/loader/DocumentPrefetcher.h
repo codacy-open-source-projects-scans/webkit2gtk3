@@ -38,7 +38,7 @@ namespace WebCore {
 
 class CachedRawResource;
 class DocumentLoader;
-class FrameLoader;
+class LocalFrame;
 class ResourceRequest;
 class SecurityOrigin;
 
@@ -51,7 +51,7 @@ public:
         CachedResourceHandle<CachedRawResource> resource;
         Box<NetworkLoadMetrics> metrics;
     };
-    static Ref<DocumentPrefetcher> create(FrameLoader& frameLoader) { return adoptRef(*new DocumentPrefetcher(frameLoader)); }
+    static Ref<DocumentPrefetcher> create(LocalFrame& frame) { return adoptRef(*new DocumentPrefetcher(frame)); }
     ~DocumentPrefetcher();
 
     // CachedResourceClient.
@@ -65,17 +65,19 @@ public:
     Box<NetworkLoadMetrics> takePrefetchedResourceMetrics(const URL&);
     void clearPrefetchedResourcesExcept(const URL&);
     void clearPrefetchedResourcesForOrigin(const SecurityOrigin&);
+    bool canServeNavigations(const ResourceResponse&) const;
 
     // CachedRawResourceClient
     void responseReceived(const CachedResource&, const ResourceResponse&, CompletionHandler<void()>&&) override;
     void notifyFinished(CachedResource&, const NetworkLoadMetrics&, LoadWillContinueInAnotherProcess = LoadWillContinueInAnotherProcess::No) override;
+    void redirectReceived(CachedResource&, ResourceRequest&&, const ResourceResponse&, CompletionHandler<void(ResourceRequest&&)>&&) override;
     CachedResourceClientType resourceClientType() const override { return RawResourceType; }
 
 
 private:
-    explicit DocumentPrefetcher(FrameLoader&);
+    explicit DocumentPrefetcher(LocalFrame&);
 
-    WeakRef<FrameLoader> m_frameLoader;
+    WeakPtr<LocalFrame> m_frame;
     HashMap<URL, PrefetchedResourceData> m_prefetchedData;
 };
 

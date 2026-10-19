@@ -42,7 +42,7 @@ class LegacyRenderSVGShape : public LegacyRenderSVGModelObject {
     WTF_MAKE_TZONE_ALLOCATED(LegacyRenderSVGShape);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(LegacyRenderSVGShape);
 public:
-    friend FloatRect SVGRenderSupport::calculateApproximateStrokeBoundingBox(const RenderElement&);
+    friend FloatRect SVGRenderSupport::calculateApproximateStrokeBoundingBox(const RenderElement&, StrokeBoundingBoxPurpose);
 
     enum class ShapeType : uint8_t {
         Empty,
@@ -58,7 +58,7 @@ public:
         GlobalCoordinateSpace,
         LocalCoordinateSpace
     };
-    LegacyRenderSVGShape(Type, SVGGraphicsElement&, RenderStyle&&);
+    LegacyRenderSVGShape(Type, SVGGraphicsElement&, Style::ComputedStyle&&);
     virtual ~LegacyRenderSVGShape();
 
     inline SVGGraphicsElement& graphicsElement() const;
@@ -92,7 +92,7 @@ protected:
     Path& ensurePath() LIFETIME_BOUND;
 
     virtual void updateShapeFromElement() = 0;
-    virtual bool NODELETE isEmpty() const;
+    virtual bool LEGACY_NODELETE isEmpty() const;
     virtual bool shapeDependentStrokeContains(const FloatPoint&, PointCoordinateSpace = GlobalCoordinateSpace);
     virtual bool shapeDependentFillContains(const FloatPoint&, const WindRule) const;
     float strokeWidth() const;
@@ -113,6 +113,7 @@ private:
     // Hit-detection separated for the fill and the stroke
     bool fillContains(const FloatPoint&, bool requiresFill = true, const WindRule fillRule = WindRule::NonZero);
     bool strokeContains(const FloatPoint&, bool requiresStroke = true);
+    FloatRect hitTestStrokeBoundingBox() const;
 
     FloatRect repaintRectInLocalCoordinates(RepaintRectCalculation = RepaintRectCalculation::Fast) const final;
     FloatRect decoratedBoundingBox() const final;
@@ -124,7 +125,7 @@ private:
 
     void layout() final;
     void paint(PaintInfo&, const LayoutPoint&) final;
-    void addFocusRingRects(Vector<LayoutRect>&, const LayoutPoint& additionalOffset, const RenderLayerModelObject* paintContainer = 0) const final;
+    void addFocusRingRects(Vector<LayoutRect>&, const LayoutPoint& additionalOffset, const RenderLayerModelObject* paintContainer = nullptr) const final;
 
     bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction) final;
 
@@ -138,9 +139,9 @@ private:
     
     std::unique_ptr<Path> createPath() const;
 
-    void fillShape(const RenderStyle&, GraphicsContext&);
-    void strokeShapeInternal(const RenderStyle&, GraphicsContext&);
-    void strokeShape(const RenderStyle&, GraphicsContext&);
+    void fillShape(const Style::ComputedStyle&, GraphicsContext&);
+    void strokeShapeInternal(const Style::ComputedStyle&, GraphicsContext&);
+    void strokeShape(const Style::ComputedStyle&, GraphicsContext&);
     void fillStrokeMarkers(PaintInfo&);
 
     virtual void drawMarkers(PaintInfo&) { }
@@ -149,12 +150,13 @@ protected:
     FloatRect m_fillBoundingBox;
     mutable Markable<FloatRect> m_strokeBoundingBox;
     mutable Markable<FloatRect> m_approximateStrokeBoundingBox;
+    mutable Markable<FloatRect> m_hitTestStrokeBoundingBox;
 private:
     FloatRect m_repaintBoundingBox;
 
-    bool m_needsBoundariesUpdate : 1;
-    bool m_needsShapeUpdate : 1;
-    bool m_needsTransformUpdate : 1;
+    bool m_needsBoundariesUpdate : 1 { false }; // Default is false, the cached rects are empty from the beginning.
+    bool m_needsShapeUpdate : 1 { true }; // Default is true, so we grab a Path object once from SVGGraphicsElement.
+    bool m_needsTransformUpdate : 1 { true }; // Default is true, so we grab a AffineTransform object once from SVGGraphicsElement.
     bool m_fillRequiresClip : 1 { true };
 protected:
     ShapeType m_shapeType : 3 { ShapeType::Empty };

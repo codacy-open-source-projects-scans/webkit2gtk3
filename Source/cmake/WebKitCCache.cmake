@@ -17,12 +17,21 @@ if (NOT "$ENV{WK_USE_CCACHE}" STREQUAL "NO" AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
             # worktrees of the same checkout (-fdebug-prefix-map handles the
             # debug-info side; CCACHE_BASEDIR handles the command-line side).
             set(_ccache_launcher "${CMAKE_BINARY_DIR}/ccache-launcher")
-            file(WRITE "${_ccache_launcher}"
-                "#!/bin/sh\n"
-                "export CCACHE_BASEDIR='${CMAKE_SOURCE_DIR}'\n"
-                "export CCACHE_NOHASHDIR=true\n"
-                "export CCACHE_SLOPPINESS='pch_defines,time_macros,include_file_mtime,include_file_ctime'\n"
-                "exec '${CCACHE_FOUND}' \"$@\"\n")
+            file(CONFIGURE OUTPUT "${_ccache_launcher}" CONTENT
+"#!/bin/sh
+export CCACHE_BASEDIR='${CMAKE_SOURCE_DIR}'
+export CCACHE_NOHASHDIR=true
+export CCACHE_PCH_EXTSUM=true
+# Hash the -MD depfile rather than preprocessing, so a cache miss is cheap.
+export CCACHE_DEPEND=true
+export CCACHE_SLOPPINESS='pch_defines,time_macros,include_file_mtime,include_file_ctime'
+for arg; do
+    if [ \"$arg\" = \"-emit-pch\" ]; then
+        exec \"$@\"
+    fi
+done
+exec '${CCACHE_FOUND}' \"$@\"
+")
             file(CHMOD "${_ccache_launcher}" PERMISSIONS
                 OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
             message(STATUS "Enabling ccache: Setting ccache prefix via ${_ccache_launcher} (CCACHE_BASEDIR=${CMAKE_SOURCE_DIR}).")
@@ -31,6 +40,29 @@ if (NOT "$ENV{WK_USE_CCACHE}" STREQUAL "NO" AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
             set(CMAKE_ASM_COMPILER_LAUNCHER "${_ccache_launcher}")
             set(CMAKE_OBJC_COMPILER_LAUNCHER "${_ccache_launcher}")
             set(CMAKE_OBJCXX_COMPILER_LAUNCHER "${_ccache_launcher}")
+        elseif (WIN32)
+            # Pass the ccache configuration inline as "KEY=VALUE ... compiler" arguments (a core
+            # ccache feature), so it is baked into every ninja compile command and applied per
+            # invocation. This avoids relying on environment set at configure time -- which does not
+            # survive to the ninja-spawned compile -- and avoids a launcher script: a .cmd wrapper
+            # would hit cmd.exe's 8191-char command-line limit on WebCore's long compile lines.
+            set(_ccache_config
+                base_dir=${CMAKE_SOURCE_DIR}
+                hash_dir=false
+                sloppiness=time_macros,include_file_mtime,include_file_ctime
+            )
+            message(STATUS "Enabling ccache: ${CCACHE_FOUND} with inline config (base_dir=${CMAKE_SOURCE_DIR}).")
+            set(CMAKE_C_COMPILER_LAUNCHER   ${CCACHE_FOUND} ${_ccache_config})
+            set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_FOUND} ${_ccache_config})
+            set(CMAKE_ASM_COMPILER_LAUNCHER ${CCACHE_FOUND} ${_ccache_config})
+            # Disable precompiled headers when ccache is in use, matching the GTK/WPE developer-mode
+            # ports (OptionsGTK.cmake / OptionsWPE.cmake set CMAKE_DISABLE_PRECOMPILE_HEADERS ON).
+            # Caching a PCH under clang-cl is fragile: ccache can restore a PCH built against a
+            # different-sized generated header (e.g. PlatformEnable.h drifts as feature flags change),
+            # which clang then rejects ("... has been modified since the precompiled header was built").
+            # Dropping PCH removes that whole failure class; ccache still serves unchanged objects as
+            # hits, so the clean-rebuild speedup is retained (PCH only accelerates ccache misses).
+            set(CMAKE_DISABLE_PRECOMPILE_HEADERS ON)
         else ()
             if (NOT DEFINED ENV{CCACHE_SLOPPINESS})
                 set(ENV{CCACHE_SLOPPINESS} time_macros)
@@ -52,4 +84,10 @@ if (("$ENV{WEBKIT_USE_SCCACHE}" STREQUAL "1") OR DEFINED ENV{SCCACHE_REDIS} OR D
         set(CMAKE_C_COMPILER_LAUNCHER ${SCCACHE_FOUND})
         set(CMAKE_CXX_COMPILER_LAUNCHER ${SCCACHE_FOUND})
     endif ()
+endif ()
+
+if (APPLE AND CMAKE_GENERATOR STREQUAL "Ninja")
+    set(_clang_wrapper "${CMAKE_SOURCE_DIR}/Source/cmake/clang-wrapper")
+    list(INSERT CMAKE_CXX_COMPILER_LAUNCHER 0 "${_clang_wrapper}")
+    list(INSERT CMAKE_OBJCXX_COMPILER_LAUNCHER 0 "${_clang_wrapper}")
 endif ()

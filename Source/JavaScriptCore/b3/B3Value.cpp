@@ -50,6 +50,8 @@
 #include "B3WasmStructGetValue.h"
 #include "B3WasmStructNewValue.h"
 #include "B3WasmStructSetValue.h"
+#include <array>
+#include <optional>
 #include <wtf/CommaPrinter.h>
 #include <wtf/ListDump.h>
 #include <wtf/StackTrace.h>
@@ -282,7 +284,7 @@ void Value::deepDump(const Procedure* proc, PrintStream& out) const
     dumpMeta(comma, out);
 
     {
-        CString string = toCString(effects());
+        auto string = toUTF8CString(effects());
         if (string.length())
             out.print(comma, string);
     }
@@ -656,157 +658,120 @@ TriState Value::asTriState() const
     }
 }
 
-Effects Value::effects() const
+namespace {
+
+// Effects for an opcode that don't depend on per-Value data. Effects::invalid() means
+// value-dependent (handled by effectsSlow()). The traps suffix is applied by effects()/effectsSlow(),
+// not here.
+constexpr Effects constantEffectsForOpcode(Opcode opcode)
 {
     Effects result = Effects::none();
-    switch (opcode()) {
-    case Nop:
-    case Identity:
-    case Opaque:
-    case Const32:
-    case Const64:
-    case ConstDouble:
-    case ConstFloat:
-    case Const128:
-    case BottomTuple:
-    case SlotBase:
-    case ArgumentReg:
-    case FramePointer:
-    case Add:
-    case Sub:
-    case Mul:
-    case MulHigh:
-    case UMulHigh:
-    case Neg:
-    case PurifyNaN:
-    case BitAnd:
-    case BitOr:
-    case BitXor:
-    case Shl:
-    case SShr:
-    case ZShr:
-    case RotR:
-    case RotL:
-    case Clz:
-    case Abs:
-    case Ceil:
-    case Floor:
-    case FTrunc:
-    case Sqrt:
-    case BitwiseCast:
-    case SExt8:
-    case SExt16:
-    case SExt8To64:
-    case SExt16To64:
-    case SExt32:
-    case ZExt32:
-    case Trunc:
-    case TruncHigh:
-    case Stitch:
-    case IToD:
-    case IToF:
-    case FloatToDouble:
-    case DoubleToFloat:
-    case Equal:
-    case NotEqual:
-    case LessThan:
-    case GreaterThan:
-    case LessEqual:
-    case GreaterEqual:
-    case Above:
-    case Below:
-    case AboveEqual:
-    case BelowEqual:
-    case EqualOrUnordered:
-    case Select:
-    case Depend:
-    case Extract:
-    case FMin:
-    case FMax:
-    case VectorExtractLane:
-    case VectorReplaceLane:
-    case VectorDupElement:
-    case VectorEqual:
-    case VectorNotEqual:
-    case VectorLessThan:
-    case VectorLessThanOrEqual:
-    case VectorBelow:
-    case VectorBelowOrEqual:
-    case VectorGreaterThan:
-    case VectorGreaterThanOrEqual:
-    case VectorAbove:
-    case VectorAboveOrEqual:
-    case VectorAdd:
-    case VectorSub:
-    case VectorAddSat:
-    case VectorSubSat:
-    case VectorMul:
-    case VectorMulHigh:
-    case VectorMulLow:
-    case VectorDotProduct:
-    case VectorDiv:
-    case VectorMin:
-    case VectorMax:
-    case VectorPmin:
-    case VectorPmax:
-    case VectorNarrow:
-    case VectorNot:
-    case VectorAnd:
-    case VectorAndnot:
-    case VectorOr:
-    case VectorXor:
-    case VectorShl:
-    case VectorShr:
-    case VectorAbs:
-    case VectorNeg:
-    case VectorPopcnt:
-    case VectorCeil:
-    case VectorFloor:
-    case VectorTrunc:
-    case VectorTruncSat:
-    case VectorRelaxedTruncSat:
-    case VectorConvert:
-    case VectorConvertLow:
-    case VectorNearest:
-    case VectorSqrt:
-    case VectorExtendLow:
-    case VectorExtendHigh:
-    case VectorPromote:
-    case VectorDemote:
-    case VectorSplat:
-    case VectorAnyTrue:
-    case VectorAllTrue:
-    case VectorAvgRound:
-    case VectorBitmask:
-    case VectorBitwiseSelect:
-    case VectorExtaddPairwise:
-    case VectorMulSat:
-    case VectorSwizzle:
-    case VectorUnzipEven:
-    case VectorUnzipOdd:
-    case VectorZipLower:
-    case VectorZipHigher:
-    case VectorTransposeEven:
-    case VectorTransposeOdd:
-    case VectorReverse:
-    case VectorExtractPair:
-    case VectorMulByElement:
-    case VectorRelaxedSwizzle:
-    case VectorRelaxedMAdd:
-    case VectorRelaxedNMAdd:
-    case VectorRelaxedLaneSelect:
-    case VectorRelaxedMin:
-    case VectorRelaxedMax:
-    case VectorRelaxedQ15Mulr:
-    case VectorRelaxedDotI8x16I7x16:
-    case VectorRelaxedDotI8x16I7x16Add:
-        break;
+    switch (opcode) {
+    case Load8Z:
+    case Load8S:
+    case Load16Z:
+    case Load16S:
+    case Load:
+    case Store8:
+    case Store16:
+    case Store:
+    case MemoryMove:
+    case MemoryFill:
+    case AtomicWeakCAS:
+    case AtomicStrongCAS:
+    case AtomicXchgAdd:
+    case AtomicXchgAnd:
+    case AtomicXchgOr:
+    case AtomicXchgSub:
+    case AtomicXchgXor:
+    case AtomicXchg:
+    case Fence:
+    case CCall:
+    case Patchpoint:
+    case WasmBoundsCheck:
+    case WasmStructGet:
+    case WasmStructSet:
+    case WasmStructNew:
+    case WasmArrayGet:
+    case WasmArraySet:
+    case WasmArrayNew:
+    case WasmArrayLength:
+        return Effects::invalid();
     case Div:
     case UDiv:
     case Mod:
     case UMod:
         result.controlDependent = true;
         break;
+    case WasmAddress:
+        result.readsPinned = true;
+        break;
+    case CheckAdd:
+    case CheckSub:
+    case CheckMul:
+    case Check:
+        result = Effects::forCheck();
+        break;
+    case WasmRefCast:
+        result.reads = HeapRange::top();
+        result.controlDependent = true;
+        result.exitsSideways = true;
+        break;
+    case WasmRefTest:
+        result.reads = HeapRange::top();
+        result.controlDependent = true;
+        break;
+    case Upsilon:
+    case Set:
+        result.writesLocalState = true;
+        break;
+    case Phi:
+    case Get:
+        result.readsLocalState = true;
+        break;
+    case Jump:
+    case Branch:
+    case Switch:
+    case Return:
+    case Oops:
+    case EntrySwitch:
+        result.terminal = true;
+        break;
+    default:
+        // Most opcodes (arithmetic, vectors, constants, conversions) have no effects.
+        break;
+    }
+    return result;
+}
+
+// The fast path in Value::effects() returns table entries without the traps suffix, which is only
+// sound if every trapping opcode with constant effects already subsumes it.
+constexpr bool constantEffectsTableIsTrapSafe()
+{
+    for (unsigned i = 0; i < numberOfB3Opcodes; ++i) {
+        Opcode opcode = static_cast<Opcode>(i);
+        Effects entry = constantEffectsForOpcode(opcode);
+        if (entry.isValid() && Kind(opcode).hasTraps() && !(entry.exitsSideways && entry.reads == HeapRange::top()))
+            return false;
+    }
+    return true;
+}
+static_assert(constantEffectsTableIsTrapSafe(),
+    "Trapping opcodes with constant effects must already set exitsSideways and reads=top.");
+
+} // anonymous namespace
+
+const std::array<Effects, numberOfB3Opcodes> constantEffectsTable = ([] {
+    std::array<Effects, numberOfB3Opcodes> table { };
+    for (unsigned i = 0; i < numberOfB3Opcodes; ++i)
+        table[i] = constantEffectsForOpcode(static_cast<Opcode>(i));
+    return table;
+}());
+
+Effects Value::effectsSlow() const
+{
+    Effects result;
+    switch (opcode()) {
     case Load8Z:
     case Load8S:
     case Load16Z:
@@ -834,7 +799,7 @@ Effects Value::effects() const
         result.controlDependent = memory->controlDependent();
         break;
     }
-    case MemoryCopy: {
+    case MemoryMove: {
         const auto* memory = as<BulkMemoryValue>();
         result.reads = memory->readRange();
         result.writes = memory->writeRange();
@@ -863,9 +828,6 @@ Effects Value::effects() const
         result.controlDependent = true;
         break;
     }
-    case WasmAddress:
-        result.readsPinned = true;
-        break;
     case Fence: {
         const FenceValue* fence = as<FenceValue>();
         result.reads = fence->read;
@@ -878,12 +840,6 @@ Effects Value::effects() const
         break;
     case Patchpoint:
         result = as<PatchpointValue>()->effects;
-        break;
-    case CheckAdd:
-    case CheckSub:
-    case CheckMul:
-    case Check:
-        result = Effects::forCheck();
         break;
     case WasmBoundsCheck:
         switch (as<WasmBoundsCheckValue>()->boundsType()) {
@@ -909,11 +865,6 @@ Effects Value::effects() const
         result.controlDependent = true;
         break;
     }
-    case WasmStructNew:
-        result.reads = HeapRange::top();
-        result.writes = HeapRange::top();
-        result.exitsSideways = true;
-        break;
     case WasmArrayGet: {
         const auto* derived = as<WasmArrayGetValue>();
         result.reads = derived->range();
@@ -927,42 +878,28 @@ Effects Value::effects() const
         result.controlDependent = true;
         break;
     }
-    case WasmArrayNew:
-        result.reads = HeapRange::top();
-        result.writes = HeapRange::top();
-        result.exitsSideways = true;
-        break;
     case WasmArrayLength:
         result.reads = as<WasmArrayLengthValue>()->range();
         result.controlDependent = true;
         result.readsMutability = Mutability::Immutable;
         break;
-    case WasmRefCast:
+    case WasmStructNew:
+    case WasmArrayNew:
+        // Allocation can trap and can trigger GC, so it reads everything and exits sideways. It
+        // only stores into the object it just produced, which nothing loaded earlier can alias, so
+        // it need not clobber cached field loads. What it must clobber is the collector state a
+        // triggered GC updates: the barrier threshold and the mutator-fence flag. Every allocation
+        // site is followed by a mutator fence that branches on that flag and full-clobbers when
+        // set, so keeping the flag's load from being hoisted above the allocation is what makes
+        // the narrow write range sound for everything else, including cached cell states.
         result.reads = HeapRange::top();
-        result.controlDependent = true;
+        result.writes = opcode() == WasmStructNew ? as<WasmStructNewValue>()->range() : as<WasmArrayNewValue>()->range();
         result.exitsSideways = true;
         break;
-    case WasmRefTest:
-        result.reads = HeapRange::top();
-        result.controlDependent = true;
-        break;
-    case Upsilon:
-    case Set:
-        result.writesLocalState = true;
-        break;
-    case Phi:
-    case Get:
-        result.readsLocalState = true;
-        break;
-    case Jump:
-    case Branch:
-    case Switch:
-    case Return:
-    case Oops:
-    case EntrySwitch:
-        result.terminal = true;
-        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
     }
+
     // We check hasTraps() first because most Kinds don't trap and we just switched on the
     // Kind above. So in most cases the compiler won't bother loading the traps() bit.
     if (kind().hasTraps() && traps()) {
@@ -994,7 +931,6 @@ ValueKey Value::key() const
     case ZExt32:
     case Clz:
     case Trunc:
-    case TruncHigh:
     case IToD:
     case IToF:
     case FloatToDouble:
@@ -1039,7 +975,6 @@ ValueKey Value::key() const
     case CheckAdd:
     case CheckSub:
     case CheckMul:
-    case Stitch:
         return ValueKey(kind(), type(), child(0), child(1));
     case Select:
         return ValueKey(kind(), type(), child(0), child(1), child(2));
@@ -1162,9 +1097,9 @@ ValueKey Value::key() const
         Value* child2 = wasmValue->hasTargetStructureID() ? child(1) : nullptr;
 
         // Check if RTT is present and set HasRTT flag accordingly
-        if (wasmValue->targetRTT()) {
+        if (RefPtr targetRTT = wasmValue->targetRTT()) {
             flags.add(WasmRefTypeCheckFlag::HasRTT);
-            return ValueKey(kind(), type(), child(0), child2, flags.toRaw(), wasmValue->targetRTT());
+            return ValueKey(kind(), type(), child(0), child2, flags.toRaw(), targetRTT.get());
         }
 
         // Use targetHeapType when RTT is null (builtin types)
@@ -1197,7 +1132,7 @@ ValueKey Value::key() const
     case WasmArrayGet:
     case WasmArraySet:
     case WasmArrayNew:
-    case MemoryCopy:
+    case MemoryMove:
     case MemoryFill:
     case Fence:
     case CCall:
@@ -1308,7 +1243,6 @@ Type Value::typeFor(Kind kind, Value* firstChild, Value* secondChild)
     case AboveEqual:
     case BelowEqual:
     case EqualOrUnordered:
-    case TruncHigh:
         return Int32;
     case Trunc:
         return firstChild->type() == Int64 ? Int32 : Float;
@@ -1316,7 +1250,6 @@ Type Value::typeFor(Kind kind, Value* firstChild, Value* secondChild)
     case SExt16To64:
     case SExt32:
     case ZExt32:
-    case Stitch:
         return Int64;
     case FloatToDouble:
     case IToD:

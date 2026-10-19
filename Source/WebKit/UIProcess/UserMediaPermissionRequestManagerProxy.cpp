@@ -49,7 +49,9 @@
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/UserMediaRequest.h>
 #include <algorithm>
+#include <wtf/Borrow.h>
 #include <wtf/CryptographicallyRandomNumber.h>
+#include <wtf/HexNumber.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/Scope.h>
 #include <wtf/StdLibExtras.h>
@@ -73,7 +75,7 @@ static const MediaProducerMediaStateFlags activeCaptureMask { MediaProducerMedia
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-static WeakHashSet<UserMediaPermissionRequestManagerProxy>& NODELETE proxies()
+static WeakHashSet<UserMediaPermissionRequestManagerProxy>& LEGACY_NODELETE proxies()
 {
     static NeverDestroyed<WeakHashSet<UserMediaPermissionRequestManagerProxy>> set;
     return set;
@@ -164,7 +166,7 @@ void UserMediaPermissionRequestManagerProxy::invalidatePendingRequests()
     for (auto& request : pendingUserMediaRequests)
         request->invalidate();
 
-    auto pregrantedRequests = WTF::move(m_pregrantedRequests);
+    const Vector pregrantedRequests = WTF::move(m_pregrantedRequests);
     for (auto& request : pregrantedRequests)
         request->invalidate();
 
@@ -220,7 +222,7 @@ void UserMediaPermissionRequestManagerProxy::clearCachedState()
 }
 
 #if ENABLE(MEDIA_STREAM)
-static uint64_t NODELETE toWebCore(UserMediaPermissionRequestProxy::UserMediaAccessDenialReason reason)
+static uint64_t LEGACY_NODELETE toWebCore(UserMediaPermissionRequestProxy::UserMediaAccessDenialReason reason)
 {
     switch (reason) {
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::NoConstraints:
@@ -487,7 +489,7 @@ static bool isMatchingDeniedRequest(const UserMediaPermissionRequestProxy& reque
 
 bool UserMediaPermissionRequestManagerProxy::wasRequestDenied(const UserMediaPermissionRequestProxy& request, bool needsAudio, bool needsVideo, bool needsScreenCapture)
 {
-    for (const auto& deniedRequest : m_deniedRequests) {
+    for (const auto& deniedRequest : borrow(m_deniedRequests)) {
         if (!isMatchingDeniedRequest(request, deniedRequest))
             continue;
 
@@ -791,7 +793,10 @@ void UserMediaPermissionRequestManagerProxy::processUserMediaPermissionValidRequ
             return;
 
         if (!isOK) {
-            protectedThis->denyRequest(protect(*protectedThis->m_currentUserMediaRequest), UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::PermissionDenied);
+            RefPtr currentUserMediaRequest = protectedThis->m_currentUserMediaRequest;
+            if (!currentUserMediaRequest)
+                return;
+            protectedThis->denyRequest(*currentUserMediaRequest, UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::PermissionDenied);
             return;
         }
         protectedThis->decidePolicyForUserMediaPermissionRequest();
@@ -911,8 +916,8 @@ public:
         m_handler(m_cameraPermission, m_microphonePermission);
     }
 
-    void NODELETE setCameraPermission(PermissionState state) { m_cameraPermission = state; }
-    void NODELETE setMicrophonePermission(PermissionState state) { m_microphonePermission = state; }
+    void LEGACY_NODELETE setCameraPermission(PermissionState state) { m_cameraPermission = state; }
+    void LEGACY_NODELETE setMicrophonePermission(PermissionState state) { m_microphonePermission = state; }
 
 private:
     explicit UserMediaPermissionInfoGatherer(CompletionHandler<void(PermissionState, PermissionState)>&& handler)
@@ -1014,7 +1019,7 @@ void UserMediaPermissionRequestManagerProxy::computeFilteredDeviceList(FrameIden
 
         bool shouldRestrictSpeaker = !protectedThis->wasGrantedAudioAccess(frameID);
         Vector<CaptureDeviceWithCapabilities> filteredDevices;
-        for (auto& deviceWithCapabilities : devicesWithCapabilities) {
+        for (auto& deviceWithCapabilities : borrow(devicesWithCapabilities)) {
             auto& device = deviceWithCapabilities.device;
             if (!device.enabled())
                 continue;
@@ -1201,7 +1206,7 @@ void UserMediaPermissionRequestManagerProxy::captureStateChanged(MediaProducerMe
 
 void UserMediaPermissionRequestManagerProxy::viewIsBecomingVisible()
 {
-    auto pregrantedRequests = WTF::move(m_pregrantedRequests);
+    const Vector pregrantedRequests = WTF::move(m_pregrantedRequests);
     for (auto& request : pregrantedRequests)
         grantRequest(request);
 }

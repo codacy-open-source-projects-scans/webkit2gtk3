@@ -54,7 +54,7 @@ inline Vector<Ref<AXCoreObject>> AXObjectCache::objectsForIDs(const U& axIDs) co
 
     CheckedPtr cache = this;
     return WTF::compactMap(axIDs, [cache](auto& axID) -> std::optional<Ref<AXCoreObject>> {
-        if (auto* object = cache->objectForID(axID))
+        if (RefPtr object = cache->objectForID(axID))
             return Ref { *object };
         return std::nullopt;
     });
@@ -81,6 +81,13 @@ inline AccessibilityObject* AXObjectCache::getOrCreate(Element& element, IsPartO
     if (auto* object = get(element))
         return object;
     return getOrCreateSlow(element, isPartOfRelation);
+}
+
+inline AccessibilityObject* AXObjectCache::getOrCreate(Widget& widget)
+{
+    if (auto* object = get(widget))
+        return object;
+    return getOrCreateSlow(widget);
 }
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)

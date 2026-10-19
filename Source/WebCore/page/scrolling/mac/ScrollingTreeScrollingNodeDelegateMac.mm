@@ -38,6 +38,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <pal/spi/mac/NSScrollerImpSPI.h>
 #import <wtf/BlockObjCExceptions.h>
+#import <wtf/SystemTracing.h>
 #import <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -63,12 +64,12 @@ void ScrollingTreeScrollingNodeDelegateMac::nodeWillBeDestroyed()
 
 void ScrollingTreeScrollingNodeDelegateMac::updateFromStateNode(const ScrollingStateScrollingNode& scrollingStateNode)
 {
-    CheckedRef horizontalScroller = m_scrollerPair->horizontalScroller();
-    CheckedRef verticalScroller = m_scrollerPair->verticalScroller();
+    Ref horizontalScroller = m_scrollerPair->horizontalScroller();
+    Ref verticalScroller = m_scrollerPair->verticalScroller();
 
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::PainterForScrollbar)) {
-        auto horizontalScrollbar = scrollingStateNode.horizontalScrollerImp();
-        auto verticalScrollbar = scrollingStateNode.verticalScrollerImp();
+        RetainPtr horizontalScrollbar = scrollingStateNode.horizontalScrollerImp();
+        RetainPtr verticalScrollbar = scrollingStateNode.verticalScrollerImp();
         if (horizontalScrollbar || verticalScrollbar) {
             m_scrollerPair->releaseReferencesToScrollerImpsOnTheMainThread();
             horizontalScroller->setScrollerImp(horizontalScrollbar);
@@ -80,10 +81,10 @@ void ScrollingTreeScrollingNodeDelegateMac::updateFromStateNode(const ScrollingS
         m_scrollerPair->mouseIsInScrollbar(scrollingStateNode.scrollbarHoverState());
 
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::HorizontalScrollbarLayer))
-        horizontalScroller->setHostLayer(static_cast<CALayer*>(scrollingStateNode.horizontalScrollbarLayer()));
+        horizontalScroller->setHostLayer(protect(static_cast<CALayer*>(scrollingStateNode.horizontalScrollbarLayer())));
 
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::VerticalScrollbarLayer))
-        verticalScroller->setHostLayer(static_cast<CALayer*>(scrollingStateNode.verticalScrollbarLayer()));
+        verticalScroller->setHostLayer(protect(static_cast<CALayer*>(scrollingStateNode.verticalScrollbarLayer())));
 
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::ScrollableAreaParams)) {
         horizontalScroller->setHiddenByStyle(scrollingStateNode.scrollableAreaParameters().horizontalNativeScrollbarVisibility);
@@ -349,6 +350,15 @@ void ScrollingTreeScrollingNodeDelegateMac::didStopRubberBandAnimation()
 
 void ScrollingTreeScrollingNodeDelegateMac::rubberBandingStateChanged(bool inRubberBand)
 {
+    if (scrollingTree()->scrollingPerformanceTestingEnabled()) {
+        auto stretch = stretchAmount();
+        WTFEmitSignpostAlways(this, ScrollingPerformanceTestRubberBand, "%{public}s; top=%d right=%d bottom=%d left=%d; stretch=%d,%d; isMainFrame=%d",
+            inRubberBand ? "started" : "ended",
+            stretch.height() < 0, stretch.width() > 0, stretch.height() > 0, stretch.width() < 0,
+            stretch.width(), stretch.height(),
+            scrollingNode()->nodeType() == ScrollingNodeType::MainFrame);
+    }
+
     scrollingTree()->setRubberBandingInProgressForNode(scrollingNode()->scrollingNodeID(), inRubberBand);
 #if HAVE(RUBBER_BANDING)
     if (!inRubberBand)
@@ -358,10 +368,10 @@ void ScrollingTreeScrollingNodeDelegateMac::rubberBandingStateChanged(bool inRub
 
 FloatSize ScrollingTreeScrollingNodeDelegateMac::rubberBandTargetOffset() const
 {
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    // Only the main frame supports banner views.
+#if HAVE(NSREFRESHCONTROLLER)
+    // NSRefreshController will only affect the rubberbanding of the main frame.
     if (scrollingNode()->nodeType() == ScrollingNodeType::MainFrame) {
-        auto topOffset = scrollingTree()->bannerViewHeight();
+        auto topOffset = scrollingTree()->topScrollStretchForRefreshController();
         if (topOffset)
             return FloatSize(0, -topOffset);
     }
@@ -369,19 +379,19 @@ FloatSize ScrollingTreeScrollingNodeDelegateMac::rubberBandTargetOffset() const
     return { };
 }
 
-#if ENABLE(BANNER_VIEW_OVERLAYS)
+#if HAVE(NSREFRESHCONTROLLER)
 
-float ScrollingTreeScrollingNodeDelegateMac::bannerViewMaximumHeight() const
+float ScrollingTreeScrollingNodeDelegateMac::refreshControllerSnappingThreshold() const
 {
     if (scrollingNode()->nodeType() != ScrollingNodeType::MainFrame)
         return 0;
 
-    return scrollingTree()->bannerViewMaximumHeight();
+    return scrollingTree()->refreshControllerSnappingThreshold();
 }
 
-bool ScrollingTreeScrollingNodeDelegateMac::hasBannerViewOverlay() const
+bool ScrollingTreeScrollingNodeDelegateMac::hasRefreshController() const
 {
-    return scrollingNode()->nodeType() == ScrollingNodeType::MainFrame && scrollingTree()->hasBannerViewOverlay();
+    return scrollingNode()->nodeType() == ScrollingNodeType::MainFrame && scrollingTree()->hasRefreshController();
 }
 
 #endif
@@ -425,6 +435,39 @@ void ScrollingTreeScrollingNodeDelegateMac::viewSizeDidChange()
 String ScrollingTreeScrollingNodeDelegateMac::scrollbarStateForOrientation(ScrollbarOrientation orientation) const
 {
     return m_scrollerPair->scrollbarStateForOrientation(orientation);
+}
+
+Vector<RetainPtr<CALayer>, 2> ScrollingTreeScrollingNodeDelegateMac::hitTestableScrollbarLayers() const
+{
+    Ref node = scrollingNode();
+    bool usesOverlayScrollbars = m_scrollerPair->scrollbarStyle() == ScrollbarStyle::Overlay;
+
+    Vector<RetainPtr<CALayer>, 2> layers;
+    auto appendIfHitTestable = [&](ScrollerMac& scroller, NativeScrollbarVisibility visibility) {
+        RetainPtr hostLayer = scroller.hostLayer();
+        if (!hostLayer)
+            return;
+
+        switch (visibility) {
+        case NativeScrollbarVisibility::HiddenByStyle:
+            return;
+        case NativeScrollbarVisibility::ReplacedByCustomScrollbar:
+            // The web process paints custom scrollbars into the host layer, and they are never overlay scrollbars.
+            break;
+        case NativeScrollbarVisibility::Visible:
+            // The web process only hit-tests an overlay scrollbar while it is shown, which it learns about
+            // through ScrollerMac::visibilityChanged(), so consult the same state here.
+            if (usesOverlayScrollbars && !scroller.isVisible())
+                return;
+            break;
+        }
+
+        layers.append(WTF::move(hostLayer));
+    };
+
+    appendIfHitTestable(m_scrollerPair->verticalScroller(), node->verticalNativeScrollbarVisibility());
+    appendIfHitTestable(m_scrollerPair->horizontalScroller(), node->horizontalNativeScrollbarVisibility());
+    return layers;
 }
 
 } // namespace WebCore

@@ -28,6 +28,7 @@
 
 #include "InternalWritableStream.h"
 #include "JSDOMPromise.h"
+#include "ScriptExecutionContext.h"
 #include "WebCoreJSClientData.h"
 #include "WritableStream.h"
 #include <JavaScriptCore/CallData.h>
@@ -88,7 +89,7 @@ RefPtr<DOMPromise> writableStreamDefaultWriterCloseWithErrorPropagation(Internal
     if (result.hasException())
         return nullptr;
 
-    auto* promise = uncheckedDowncast<JSC::JSPromise>(result.returnValue());
+    auto* promise = downcast<JSC::JSPromise>(result.returnValue());
     if (!promise)
         return nullptr;
 
@@ -127,11 +128,124 @@ RefPtr<DOMPromise> writableStreamDefaultWriterWrite(InternalWritableStreamWriter
     if (result.hasException())
         return nullptr;
 
-    auto* promise = uncheckedDowncast<JSC::JSPromise>(result.returnValue());
+    auto* promise = downcast<JSC::JSPromise>(result.returnValue());
     if (!promise)
         return nullptr;
 
     return DOMPromise::create(*globalObject, *promise);
+}
+
+JSC::JSValue InternalWritableStreamWriter::closedForBindings(JSC::JSGlobalObject& globalObject)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterClosedForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return { };
+
+    return result.returnValue();
+}
+
+ExceptionOr<std::optional<double>> InternalWritableStreamWriter::desiredSizeForBindings(JSC::JSGlobalObject& globalObject)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterDesiredSizeForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return result.releaseException();
+
+    // writableStreamDefaultWriterDesiredSizeForBindings returns either null or a number.
+    if (result.returnValue().isNull())
+        return { { } };
+
+    return result.returnValue().asNumber();
+}
+
+JSC::JSValue InternalWritableStreamWriter::readyForBindings(JSC::JSGlobalObject& globalObject)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterReadyForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return { };
+
+    return result.returnValue();
+}
+
+JSC::JSValue InternalWritableStreamWriter::abortForBindings(JSC::JSGlobalObject& globalObject, JSC::JSValue reason)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterAbortForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+    arguments.append(reason);
+    ASSERT(!arguments.hasOverflowed());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return { };
+
+    return result.returnValue();
+}
+
+JSC::JSValue InternalWritableStreamWriter::closeForBindings(JSC::JSGlobalObject& globalObject)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterCloseForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return { };
+
+    return result.returnValue();
+}
+
+ExceptionOr<void> InternalWritableStreamWriter::releaseLockForBindings(JSC::JSGlobalObject& globalObject)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterReleaseLockForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return result.releaseException();
+
+    return { };
+}
+
+JSC::JSValue InternalWritableStreamWriter::writeForBindings(JSC::JSGlobalObject& globalObject, JSC::JSValue chunk)
+{
+    auto* clientData = downcast<JSVMClientData>(globalObject.vm().clientData);
+    auto& privateName = clientData->builtinFunctions().writableStreamInternalsBuiltins().writableStreamDefaultWriterWriteForBindingsPrivateName();
+
+    JSC::MarkedArgumentBuffer arguments;
+    arguments.append(guardedObject());
+    arguments.append(chunk);
+    ASSERT(!arguments.hasOverflowed());
+
+    auto result = invokeWritableStreamWriterFunction(globalObject, privateName, arguments);
+    if (result.hasException())
+        return { };
+
+    return result.returnValue();
 }
 
 void InternalWritableStreamWriter::onClosedPromiseRejection(Function<void(JSDOMGlobalObject&, JSC::JSValue)>&& callback)
@@ -150,13 +264,16 @@ void InternalWritableStreamWriter::onClosedPromiseRejection(Function<void(JSDOMG
     if (result.hasException())
         return;
 
-    auto* promise = uncheckedDowncast<JSC::JSPromise>(result.returnValue());
+    auto* promise = downcast<JSC::JSPromise>(result.returnValue());
     if (!promise)
         return;
 
     Ref domPromise = DOMPromise::create(*globalObject, *promise);
     domPromise->whenSettledWithResult([callback = WTF::move(callback)](auto* globalObject, bool isFulfilled, auto result) mutable {
         if (isFulfilled || !globalObject)
+            return;
+        RefPtr scriptExecutionContext = globalObject->scriptExecutionContext();
+        if (!scriptExecutionContext || scriptExecutionContext->activeDOMObjectsAreStopped())
             return;
         callback(*globalObject, result);
     });
@@ -178,19 +295,22 @@ void InternalWritableStreamWriter::onClosedPromiseResolution(Function<void()>&& 
     if (result.hasException())
         return;
 
-    auto* promise = uncheckedDowncast<JSC::JSPromise>(result.returnValue());
+    auto* promise = downcast<JSC::JSPromise>(result.returnValue());
     if (!promise)
         return;
 
     Ref domPromise = DOMPromise::create(*globalObject, *promise);
-    domPromise->whenSettledWithResult([callback = WTF::move(callback)](auto*, bool isFulfilled, auto) mutable {
-        if (!isFulfilled)
+    domPromise->whenSettledWithResult([callback = WTF::move(callback)](auto* globalObject, bool isFulfilled, auto) mutable {
+        if (!isFulfilled || !globalObject)
+            return;
+        RefPtr scriptExecutionContext = globalObject->scriptExecutionContext();
+        if (!scriptExecutionContext || scriptExecutionContext->activeDOMObjectsAreStopped())
             return;
         callback();
     });
 }
 
-static int writableStreamDefaultWriterGetDesiredSize(InternalWritableStreamWriter& writer)
+static std::optional<int> writableStreamDefaultWriterGetDesiredSize(InternalWritableStreamWriter& writer)
 {
     auto* globalObject = writer.globalObject();
     if (!globalObject)
@@ -203,12 +323,18 @@ static int writableStreamDefaultWriterGetDesiredSize(InternalWritableStreamWrite
     arguments.append(writer.guardedObject());
 
     auto result = invokeWritableStreamWriterFunction(*globalObject, privateName, arguments);
+    if (result.hasException())
+        return { };
     return result.returnValue().toNumber(globalObject);
 }
 
 void InternalWritableStreamWriter::whenReady(Function<void (bool)>&& callback)
 {
-    if (writableStreamDefaultWriterGetDesiredSize(*this) > 0) {
+    auto size = writableStreamDefaultWriterGetDesiredSize(*this);
+    if (!size)
+        return;
+
+    if (*size > 0) {
         callback(true);
         return;
     }
@@ -227,12 +353,17 @@ void InternalWritableStreamWriter::whenReady(Function<void (bool)>&& callback)
     if (result.hasException())
         return;
 
-    auto* promise = uncheckedDowncast<JSC::JSPromise>(result.returnValue());
+    auto* promise = downcast<JSC::JSPromise>(result.returnValue());
     if (!promise)
         return;
 
     Ref domPromise = DOMPromise::create(*globalObject, *promise);
-    domPromise->whenSettledWithResult([callback = WTF::move(callback)](auto*, bool isFulfilled, auto) mutable {
+    domPromise->whenSettledWithResult([callback = WTF::move(callback)](auto* globalObject, bool isFulfilled, auto) mutable {
+        if (!globalObject)
+            return;
+        RefPtr scriptExecutionContext = globalObject->scriptExecutionContext();
+        if (!scriptExecutionContext || scriptExecutionContext->activeDOMObjectsAreStopped())
+            return;
         callback(isFulfilled);
     });
 }

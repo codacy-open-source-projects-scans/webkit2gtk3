@@ -55,6 +55,7 @@ enum class TextExtractionOptionFlag : uint8_t {
     IncludeRects         = 1 << 1,
     ShortenURLs          = 1 << 2,
     IncludeSelectOptions = 1 << 3,
+    IncludeTagName       = 1 << 4,
 };
 
 enum class TextExtractionOutputFormat : uint8_t {
@@ -84,7 +85,7 @@ struct TextExtractionOptions {
     {
     }
 
-    TextExtractionOptions(WebCore::FrameIdentifier&& mainFrameIdentifier, Vector<TextExtractionFilterCallback>&& filters, Vector<String>&& items, HashMap<String, String>&& replacementStrings, std::optional<TextExtractionVersion> version, TextExtractionOptionFlags flags, TextExtractionOutputFormat outputFormat, TextExtractionURLCache* urlCache = nullptr, std::optional<uint64_t> maxWordsPerParagraph = std::nullopt, String&& topHostName = { })
+    TextExtractionOptions(WebCore::FrameIdentifier&& mainFrameIdentifier, Vector<TextExtractionFilterCallback>&& filters, Vector<String>&& items, Vector<std::pair<String, String>>&& replacementStrings, std::optional<TextExtractionVersion> version, TextExtractionOptionFlags flags, TextExtractionOutputFormat outputFormat, TextExtractionURLCache* urlCache = nullptr, std::optional<uint64_t> maxWordsPerParagraph = std::nullopt, String&& topHostName = { })
         : mainFrameIdentifier(WTF::move(mainFrameIdentifier))
         , filterCallbacks(WTF::move(filters))
         , nativeMenuItems(WTF::move(items))
@@ -101,7 +102,7 @@ struct TextExtractionOptions {
     WebCore::FrameIdentifier mainFrameIdentifier;
     Vector<TextExtractionFilterCallback> filterCallbacks;
     Vector<String> nativeMenuItems;
-    HashMap<String, String> replacementStrings;
+    Vector<std::pair<String, String>> replacementStrings;
     std::optional<TextExtractionVersion> version;
     std::optional<uint64_t> maxWordsPerParagraph;
     TextExtractionOptionFlags flags;
@@ -110,15 +111,26 @@ struct TextExtractionOptions {
     String topHostName;
 };
 
+struct TextExtractionLineContent {
+    String contentWithoutIdentifier;
+    String cachedRepresentation;
+    std::optional<String> nodeIdentifier;
+};
+
 struct TextExtractionResult {
     String textContent;
     bool filteredOutAnyText { false };
     Vector<String> shortenedURLStrings;
     HashMap<String, Vector<ExtractedNodeInfo>> textToContainerMap;
+    Vector<TextExtractionLineContent> lineContents;
 };
 
 void convertToText(WebCore::TextExtraction::Item&&, TextExtractionOptions&&, CompletionHandler<void(TextExtractionResult&&)>&&);
 
 std::optional<ExtractedNodeInfo> parseExtractedNodeInfo(StringView);
+
+String foldTextForReplacement(const String& source);
+
+String applyReplacements(const String& text, const Vector<std::pair<String, String>>& replacementStrings);
 
 } // namespace WebKit

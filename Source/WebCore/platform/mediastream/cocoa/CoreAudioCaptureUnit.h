@@ -86,10 +86,10 @@ public:
     static Ref<CoreAudioCaptureUnit> createNonVPIOUnit();
     ~CoreAudioCaptureUnit();
 
-    WEBCORE_EXPORT static void forEach(NOESCAPE Function<void(CoreAudioCaptureUnit&)>&&);
+    WEBCORE_EXPORT static void forEach(NOESCAPE const Function<void(CoreAudioCaptureUnit&)>&);
     static void forNewUnit(Function<void(CoreAudioCaptureUnit&)>&&);
 
-    using CreationCallback = Function<Expected<UniqueRef<InternalUnit>, OSStatus>(bool enableEchoCancellation)>;
+    using CreationCallback = Function<std::expected<UniqueRef<InternalUnit>, OSStatus>(bool enableEchoCancellation)>;
     void setInternalUnitCreationCallback(CreationCallback&& callback) { m_creationCallback = WTF::move(callback); }
     using GetSampleRateCallback = Function<int()>;
     void setInternalUnitGetSampleRateCallback(GetSampleRateCallback&& callback) { m_getSampleRateCallback = WTF::move(callback); }
@@ -179,7 +179,7 @@ private:
     void updateMutedStateTimerFired();
 
     void updateVoiceActivityDetection(bool shouldDisableVoiceActivityDetection = false);
-    bool NODELETE shouldEnableVoiceActivityDetection() const;
+    bool LEGACY_NODELETE shouldEnableVoiceActivityDetection() const;
     RetainPtr<WebCoreAudioInputMuteChangeListener> createAudioInputMuteChangeListener();
     void setMutedState(bool isMuted);
 
@@ -213,16 +213,15 @@ private:
 #if !LOG_DISABLED
     void checkTimestamps(const AudioTimeStamp&, double);
 
-    String m_ioUnitName;
 #endif
 
     LongCapabilityRange m_sampleRateCapabilities;
 
     std::atomic<uint64_t> m_microphoneProcsCalled { 0 };
     uint64_t m_microphoneProcsCalledLastTime { 0 };
-    std::unique_ptr<Timer> m_verifyCapturingTimer;
+    const std::unique_ptr<Timer> m_verifyCapturingTimer;
 
-    std::unique_ptr<Timer> m_updateMutedStateTimer;
+    const std::unique_ptr<Timer> m_updateMutedStateTimer;
 
     std::optional<size_t> m_minimumMicrophoneSampleFrames;
     bool m_isReconfiguring { false };
@@ -238,7 +237,6 @@ private:
 
     bool m_shouldUseVPIO { true };
     bool m_canRenderAudio { true };
-    bool m_shouldSetVoiceActivityListener { false };
     bool m_voiceActivityDetectionEnabled { false };
 #if PLATFORM(MAC)
     StoredAudioUnit m_storedVPIOUnit { nullptr };

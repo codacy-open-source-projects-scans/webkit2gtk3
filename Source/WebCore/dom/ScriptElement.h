@@ -22,6 +22,7 @@
 #pragma once
 
 #include <JavaScriptCore/Forward.h>
+#include <JavaScriptCore/SourceTaintedness.h>
 #include <WebCore/ActiveDOMObject.h>
 #include <WebCore/ContainerNode.h>
 #include <WebCore/ContentSecurityPolicy.h>
@@ -53,6 +54,8 @@ public:
 
     bool prepareScript(const TextPosition& scriptStartPosition = TextPosition());
 
+    void markAlreadyStarted() { m_alreadyStarted = true; }
+
     const AtomString& scriptCharset() const LIFETIME_BOUND { return m_characterEncoding; }
     WEBCORE_EXPORT String scriptContent() const;
     void executeClassicScript(const ScriptSourceCode&);
@@ -82,7 +85,7 @@ public:
 
     ScriptType scriptType() const { return m_scriptType; }
 
-    JSC::SourceTaintedOrigin sourceTaintedOrigin() const { return m_taintedOrigin; }
+    JSC::SourceTaintedness sourceTaintedOrigin() const { return m_taintedOrigin; }
 
     static std::optional<ScriptType> determineScriptType(const String& typeAttribute, const String& languageAttribute, bool isHTMLDocument = true, bool speculationRulesPrefetchEnabled = false);
 
@@ -112,7 +115,7 @@ protected:
     void childrenChanged(const ContainerNode::ChildChange&);
     void finishParsingChildren();
     void handleSourceAttribute(const String& sourceURL);
-    void NODELETE handleAsyncAttribute();
+    void LEGACY_NODELETE handleAsyncAttribute();
 
     void setTrustedScriptText(const String&);
 
@@ -123,11 +126,12 @@ private:
     void executeScriptAndDispatchEvent(LoadableScript&);
 
     std::optional<ScriptType> determineScriptType() const;
-    bool NODELETE ignoresLoadRequest() const;
+    bool LEGACY_NODELETE ignoresLoadRequest() const;
     void dispatchLoadEventRespectingUserGestureIndicator();
 
     bool requestClassicScript(const String& sourceURL);
     bool requestModuleScript(const String& sourceText, const TextPosition& scriptStartPosition);
+    ParserInserted effectiveParserInsertedForModule(Document&, const URL& moduleURL) const;
 
     void updateTaintedOriginFromSourceURL();
 
@@ -141,8 +145,8 @@ private:
     virtual bool isScriptPreventedByAttributes() const { return false; }
 
     WeakRef<Element, WeakPtrImplWithEventTargetData> m_element;
-    OrdinalNumber m_startLineNumber { OrdinalNumber::beforeFirst() };
-    JSC::SourceTaintedOrigin m_taintedOrigin;
+    TextPosition m_startPosition { TextPosition::belowRangePosition() };
+    JSC::SourceTaintedness m_taintedOrigin;
     ParserInserted m_parserInserted : bitWidthOfParserInserted;
     bool m_isExternalScript : 1 { false };
     bool m_alreadyStarted : 1;
@@ -157,21 +161,20 @@ private:
     bool m_hasRelevantLoadEventsListener : 1 { false };
     ScriptType m_scriptType : bitWidthOfScriptType { ScriptType::Classic };
     AtomString m_characterEncoding;
-    AtomString m_fallbackCharacterEncoding;
     RefPtr<LoadableScript> m_loadableScript;
 
     // https://html.spec.whatwg.org/multipage/scripting.html#preparation-time-document
     Markable<ScriptExecutionContextIdentifier> m_preparationTimeDocumentIdentifier;
 
     MonotonicTime m_creationTime;
-    RefPtr<UserGestureToken> m_userGestureToken;
+    const RefPtr<UserGestureToken> m_userGestureToken;
 
     // https://w3c.github.io/trusted-types/dist/spec/#slots-with-trusted-values
     String m_trustedScriptText { emptyString() };
 };
 
 // FIXME: replace with is/downcast<ScriptElement>.
-bool NODELETE isScriptElement(Node&);
-ScriptElement* NODELETE dynamicDowncastScriptElement(Element&);
+bool LEGACY_NODELETE isScriptElement(Node&);
+ScriptElement* LEGACY_NODELETE dynamicDowncastScriptElement(Element&);
 
 }

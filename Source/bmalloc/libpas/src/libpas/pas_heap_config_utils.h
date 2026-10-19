@@ -83,6 +83,8 @@ typedef struct {
     bool pgm_enabled;
     bool delegate_large_user_allocations;
     pas_large_map_variant large_map_variant;
+    bool allow_mte_tagging;
+    pas_memory_flavor memory_flavor;
 } pas_basic_heap_config_arguments;
 
 #define PAS_BASIC_HEAP_CONFIG_SEGREGATED_HEAP_FIELDS(name, ...) \
@@ -90,7 +92,7 @@ typedef struct {
         .base = { \
             .is_enabled = true, \
             .allow_profiling = PAS_SHOULD_PROFILE_BASIC_HEAP_PAGE(pas_page_config_size_category_small), \
-            .allow_mte_tagging = PAS_SHOULD_MTE_TAG_BASIC_HEAP_PAGE(pas_page_config_size_category_small), \
+            .allow_mte_tagging = (((pas_basic_heap_config_arguments){__VA_ARGS__}).allow_mte_tagging), \
             .heap_config_ptr = &name ## _heap_config, \
             .page_config_ptr = &name ## _heap_config.small_segregated_config.base, \
             .page_config_kind = pas_page_config_kind_segregated, \
@@ -145,7 +147,7 @@ typedef struct {
             .is_enabled = \
                 ((pas_basic_heap_config_arguments){__VA_ARGS__}).use_medium_segregated, \
             .allow_profiling = PAS_SHOULD_PROFILE_BASIC_HEAP_PAGE(pas_page_config_size_category_medium), \
-            .allow_mte_tagging = PAS_SHOULD_MTE_TAG_BASIC_HEAP_PAGE(pas_page_config_size_category_medium), \
+            .allow_mte_tagging = (((pas_basic_heap_config_arguments){__VA_ARGS__}).allow_mte_tagging), \
             .heap_config_ptr = &name ## _heap_config, \
             .page_config_ptr = &name ## _heap_config.medium_segregated_config.base, \
             .page_config_kind = pas_page_config_kind_segregated, \
@@ -192,7 +194,7 @@ typedef struct {
             .is_enabled = \
                 ((pas_basic_heap_config_arguments){__VA_ARGS__}).use_small_bitfit, \
             .allow_profiling = PAS_SHOULD_PROFILE_BASIC_HEAP_PAGE(pas_page_config_size_category_small), \
-            .allow_mte_tagging = PAS_SHOULD_MTE_TAG_BASIC_HEAP_PAGE(pas_page_config_size_category_small), \
+            .allow_mte_tagging = (((pas_basic_heap_config_arguments){__VA_ARGS__}).allow_mte_tagging), \
             .heap_config_ptr = &name ## _heap_config, \
             .page_config_ptr = &name ## _heap_config.small_bitfit_config.base, \
             .page_config_kind = pas_page_config_kind_bitfit, \
@@ -236,7 +238,7 @@ typedef struct {
             .is_enabled = \
                 ((pas_basic_heap_config_arguments){__VA_ARGS__}).use_medium_bitfit, \
             .allow_profiling = PAS_SHOULD_PROFILE_BASIC_HEAP_PAGE(pas_page_config_size_category_medium), \
-            .allow_mte_tagging = PAS_SHOULD_MTE_TAG_BASIC_HEAP_PAGE(pas_page_config_size_category_medium), \
+            .allow_mte_tagging = (((pas_basic_heap_config_arguments){__VA_ARGS__}).allow_mte_tagging), \
             .heap_config_ptr = &name ## _heap_config, \
             .page_config_ptr = &name ## _heap_config.medium_bitfit_config.base, \
             .page_config_kind = pas_page_config_kind_bitfit, \
@@ -270,7 +272,7 @@ typedef struct {
             .is_enabled = \
                 ((pas_basic_heap_config_arguments){__VA_ARGS__}).use_marge_bitfit, \
             .allow_profiling = PAS_SHOULD_PROFILE_BASIC_HEAP_PAGE(pas_page_config_size_category_marge), \
-            .allow_mte_tagging = PAS_SHOULD_MTE_TAG_BASIC_HEAP_PAGE(pas_page_config_size_category_marge), \
+            .allow_mte_tagging = false, \
             .heap_config_ptr = &name ## _heap_config, \
             .page_config_ptr = &name ## _heap_config.marge_bitfit_config.base, \
             .page_config_kind = pas_page_config_kind_bitfit, \
@@ -317,12 +319,13 @@ typedef struct {
         .aligned_allocator = name ## _aligned_allocator, \
         .aligned_allocator_talks_to_sharing_pool = true, \
         .deallocator = NULL, \
-        .mmap_capability = pas_may_mmap, \
+        .memory_flavor = ((pas_basic_heap_config_arguments){__VA_ARGS__}).memory_flavor, \
         .root_data = &name ## _root_data, \
         .prepare_to_enumerate = name ## _prepare_to_enumerate, \
         PAS_HEAP_CONFIG_SPECIALIZATIONS(name ## _heap_config), \
         .pgm_enabled = true, \
         .delegate_large_user_allocations = ((pas_basic_heap_config_arguments){__VA_ARGS__}).delegate_large_user_allocations, \
+        .allow_mte_tagging = ((pas_basic_heap_config_arguments){__VA_ARGS__}).allow_mte_tagging, \
         .large_map_variant = ((pas_basic_heap_config_arguments){__VA_ARGS__}).large_map_variant \
     })
 

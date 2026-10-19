@@ -69,6 +69,7 @@ public:
     T* operator->() const { return m_object.get(); }
     T& operator*() const { return *m_object; }
     operator RefPtr<T>() const { return m_object; }
+    Ref<T> releaseNonNull() { return m_object.releaseNonNull(); }
 
 private:
     void didBind(T& object)
@@ -100,8 +101,8 @@ class WebGLObject : public RefCounted<WebGLObject> {
 public:
     virtual ~WebGLObject();
 
-    WebGLRenderingContextBase* NODELETE context() const;
-    GraphicsContextGL* NODELETE graphicsContextGL() const;
+    WebGLRenderingContextBase* LEGACY_NODELETE context() const;
+    GraphicsContextGL* LEGACY_NODELETE graphicsContextGL() const;
 
     PlatformGLObject object() const { return m_object; }
 
@@ -121,9 +122,11 @@ public:
     bool isDeleted() const { return m_deleted; }
 
     // True if this object belongs to the context.
-    bool NODELETE validate(const WebGLRenderingContextBase&) const;
+    bool LEGACY_NODELETE validate(const WebGLRenderingContextBase&) const;
 
-    Lock& NODELETE objectGraphLockForContext();
+    Lock& LEGACY_NODELETE objectGraphLockForContext();
+
+    bool hasActiveInspectorCanvasCallTracer() const;
 
 protected:
     WebGLObject(WebGLRenderingContextBase&, PlatformGLObject);
@@ -147,7 +150,7 @@ PlatformGLObject objectOrZero(const T& object)
     return object ? object->object() : 0;
 }
 
-WebCoreOpaqueRoot NODELETE root(WebGLObject*);
+WebCoreOpaqueRoot LEGACY_NODELETE root(WebGLObject*);
 
 } // namespace WebCore
 

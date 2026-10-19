@@ -32,13 +32,12 @@
 namespace WebCore {
 
 struct AcceleratedEffectCircleFunction;
-struct TransformOperationData;
 
 namespace Style {
 
 struct Circle {
     using Extent = CSS::Circle::Extent;
-    using Length = Style::LengthPercentage<CSS::NonnegativeUnzoomed>;
+    using Length = Style::LengthPercentage<CSS::Nonnegative>;
     using RadialSize = Variant<Length, Extent>;
 
     RadialSize radius;
@@ -46,7 +45,7 @@ struct Circle {
 
     bool operator==(const Circle&) const = default;
 };
-using CircleFunction = FunctionNotation<CSSValueCircle, Circle>;
+using CircleFunction = FunctionNotation<CSSValueID::Circle, Circle>;
 
 template<size_t I> const auto& get(const Circle& value)
 {
@@ -73,7 +72,7 @@ template<> struct Blending<Circle> {
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-template<> struct Evaluation<CircleFunction, AcceleratedEffectCircleFunction> { AcceleratedEffectCircleFunction operator()(const CircleFunction&, const TransformOperationData&, ZoomFactor); };
+template<> struct Evaluation<CircleFunction, AcceleratedEffectCircleFunction> { AcceleratedEffectCircleFunction operator()(const CircleFunction&, const FloatSize&, ZoomFactor); };
 
 #endif
 

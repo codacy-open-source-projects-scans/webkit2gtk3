@@ -36,10 +36,10 @@ namespace Style {
 
 using namespace CSS::Literals;
 
-void Scale::apply(TransformationMatrix& transform, const FloatSize& size) const
+void Scale::apply(TransformationMatrix& transform, const FloatSize& size, ZoomFactor zoom) const
 {
     if (RefPtr protectedValue = value)
-        protectedValue->apply(transform, size);
+        protectedValue->apply(transform, size, zoom);
 }
 
 // MARK: - Conversion
@@ -51,7 +51,7 @@ auto CSSValueConversion<Scale>::operator()(BuilderState& state, const CSSValue& 
 
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return CSS::Keyword::None { };
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -63,9 +63,9 @@ auto CSSValueConversion<Scale>::operator()(BuilderState& state, const CSSValue& 
     if (!list)
         return CSS::Keyword::None { };
 
-    auto sx = toStyleFromCSSValue<NumberOrPercentageResolvedToNumber<>>(state, list->item(0));
-    auto sy = list->size() > 1 ? toStyleFromCSSValue<NumberOrPercentageResolvedToNumber<>>(state, list->item(1)) : sx;
-    auto sz = list->size() > 2 ? toStyleFromCSSValue<NumberOrPercentageResolvedToNumber<>>(state, list->item(2)) : NumberOrPercentageResolvedToNumber<> { 1_css_number };
+    auto sx = toStyleFromCSSValue<NumberOrPercentageResolvedToNumber<>>(state, protect(list->item(0)));
+    auto sy = list->size() > 1 ? toStyleFromCSSValue<NumberOrPercentageResolvedToNumber<>>(state, protect(list->item(1))) : sx;
+    auto sz = list->size() > 2 ? toStyleFromCSSValue<NumberOrPercentageResolvedToNumber<>>(state, protect(list->item(2))) : NumberOrPercentageResolvedToNumber<> { 1_css_number };
 
     return ScaleTransformFunction::create(sx, sy, sz, TransformFunctionType::Scale);
 }
@@ -109,10 +109,10 @@ auto Blending<Scale>::blend(const Scale& from, const Scale& to, const BlendingCo
 
 // MARK: - Platform
 
-auto ToPlatform<Scale>::operator()(const Scale& value, const FloatSize& size) -> RefPtr<TransformOperation>
+auto ToPlatform<Scale>::operator()(const Scale& value, const FloatSize& size, ZoomFactor zoom) -> RefPtr<TransformOperation>
 {
     if (RefPtr function = value.value)
-        return function->toPlatform(size);
+        return function->toPlatform(size, zoom);
     return nullptr;
 }
 

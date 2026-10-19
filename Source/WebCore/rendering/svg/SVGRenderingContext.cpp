@@ -27,6 +27,7 @@
 #include "config.h"
 #include "SVGRenderingContext.h"
 
+#include "DocumentPage.h"
 #include "LegacyRenderSVGImage.h"
 #include "LegacyRenderSVGResourceClipper.h"
 #include "LegacyRenderSVGResourceFilter.h"
@@ -34,6 +35,7 @@
 #include "LegacyRenderSVGRoot.h"
 #include "LocalFrame.h"
 #include "LocalFrameView.h"
+#include "LocalFrameViewInlines.h"
 #include "PathOperation.h"
 #include "RenderElementInlines.h"
 #include "RenderLayer.h"
@@ -45,12 +47,13 @@
 #include "SVGResources.h"
 #include "SVGResourcesCache.h"
 #include "Settings.h"
+#include "StylePrimitiveNumericTypes+Evaluation.h"
 #include <numbers>
 #include <wtf/MathExtras.h>
 
 namespace WebCore {
 
-static inline bool NODELETE isRenderingMaskImage(const RenderObject& object)
+static inline bool LEGACY_NODELETE isRenderingMaskImage(const RenderObject& object)
 {
     return object.view().frameView().paintBehavior().contains(PaintBehavior::RenderingSVGClipOrMask);
 }
@@ -112,8 +115,8 @@ void SVGRenderingContext::prepareToRenderSVGContent(RenderElement& renderer, Pai
     // Setup transparency layers before setting up SVG resources!
     bool isRenderingMask = isRenderingMaskImage(*m_renderer);
     // RenderLayer takes care of root opacity.
-    float opacity = (renderer.isLegacyRenderSVGRoot() || isRenderingMask) ? 1 : style.opacity().value.value;
-    bool hasBlendMode = style.blendMode() != BlendMode::Normal;
+    float opacity = (renderer.isLegacyRenderSVGRoot() || isRenderingMask) ? 1 : Style::evaluate<float>(style.opacity());
+    bool hasBlendMode = style.usedBlendMode() != BlendMode::Normal;
     bool hasIsolation = style.isolation() != Isolation::Auto;
     bool isolateMaskForBlending = false;
 
@@ -127,18 +130,15 @@ void SVGRenderingContext::prepareToRenderSVGContent(RenderElement& renderer, Pai
             FloatRect repaintRect = m_renderer->repaintRectInLocalCoordinates();
             m_paintInfo->context().clip(repaintRect);
 
-            if (opacity < 1 || hasBlendMode || isolateMaskForBlending || hasIsolation) {
+            if (hasBlendMode)
+                m_paintInfo->context().setCompositeOperation(m_paintInfo->context().compositeOperation(), style.usedBlendMode());
 
-                if (hasBlendMode)
-                    m_paintInfo->context().setCompositeOperation(m_paintInfo->context().compositeOperation(), style.blendMode());
+            m_paintInfo->context().beginTransparencyLayer(opacity);
 
-                m_paintInfo->context().beginTransparencyLayer(opacity);
+            if (hasBlendMode)
+                m_paintInfo->context().setCompositeOperation(m_paintInfo->context().compositeOperation(), BlendMode::Normal);
 
-                if (hasBlendMode)
-                    m_paintInfo->context().setCompositeOperation(m_paintInfo->context().compositeOperation(), BlendMode::Normal);
-
-                m_renderingFlags |= EndOpacityLayer;
-            }
+            m_renderingFlags |= EndOpacityLayer;
         }
     }
 
@@ -202,7 +202,7 @@ void SVGRenderingContext::prepareToRenderSVGContent(RenderElement& renderer, Pai
     m_renderingFlags |= RenderingPrepared;
 }
 
-static AffineTransform& NODELETE currentContentTransformation()
+static AffineTransform& LEGACY_NODELETE currentContentTransformation()
 {
     static NeverDestroyed<AffineTransform> s_currentContentTransformation;
     return s_currentContentTransformation;

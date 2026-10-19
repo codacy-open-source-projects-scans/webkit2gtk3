@@ -40,9 +40,7 @@
 #import <wtf/TZoneMallocInlines.h>
 
 #import <pal/cf/CoreMediaSoftLink.h>
-
-SOFTLINK_AVKIT_FRAMEWORK()
-SOFT_LINK_CLASS_OPTIONAL(AVKit, AVValueTiming)
+#import <pal/cocoa/AVKitSoftLink.h>
 
 namespace WebCore {
 
@@ -214,7 +212,7 @@ void PlaybackSessionInterfaceMac::isPictureInPictureSupportedChanged(bool)
 #endif
 }
 
-void PlaybackSessionInterfaceMac::externalPlaybackChanged(bool, PlaybackSessionModel::ExternalPlaybackTargetType, const String&)
+void PlaybackSessionInterfaceMac::externalPlaybackChanged(bool, PlaybackSessionModel::ExternalPlaybackTargetType, const String&, const String&)
 {
 #if ENABLE(WEB_PLAYBACK_CONTROLS_MANAGER)
     updatePlaybackControlsManagerCanTogglePictureInPicture();
@@ -251,7 +249,7 @@ void PlaybackSessionInterfaceMac::setPlayBackControlsManager(WebPlaybackControls
         return;
 
     NSTimeInterval anchorTimeStamp = ![manager rate] ? NAN : [[NSProcessInfo processInfo] systemUptime];
-    manager.timing = [getAVValueTimingClassSingleton() valueTimingWithAnchorValue:model->currentTime() anchorTimeStamp:anchorTimeStamp rate:0];
+    manager.timing = [PAL::getAVValueTimingClassSingleton() valueTimingWithAnchorValue:model->currentTime() anchorTimeStamp:anchorTimeStamp rate:0];
     double duration = model->duration();
     manager.contentDuration = duration;
     manager.hasEnabledAudio = duration > 0;
@@ -296,7 +294,7 @@ void PlaybackSessionInterfaceMac::updatePlaybackControlsManagerTiming(double cur
         || (manager.get().rate < 0 && model->playbackStartedTime() <= currentTime))
         effectivePlaybackRate = 0;
 
-    manager.get().timing = [getAVValueTimingClassSingleton() valueTimingWithAnchorValue:currentTime anchorTimeStamp:effectiveAnchorTime rate:effectivePlaybackRate];
+    manager.get().timing = [PAL::getAVValueTimingClassSingleton() valueTimingWithAnchorValue:currentTime anchorTimeStamp:effectiveAnchorTime rate:effectivePlaybackRate];
 }
 
 #endif // ENABLE(WEB_PLAYBACK_CONTROLS_MANAGER)

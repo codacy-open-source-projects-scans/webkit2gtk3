@@ -62,6 +62,10 @@ public:
 
     JSValue value() const { return m_value.get(); }
     const Vector<StackFrame>& stack() const LIFETIME_BOUND { return m_stack; }
+    // The stack may be skipped when a user catch clause handles the throw, but vm.lastException()
+    // outlives the catch and can still be reported, so fall back to the Error's own stack. That one
+    // is freed whenever the Error materializes its stack property, so it is copied in, not borrowed.
+    JS_EXPORT_PRIVATE const Vector<StackFrame>& stackForReporting(VM&) LIFETIME_BOUND;
 
     bool didNotifyInspectorOfThrow() const { return m_didNotifyInspectorOfThrow; }
     void setDidNotifyInspectorOfThrow() { m_didNotifyInspectorOfThrow = true; }
@@ -76,7 +80,7 @@ public:
 private:
     Exception(VM&, JSValue thrownValue);
     void finishCreation(VM&, StackCaptureAction);
-    static void NODELETE destroy(JSCell*);
+    static void destroy(JSCell*);
 
     WriteBarrier<Unknown> m_value;
     Vector<StackFrame> m_stack;

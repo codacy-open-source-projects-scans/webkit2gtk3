@@ -25,20 +25,28 @@
 
 #include "config.h"
 #include "TextPaintStyle.h"
-#include "DocumentView.h"
 
 #include "ColorLuminance.h"
+#include "DocumentView.h"
 #include "FocusController.h"
 #include "GraphicsContext.h"
 #include "LocalFrame.h"
+#include "LocalFrameView.h"
 #include "Page.h"
 #include "PaintInfo.h"
+#include "PlatformRenderTheme.h"
+#include "RenderElement.h"
+#include "RenderObjectDocument.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderText.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "Settings.h"
+#include "StyleComputedStyle+GettersInlines.h"
+
+#if __has_include(<WebKitAdditions/AXCustomColorModeController.h>)
+#include <WebKitAdditions/AXCustomColorModeController.h>
+#endif
 
 namespace WebCore {
 
@@ -74,7 +82,46 @@ static Color adjustColorForVisibilityOnBackground(const Color& textColor, const 
     return lightened;
 }
 
-TextPaintStyle computeTextPaintStyle(const RenderText& renderer, const RenderStyle& lineStyle, const PaintInfo& paintInfo)
+// A punched out background paints as transparent, stranding text that was only legible against it.
+static Color adjustColorForPunchedOutBackground(const Color& textColor, const RenderText& renderer, const Style::ComputedStyle& lineStyle)
+{
+    Ref document = renderer.document();
+    if (!document->settings().punchOutWhiteBackgroundsInDarkMode()) [[likely]]
+        return textColor;
+
+    // Only content that brought its own color can be stranded; anything inheriting from the editable
+    // body is already legible. Checked before walking ancestors below, which is the expensive part.
+    if (!lineStyle.hasExplicitlySetColor())
+        return textColor;
+
+    RefPtr frameView = document->view();
+    if (!frameView)
+        return textColor;
+
+    auto styleColorOptions = document->styleColorOptions(&lineStyle, StyleColorOptionsPurpose::Rendering);
+
+    auto backdropColor = frameView->documentBackgroundColor();
+    if (!backdropColor.isOpaque())
+        backdropColor = RenderTheme::singleton().systemColor(CSSValueID::Canvas, styleColorOptions);
+
+    if (!backdropColor.isValid() || textColorIsLegibleAgainstBackgroundColor(textColor, backdropColor))
+        return textColor;
+
+    for (CheckedPtr ancestor = renderer.parent(); ancestor; ancestor = ancestor->parent()) {
+        auto backgroundColor = protect(ancestor->style())->visitedDependentUsedBackgroundColor();
+        if (!backgroundColor.isVisible())
+            continue;
+
+        if (!document->backgroundColorIsPunchedOut(backgroundColor, *ancestor))
+            return textColor;
+
+        return RenderTheme::singleton().systemColor(CSSValueID::Canvastext, styleColorOptions);
+    }
+
+    return textColor;
+}
+
+TextPaintStyle computeTextPaintStyle(const RenderText& renderer, const Style::ComputedStyle& lineStyle, const PaintInfo& paintInfo)
 {
     Ref frame = renderer.frame();
     RefPtr frameView = frame->view();
@@ -118,6 +165,7 @@ TextPaintStyle computeTextPaintStyle(const RenderText& renderer, const RenderSty
     }
 
     paintStyle.fillColor = lineStyle.visitedDependentTextFillColorApplyingColorFilter(paintInfo.paintBehavior);
+    paintStyle.fillColor = adjustColorForPunchedOutBackground(paintStyle.fillColor, renderer, lineStyle);
 
     bool forceBackgroundToWhite = false;
     if (frame->document() && protect(frame->document())->printing()) {
@@ -149,10 +197,19 @@ TextPaintStyle computeTextPaintStyle(const RenderText& renderer, const RenderSty
     if (forceBackgroundToWhite)
         paintStyle.emphasisMarkColor = adjustColorForVisibilityOnBackground(paintStyle.emphasisMarkColor, Color::white);
 
+#if ENABLE(AX_CUSTOM_COLOR_MODE)
+    if (!forceBackgroundToWhite && frame->settings().axCustomColorModeEnabled()) {
+        AXCustomColorModeController::adjustTextPaintStyle(renderer, paintStyle,
+            lineStyle.visitedDependentTextFillColor(paintInfo.paintBehavior),
+            lineStyle.usedStrokeColor(),
+            lineStyle.visitedDependentTextEmphasisColor());
+    }
+#endif
+
     return paintStyle;
 }
 
-TextPaintStyle computeTextSelectionPaintStyle(const TextPaintStyle& textPaintStyle, const RenderText& renderer, const RenderStyle& lineStyle, const PaintInfo& paintInfo, Style::TextShadows& selectionShadow)
+TextPaintStyle computeTextSelectionPaintStyle(const TextPaintStyle& textPaintStyle, const RenderText& renderer, const Style::ComputedStyle& lineStyle, const PaintInfo& paintInfo, Style::TextShadows& selectionShadow)
 {
     TextPaintStyle selectionPaintStyle = textPaintStyle;
 
@@ -166,7 +223,7 @@ TextPaintStyle computeTextSelectionPaintStyle(const TextPaintStyle& textPaintSty
         selectionPaintStyle.emphasisMarkColor = emphasisMarkForeground;
 
     RefPtr view = renderer.frame().view();
-    if (auto pseudoStyle = renderer.selectionPseudoStyle()) {
+    if (CheckedPtr pseudoStyle = renderer.selectionPseudoStyle()) {
         selectionPaintStyle.hasExplicitlySetFillColor = pseudoStyle->hasExplicitlySetColor();
         selectionShadow = paintInfo.forceTextColor() ? Style::TextShadows { CSS::Keyword::None { } } : pseudoStyle->textShadow();
         auto viewportSize = view ? view->size() : IntSize();
@@ -199,7 +256,7 @@ void updateGraphicsContext(GraphicsContext& context, const TextPaintStyle& paint
         mode = newMode;
     }
 
-    Color fillColor = fillColorType == UseEmphasisMarkColor ? paintStyle.emphasisMarkColor : paintStyle.fillColor;
+    Color fillColor = fillColorType == FillColorType::EmphasisMark ? paintStyle.emphasisMarkColor : paintStyle.fillColor;
     if (mode.contains(TextDrawingMode::Fill) && (fillColor != context.fillColor()))
         context.setFillColor(fillColor);
 

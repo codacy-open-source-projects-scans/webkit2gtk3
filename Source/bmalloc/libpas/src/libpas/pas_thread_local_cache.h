@@ -210,10 +210,6 @@ PAS_API void pas_thread_local_cache_ensure_committed(pas_thread_local_cache* thr
                                                      pas_allocator_index begin_allocator_index,
                                                      pas_allocator_index end_allocator_index);
 
-PAS_API void pas_thread_local_cache_did_recommit_accidentally(pas_thread_local_cache* thread_local_cache,
-                                                              pas_allocator_index begin_allocator_index,
-                                                              pas_allocator_index end_allocator_index);
-
 static PAS_ALWAYS_INLINE void*
 pas_thread_local_cache_get_local_allocator_direct_without_any_checks_whatsoever(
     pas_thread_local_cache* thread_local_cache,
@@ -350,8 +346,6 @@ pas_thread_local_cache_get_local_allocator_if_can_set_cache_for_possibly_uniniti
 PAS_API pas_allocator_index pas_thread_local_cache_allocator_index_for_allocator(pas_thread_local_cache* cache,
                                                                                  void* allocator);
 
-PAS_API unsigned pas_thread_local_cache_get_num_allocators(pas_thread_local_cache* cache);
-
 PAS_API void pas_thread_local_cache_stop_local_allocators(
     pas_thread_local_cache* thread_local_cache,
     pas_lock_hold_mode heap_lock_hold_mode);
@@ -380,7 +374,7 @@ PAS_API bool pas_thread_local_cache_for_all(pas_allocator_scavenge_action alloca
                                             pas_deallocator_scavenge_action deallocator_action,
                                             pas_thread_local_cache_decommit_action thread_local_cache_decommit_action);
 
-PAS_API PAS_NEVER_INLINE void pas_thread_local_cache_append_deallocation_slow(
+PAS_API PAS_NEVER_INLINE PAS_PRESERVE_MOST void pas_thread_local_cache_append_deallocation_slow(
     pas_thread_local_cache* thread_local_cache,
     uintptr_t begin,
     pas_segregated_page_config_kind kind);

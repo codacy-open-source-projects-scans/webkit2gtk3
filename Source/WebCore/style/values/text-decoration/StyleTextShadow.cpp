@@ -29,8 +29,8 @@
 #include "CSSKeywordValue.h"
 #include "CSSTextShadowPropertyValue.h"
 #include "ColorBlending.h"
-#include "RenderStyle+GettersInlines.h"
 #include "StyleBuilderChecking.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
@@ -44,7 +44,7 @@ namespace Style {
 
 // MARK: - Conversion
 
-auto ToCSS<TextShadow>::operator()(const TextShadow& value, const RenderStyle& style) -> CSS::TextShadow
+auto ToCSS<TextShadow>::operator()(const TextShadow& value, const Style::ComputedStyle& style) -> CSS::TextShadow
 {
     return {
         .color = toCSS(value.color, style),
@@ -58,11 +58,11 @@ auto ToStyle<CSS::TextShadow>::operator()(const CSS::TextShadow& value, const Bu
     return {
         .color = value.color ? toStyle(*value.color, state) : Color::currentColor(),
         .location = toStyle(value.location, state),
-        .blur = value.blur ? toStyle(*value.blur, state) : Length<CSS::NonnegativeUnzoomed> { 0 },
+        .blur = value.blur ? toStyle(*value.blur, state) : Length<CSS::Nonnegative> { 0 },
     };
 }
 
-Ref<CSSValue> CSSValueCreation<TextShadowList>::operator()(CSSValuePool&, const RenderStyle& style, const TextShadowList& value)
+Ref<CSSValue> CSSValueCreation<TextShadowList>::operator()(CSSValuePool&, const Style::ComputedStyle& style, const TextShadowList& value)
 {
     CSS::TextShadowProperty::List list;
 
@@ -76,7 +76,7 @@ auto CSSValueConversion<TextShadows>::operator()(BuilderState& state, const CSSV
 {
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return CSS::Keyword::None { };
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -102,14 +102,14 @@ auto CSSValueConversion<TextShadows>::operator()(BuilderState& state, const CSSV
 
 // MARK: - Serialization
 
-void Serialize<TextShadowList>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const RenderStyle& style, const TextShadowList& value)
+void Serialize<TextShadowList>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const Style::ComputedStyle& style, const TextShadowList& value)
 {
     serializationForCSSOnRangeLike(builder, context, style, value | std::views::reverse, SerializationSeparatorString<TextShadowList>);
 }
 
 // MARK: - Blending
 
-auto Blending<TextShadow>::blend(const TextShadow& a, const TextShadow& b, const RenderStyle& aStyle, const RenderStyle& bStyle, const BlendingContext& context) -> TextShadow
+auto Blending<TextShadow>::blend(const TextShadow& a, const TextShadow& b, const Style::ComputedStyle& aStyle, const Style::ComputedStyle& bStyle, const BlendingContext& context) -> TextShadow
 {
     ColorResolver aColorResolver { aStyle };
     ColorResolver bColorResolver { bStyle };
@@ -140,7 +140,7 @@ auto Blending<TextShadows>::canBlend(const TextShadows& from, const TextShadows&
     return ShadowInterpolation<TextShadows, MatchingTextShadows>::canInterpolate(from, to, compositeOperation);
 }
 
-auto Blending<TextShadows>::blend(const TextShadows& from, const TextShadows& to, const RenderStyle& fromStyle, const RenderStyle& toStyle, const BlendingContext& context) -> TextShadows
+auto Blending<TextShadows>::blend(const TextShadows& from, const TextShadows& to, const Style::ComputedStyle& fromStyle, const Style::ComputedStyle& toStyle, const BlendingContext& context) -> TextShadows
 {
     return ShadowInterpolation<TextShadows, MatchingTextShadows>::interpolate(from, to, fromStyle, toStyle, context);
 }

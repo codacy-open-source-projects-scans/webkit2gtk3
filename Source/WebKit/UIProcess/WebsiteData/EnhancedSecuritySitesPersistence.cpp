@@ -29,6 +29,7 @@
 #include "Logging.h"
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/SQLiteStatement.h>
+#include <wtf/Borrow.h>
 #include <wtf/FileSystem.h>
 #include <wtf/MainThread.h>
 #include <wtf/Seconds.h>
@@ -143,6 +144,8 @@ bool EnhancedSecuritySitesPersistence::openDatabase(const String& directoryPath)
     {
         auto columnCheckStatement = checkedDB->prepareStatement("SELECT COUNT(*) FROM pragma_table_info('sites') WHERE name = 'last_modified'"_s);
         bool hasLastModifiedColumn = columnCheckStatement && columnCheckStatement->step() == SQLITE_ROW && columnCheckStatement->columnInt(0) > 0;
+        columnCheckStatement = nullptr;
+
         if (!hasLastModifiedColumn) {
             if (!checkedDB->executeCommand("ALTER TABLE sites ADD COLUMN last_modified REAL NOT NULL DEFAULT 0"_s))
                 return reportErrorAndCloseDatabase("add last_modified column"_s);
@@ -200,7 +203,7 @@ void EnhancedSecuritySitesPersistence::deleteSites(const Vector<WebCore::Registr
         return;
     }
 
-    for (auto& site : sites)
+    for (auto& site : borrow(sites))
         deleteSite(site);
 }
 
@@ -279,7 +282,7 @@ void EnhancedSecuritySitesPersistence::trackEnhancedSecurityForDomain(WebCore::R
 
     if (!selectSiteStatement
         || selectSiteStatement->bindText(1, site.string()) != SQLITE_OK)
-        reportSQLError(__FUNCTION__, "Failed to query specific site"_s);
+        return reportSQLError(__FUNCTION__, "Failed to query specific site"_s);
 
     if (selectSiteStatement->step() == SQLITE_ROW) {
         if (static_cast<EnhancedSecurity>(selectSiteStatement->columnInt(0)) == EnhancedSecurity::Disabled)

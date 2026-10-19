@@ -20,11 +20,13 @@
 
 #pragma once
 
+#include "Path.h"
 #include "RenderSVGResourceContainer.h"
 #include "SVGUnitTypes.h"
 
 namespace WebCore {
 
+class AffineTransform;
 class GraphicsContext;
 class SVGClipPathElement;
 class SVGGraphicsElement;
@@ -33,7 +35,7 @@ class RenderSVGResourceClipper final : public RenderSVGResourceContainer {
     WTF_MAKE_TZONE_ALLOCATED(RenderSVGResourceClipper);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderSVGResourceClipper);
 public:
-    RenderSVGResourceClipper(SVGClipPathElement&, RenderStyle&&);
+    RenderSVGResourceClipper(SVGClipPathElement&, Style::ComputedStyle&&);
     virtual ~RenderSVGResourceClipper();
 
     RefPtr<SVGGraphicsElement> shouldApplyPathClipping() const;
@@ -42,12 +44,12 @@ public:
 
     FloatRect resourceBoundingBox(const RenderObject&, RepaintRectCalculation);
 
-    bool hitTestClipContent(const FloatRect&, const LayoutPoint&);
+    bool hitTestClipContent(const FloatRect&, const FloatPoint&);
 
     inline SVGUnitTypes::SVGUnitType clipPathUnits() const;
     inline SVGClipPathElement& clipPathElement() const;
 
-    void applyTransform(TransformationMatrix&, const RenderStyle&, const FloatRect& boundingBox, OptionSet<Style::TransformResolverOption>) const final;
+    void applyTransform(TransformationMatrix&, const Style::ComputedStyle&, const FloatRect& boundingBox, OptionSet<Style::TransformResolverOption>) const final;
 
 private:
     void element() const = delete;
@@ -59,7 +61,20 @@ private:
     bool requiresLayer() const final { return true; }
     ASCIILiteral renderName() const final { return "RenderSVGResourceClipper"_s; }
 
-    void styleDidChange(Style::Difference, const RenderStyle* oldStyle) final;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle* oldStyle) final;
+
+    void repaintAllClients() const final;
+    void clearCacheBeforeLayout() final;
+
+    AffineTransform clipContentTransform(const FloatRect& objectBoundingBox) const;
+    const Path& cachedPathClip(RenderSVGModelObject& clipRenderer) const;
+
+    mutable std::optional<Path> m_cachedPathClip;
+    mutable SingleThreadWeakPtr<RenderSVGModelObject> m_cachedPathClipRenderer;
+
+    // Cached shouldApplyPathClipping() result, flushed from repaintAllClients(). Held weakly so it
+    // never keeps a replaced clip child alive. The std::optional records whether it has been computed.
+    mutable std::optional<WeakPtr<SVGGraphicsElement, WeakPtrImplWithEventTargetData>> m_cachedShouldApplyPathClippingResult;
 };
 
 }

@@ -971,40 +971,50 @@ TEST(WTF_InlineMap, StringKeysGrowth)
 TEST(WTF_InlineMap, RefPtrKeys)
 {
     // RefPtr objects work as map keys, looked up by raw pointer.
-    DerivedRefLogger a("a");
-    DerivedRefLogger b("b");
-    DerivedRefLogger c("c");
+    {
+        DerivedRefLogger a("a");
+        DerivedRefLogger b("b");
+        DerivedRefLogger c("c");
 
-    InlineMap<RefPtr<RefLogger>, int, 5> map;
+        InlineMap<RefPtr<RefLogger>, int, 5> map;
 
-    map.add(RefPtr<RefLogger>(&a), 1);
-    map.add(RefPtr<RefLogger>(&b), 2);
-    map.add(RefPtr<RefLogger>(&c), 3);
+        map.add(RefPtr<RefLogger>(&a), 1);
+        map.add(RefPtr<RefLogger>(&b), 2);
+        map.add(RefPtr<RefLogger>(&c), 3);
 
-    EXPECT_EQ(map.size(), 3u);
-    EXPECT_TRUE(map.contains(&a));
-    EXPECT_TRUE(map.contains(&b));
-    EXPECT_TRUE(map.contains(&c));
+        EXPECT_EQ(map.size(), 3u);
+        EXPECT_TRUE(map.contains(&a));
+        EXPECT_TRUE(map.contains(&b));
+        EXPECT_TRUE(map.contains(&c));
 
-    EXPECT_EQ(map.find(&a)->value, 1);
-    EXPECT_EQ(map.find(&b)->value, 2);
-    EXPECT_EQ(map.find(&c)->value, 3);
+        EXPECT_EQ(map.find(&a)->value, 1);
+        EXPECT_EQ(map.find(&b)->value, 2);
+        EXPECT_EQ(map.find(&c)->value, 3);
+    }
+
+    // Drain the RefLogger log so subsequent tests start clean.
+    takeLogStr();
 }
 
 TEST(WTF_InlineMap, RefPtrValues)
 {
     // RefPtr objects work as map values.
-    DerivedRefLogger a("a");
-    DerivedRefLogger b("b");
+    {
+        DerivedRefLogger a("a");
+        DerivedRefLogger b("b");
 
-    InlineMap<unsigned, RefPtr<RefLogger>, 5, IntHash<unsigned>> map;
+        InlineMap<unsigned, RefPtr<RefLogger>, 5, IntHash<unsigned>> map;
 
-    map.add(1, RefPtr<RefLogger>(&a));
-    map.add(2, RefPtr<RefLogger>(&b));
+        map.add(1, RefPtr<RefLogger>(&a));
+        map.add(2, RefPtr<RefLogger>(&b));
 
-    EXPECT_EQ(map.size(), 2u);
-    EXPECT_EQ(map.find(1)->value.get(), &a);
-    EXPECT_EQ(map.find(2)->value.get(), &b);
+        EXPECT_EQ(map.size(), 2u);
+        EXPECT_EQ(map.find(1)->value.get(), &a);
+        EXPECT_EQ(map.find(2)->value.get(), &b);
+    }
+
+    // Drain the RefLogger log so subsequent tests start clean.
+    takeLogStr();
 }
 
 TEST(WTF_InlineMap, RefKeys)
@@ -1055,31 +1065,35 @@ TEST(WTF_InlineMap, RefValues)
 TEST(WTF_InlineMap, RefKeysGrowth)
 {
     // Ref keys work correctly through growth transitions.
-    // Test that Ref keys work correctly through growth transitions
-    Vector<Ref<RefLogger>> loggers;
-    for (int i = 0; i < 50; ++i)
-        loggers.append(adoptRef(*new RefLogger("a")));
-
     {
-        InlineMap<Ref<RefLogger>, int, 5> map;
+        Vector<Ref<RefLogger>> loggers;
+        for (int i = 0; i < 50; ++i)
+            loggers.append(adoptRef(*new RefLogger("a")));
 
-        for (int i = 0; i < 50; ++i) {
-            Ref<RefLogger> ref = loggers[i].copyRef();
-            map.add(WTF::move(ref), i + 1);
+        {
+            InlineMap<Ref<RefLogger>, int, 5> map;
+
+            for (int i = 0; i < 50; ++i) {
+                Ref<RefLogger> ref = loggers[i].copyRef();
+                map.add(WTF::move(ref), i + 1);
+            }
+
+            EXPECT_EQ(map.size(), 50u);
+
+            // Verify all entries through iteration
+            unsigned count = 0;
+            for (auto& entry : map) {
+                ++count;
+                // Just verify values are in expected range
+                EXPECT_GE(entry.value, 1);
+                EXPECT_LE(entry.value, 50);
+            }
+            EXPECT_EQ(count, 50u);
         }
-
-        EXPECT_EQ(map.size(), 50u);
-
-        // Verify all entries through iteration
-        unsigned count = 0;
-        for (auto& entry : map) {
-            ++count;
-            // Just verify values are in expected range
-            EXPECT_GE(entry.value, 1);
-            EXPECT_LE(entry.value, 50);
-        }
-        EXPECT_EQ(count, 50u);
     }
+
+    // Drain the RefLogger log so subsequent tests start clean.
+    takeLogStr();
 }
 
 TEST(WTF_InlineMap, ClearEmpty)

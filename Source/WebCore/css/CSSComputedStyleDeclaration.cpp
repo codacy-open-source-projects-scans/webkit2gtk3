@@ -33,12 +33,11 @@
 #include "ComposedTreeAncestorIterator.h"
 #include "DeprecatedCSSOMValue.h"
 #include "NodeDocument.h"
-#include "NodeInlines.h"
 #include "RenderBox.h"
 #include "RenderBoxModelObject.h"
-#include "RenderStyle+GettersInlines.h"
 #include "Settings.h"
 #include "ShorthandSerializer.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StylePropertiesInlines.h"
 #include "StylePropertyShorthand.h"
 #include "StyleScope.h"
@@ -128,7 +127,7 @@ unsigned CSSComputedStyleDeclaration::length() const
     if (m_isEmpty)
         return 0;
 
-    Style::Extractor::updateStyleIfNeededForProperty(m_element.get(), CSSPropertyCustom);
+    Style::Extractor::updateStyleIfNeededForProperty(m_element.get(), m_pseudoElementIdentifier, CSSPropertyID::Custom);
 
     CheckedPtr style = protect(element())->computedStyle(m_pseudoElementIdentifier);
     if (!style)
@@ -180,21 +179,14 @@ RefPtr<DeprecatedCSSOMValue> CSSComputedStyleDeclaration::getPropertyCSSValue(co
     if (m_isEmpty)
         return nullptr;
 
-    if (isCustomPropertyName(propertyName)) {
-        auto value = extractor().customPropertyValue(AtomString { propertyName });
-        if (!value)
-            return nullptr;
-        return value->createDeprecatedCSSOMWrapper(*this);
-    }
+    if (isCustomPropertyName(propertyName))
+        return extractor().customPropertyValueDeprecatedCSSOMValue(AtomString { propertyName }, *this);
 
     auto propertyID = cssPropertyID(propertyName);
-    if (!propertyID)
+    if (propertyID == CSSPropertyID::Invalid)
         return nullptr;
 
-    auto value = extractor().propertyValue(propertyID);
-    if (!value)
-        return nullptr;
-    return value->createDeprecatedCSSOMWrapper(*this);
+    return extractor().propertyValueDeprecatedCSSOMValue(propertyID, *this);
 }
 
 String CSSComputedStyleDeclaration::getPropertyValue(const String& propertyName)
@@ -206,7 +198,7 @@ String CSSComputedStyleDeclaration::getPropertyValue(const String& propertyName)
         return extractor().customPropertyValueSerialization(AtomString { propertyName }, CSS::defaultSerializationContext());
 
     auto propertyID = cssPropertyID(propertyName);
-    if (!propertyID)
+    if (propertyID == CSSPropertyID::Invalid)
         return String();
 
     return extractor().propertyValueSerialization(propertyID, CSS::defaultSerializationContext());

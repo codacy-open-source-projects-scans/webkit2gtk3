@@ -37,7 +37,7 @@
 namespace WebCore {
 namespace Style {
 
-static CSS::EasingFunction toCSSEasingFunction(const TimingFunction& function, const RenderStyle& style)
+static CSS::EasingFunction toCSSEasingFunction(const TimingFunction& function, const Style::ComputedStyle& style)
 {
     switch (function.type()) {
     case TimingFunction::Type::CubicBezierFunction: {
@@ -155,19 +155,19 @@ Ref<TimingFunction> createTimingFunctionDeprecated(const CSS::EasingFunction& fu
 static Ref<TimingFunction> createTimingFunctionFromValueID(BuilderState& state, CSSValueID valueID)
 {
     switch (valueID) {
-    case CSSValueLinear:
+    case CSSValueID::Linear:
         return LinearTimingFunction::create();
-    case CSSValueEase:
+    case CSSValueID::Ease:
         return CubicBezierTimingFunction::create();
-    case CSSValueEaseIn:
+    case CSSValueID::EaseIn:
         return CubicBezierTimingFunction::create(CubicBezierTimingFunction::TimingFunctionPreset::EaseIn);
-    case CSSValueEaseOut:
+    case CSSValueID::EaseOut:
         return CubicBezierTimingFunction::create(CubicBezierTimingFunction::TimingFunctionPreset::EaseOut);
-    case CSSValueEaseInOut:
+    case CSSValueID::EaseInOut:
         return CubicBezierTimingFunction::create(CubicBezierTimingFunction::TimingFunctionPreset::EaseInOut);
-    case CSSValueStepStart:
+    case CSSValueID::StepStart:
         return StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::Start);
-    case CSSValueStepEnd:
+    case CSSValueID::StepEnd:
         return StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::End);
     default:
         state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -178,19 +178,19 @@ static Ref<TimingFunction> createTimingFunctionFromValueID(BuilderState& state, 
 static RefPtr<TimingFunction> createTimingFunctionFromValueIDDeprecated(CSSValueID valueID)
 {
     switch (valueID) {
-    case CSSValueLinear:
+    case CSSValueID::Linear:
         return LinearTimingFunction::create();
-    case CSSValueEase:
+    case CSSValueID::Ease:
         return CubicBezierTimingFunction::create();
-    case CSSValueEaseIn:
+    case CSSValueID::EaseIn:
         return CubicBezierTimingFunction::create(CubicBezierTimingFunction::TimingFunctionPreset::EaseIn);
-    case CSSValueEaseOut:
+    case CSSValueID::EaseOut:
         return CubicBezierTimingFunction::create(CubicBezierTimingFunction::TimingFunctionPreset::EaseOut);
-    case CSSValueEaseInOut:
+    case CSSValueID::EaseInOut:
         return CubicBezierTimingFunction::create(CubicBezierTimingFunction::TimingFunctionPreset::EaseInOut);
-    case CSSValueStepStart:
+    case CSSValueID::StepStart:
         return StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::Start);
-    case CSSValueStepEnd:
+    case CSSValueID::StepEnd:
         return StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::End);
     default:
         return nullptr;
@@ -219,14 +219,14 @@ auto CSSValueConversion<EasingFunction>::operator()(BuilderState& state, const C
     return { LinearTimingFunction::create() };
 }
 
-Ref<CSSValue> CSSValueCreation<EasingFunction>::operator()(CSSValuePool&, const RenderStyle& style, const EasingFunction& value)
+Ref<CSSValue> CSSValueCreation<EasingFunction>::operator()(CSSValuePool&, const Style::ComputedStyle& style, const EasingFunction& value)
 {
     return CSSEasingFunctionValue::create(toCSSEasingFunction(value.value, style));
 }
 
 // MARK: - Serialization
 
-void Serialize<EasingFunction>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const RenderStyle& style, const EasingFunction& value)
+void Serialize<EasingFunction>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const Style::ComputedStyle& style, const EasingFunction& value)
 {
     // FIXME: Optimize by avoiding CSSEasingFunction conversion.
     CSS::serializationForCSS(builder, context, toCSSEasingFunction(value.value, style));

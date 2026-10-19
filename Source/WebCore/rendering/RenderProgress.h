@@ -32,17 +32,17 @@ class RenderProgress final : public RenderBlockFlow {
     WTF_MAKE_TZONE_ALLOCATED(RenderProgress);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderProgress);
 public:
-    RenderProgress(HTMLElement&, RenderStyle&&);
+    RenderProgress(HTMLElement&, Style::ComputedStyle&&);
     virtual ~RenderProgress();
 
     double position() const { return m_position; }
     double animationProgress() const;
     MonotonicTime animationStartTime() const { return m_animationStartTime; }
 
-    bool NODELETE isDeterminate() const;
+    bool LEGACY_NODELETE isDeterminate() const;
     void updateFromElement() override;
 
-    HTMLProgressElement* NODELETE progressElement() const;
+    HTMLProgressElement* LEGACY_NODELETE progressElement() const;
 
 private:
     ASCIILiteral renderName() const override { return "RenderProgress"_s; }

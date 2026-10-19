@@ -32,9 +32,11 @@ namespace WebCore {
 
 namespace InlineIterator {
 
+enum class TextRunMode { Painting, Editing };
+
 class TextBox : public Box {
 public:
-    TextBox(PathVariant&&);
+    TextBox(const LayoutIntegration::InlineContent&, size_t boxIndex);
 
     bool hasHyphen() const;
     StringView originalText() const;
@@ -45,23 +47,19 @@ public:
 
     TextBoxSelectableRange selectableRange() const;
 
-    const FontCascade& fontCascade() const;
+    const FontCascade& LEGACY_NODELETE fontCascade() const;
 
-    inline TextRun textRun(TextRunMode = TextRunMode::Painting) const;
+    TextRun textRun(TextRunMode = TextRunMode::Painting) const;
 
     const RenderText& renderer() const { return downcast<RenderText>(Box::renderer()); }
 
-    // FIXME: Remove. For intermediate porting steps only.
-    const LegacyInlineTextBox* legacyInlineBox() const { return downcast<LegacyInlineTextBox>(Box::legacyInlineBox()); }
-
     // This returns the next text box generated for the same RenderText/Layout::InlineTextBox.
-    TextBoxIterator nextTextBox() const;
+    TextBoxIterator LEGACY_NODELETE nextTextBox() const;
 };
 
 class TextBoxIterator : public LeafBoxIterator {
 public:
     TextBoxIterator() = default;
-    TextBoxIterator(Box::PathVariant&&);
     TextBoxIterator(const Box&);
 
     TextBoxIterator& operator++() { return traverseNextTextBox(); }
@@ -70,7 +68,7 @@ public:
     const TextBox* operator->() const LIFETIME_BOUND { return &get(); }
 
     // This traverses to the next text box generated for the same RenderText/Layout::InlineTextBox.
-    TextBoxIterator& traverseNextTextBox();
+    TextBoxIterator& LEGACY_NODELETE traverseNextTextBox();
 
 private:
     BoxIterator& traverseLineRightwardOnLine() = delete;
@@ -82,56 +80,61 @@ private:
 };
 
 TextBoxIterator lineLeftmostTextBoxFor(const RenderText&);
-TextBoxIterator textBoxFor(const LegacyInlineTextBox*);
 TextBoxIterator textBoxFor(const LayoutIntegration::InlineContent&, const InlineDisplay::Box&);
 TextBoxIterator textBoxFor(const LayoutIntegration::InlineContent&, size_t boxIndex);
 BoxRange<TextBoxIterator> textBoxesFor(const RenderText&);
 
-inline bool TextBox::hasHyphen() const
+inline TextBox::TextBox(const LayoutIntegration::InlineContent& inlineContent, size_t boxIndex)
+    : Box(inlineContent, boxIndex)
 {
-    return WTF::switchOn(m_pathVariant, [](auto& path) {
-        return path.hasHyphen();
-    });
 }
 
-inline TextBox::TextBox(PathVariant&& path)
-    : Box(WTF::move(path))
+inline bool TextBox::hasHyphen() const
 {
+    return displayBox().text().hasHyphen();
 }
 
 inline StringView TextBox::originalText() const
 {
-    return WTF::switchOn(m_pathVariant, [](auto& path) {
-        return path.originalText();
-    });
+    return displayBox().text().originalContent();
 }
 
 inline unsigned TextBox::start() const
 {
-    return WTF::switchOn(m_pathVariant, [](auto& path) {
-        return path.start();
-    });
+    return displayBox().text().start();
 }
 
 inline unsigned TextBox::end() const
 {
-    return WTF::switchOn(m_pathVariant, [](auto& path) {
-        return path.end();
-    });
+    return displayBox().text().end();
 }
 
 inline unsigned TextBox::length() const
 {
-    return WTF::switchOn(m_pathVariant, [](auto& path) {
-        return path.length();
-    });
+    return displayBox().text().length();
 }
 
 inline TextBoxSelectableRange TextBox::selectableRange() const
 {
-    return WTF::switchOn(m_pathVariant, [&](auto& path) {
-        return path.selectableRange();
-    });
+    auto& box = displayBox();
+    auto& textContent = box.text();
+    auto extraTrailingLength = [&] -> unsigned {
+        if (textContent.hasHyphen())
+            return protect(box.style())->hyphenString().length();
+        if (downcast<Layout::InlineTextBox>(box.layoutBox()).isCombined()) {
+            ASSERT(textContent.renderedContent().length() >= length());
+            return textContent.renderedContent().length() - length();
+        }
+        return 0;
+    };
+    return {
+        start(),
+        length(),
+        extraTrailingLength(),
+        box.isLineBreak(),
+        textContent.partiallyVisibleContentLength(),
+        (line().isLeftToRightInlineDirection() ? TextDirection::LTR : TextDirection::RTL) != direction()
+    };
 }
 
 }

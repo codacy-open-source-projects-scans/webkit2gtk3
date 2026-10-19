@@ -163,7 +163,7 @@ void BreakBlockquoteCommand::doApply()
     // or clonedBlockquote if ancestors is empty).
     RefPtr<Element> clonedAncestor = clonedBlockquote.copyRef();
     for (size_t i = ancestors.size(); i != 0; --i) {
-        auto clonedChild = ancestors[i - 1]->cloneElementWithoutChildren(document(), nullptr);
+        auto clonedChild = protect(ancestors[i - 1])->cloneElementWithoutChildren(document(), nullptr);
         // Preserve list item numbering in cloned lists.
         if (clonedChild->isElementNode() && clonedChild->hasTagName(olTag)) {
             RefPtr<Node> listChildNode = i > 1 ? ancestors[i - 2].ptr() : startNode.get();
@@ -195,13 +195,13 @@ void BreakBlockquoteCommand::doApply()
             ancestor = ancestor->parentElement(), clonedParent = clonedParent->parentElement()) {
             if (!clonedParent)
                 break;
-            moveRemainingSiblingsToNewParent(ancestor->nextSibling(), 0, *clonedParent);
+            moveRemainingSiblingsToNewParent(protect(ancestor->nextSibling()), 0, *clonedParent);
         }
 
         // If the startNode's original parent is now empty, remove it
-        RefPtr originalParent = ancestors.first().get();
+        Ref originalParent = ancestors.first();
         if (!originalParent->hasChildNodes())
-            removeNode(*originalParent);
+            removeNode(originalParent);
     }
     
     // Make sure the cloned block quote renders.

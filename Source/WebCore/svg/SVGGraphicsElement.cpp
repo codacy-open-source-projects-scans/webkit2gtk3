@@ -40,16 +40,17 @@
 #include "RenderSVGResourcePattern.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGImageElement.h"
-#include "SVGLayerTransformComputation.h"
 #include "SVGMatrix.h"
 #include "SVGNames.h"
-#include "SVGPathData.h"
+#include "SVGPathFromElement.h"
 #include "SVGRect.h"
 #include "SVGRenderSupport.h"
 #include "SVGSVGElement.h"
 #include "SVGStringList.h"
+#include "SVGTransformComputation.h"
 #include "Settings.h"
 #include "StyleTransformResolver.h"
+#include "StyleUpdate.h"
 #include "TransformOperationData.h"
 #include "TransformState.h"
 #include <wtf/NeverDestroyed.h>
@@ -61,7 +62,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(SVGGraphicsElement);
 
 // FIXME: This doesn't match SVGElement::viewportElement() as it has an extra check for
 // foreign object.
-static bool NODELETE isViewportElement(const SVGElement* element)
+static bool LEGACY_NODELETE isViewportElement(const SVGElement* element)
 {
     if (!element)
         return false;
@@ -114,7 +115,7 @@ AffineTransform SVGGraphicsElement::computeCTM(SVGElement* element, CTMScope mod
 
         auto trackingMode { mode == CTMScope::ScreenScope ? TransformState::TrackSVGScreenCTMMatrix : TransformState::TrackSVGCTMMatrix };
         CheckedPtr stopAtRenderer = dynamicDowncast<RenderLayerModelObject>(stopAtElement ? stopAtElement->renderer() : nullptr);
-        return SVGLayerTransformComputation(*renderer).computeAccumulatedTransform(stopAtRenderer.get(), trackingMode);
+        return SVGTransformComputation(*renderer).computeAccumulatedTransform(stopAtRenderer.get(), trackingMode);
     }
 
     AffineTransform ctm;
@@ -134,8 +135,8 @@ AffineTransform SVGGraphicsElement::computeCTM(SVGElement* element, CTMScope mod
     return ctm;
 }
 
-SVGGraphicsElement::SVGGraphicsElement(const QualifiedName& tagName, Document& document, UniqueRef<SVGPropertyRegistry>&& propertyRegistry, OptionSet<TypeFlag> typeFlags)
-    : SVGElement(tagName, document, WTF::move(propertyRegistry), typeFlags)
+SVGGraphicsElement::SVGGraphicsElement(const QualifiedName& tagName, Document& document, const SVGPropertyRegistry& propertyRegistry, OptionSet<TypeFlag> typeFlags)
+    : SVGElement(tagName, document, propertyRegistry, typeFlags)
     , SVGTests(this)
     , m_shouldIsolateBlending(false)
     , m_transform(SVGAnimatedTransformList::create(this))
@@ -173,10 +174,9 @@ AffineTransform SVGGraphicsElement::animatedLocalTransform() const
 {
     // LBSE handles transforms via RenderLayer, no need to handle CSS transforms here.
     if (document().settings().layerBasedSVGEngineEnabled()) {
-        auto concatenatedTransform = protect(transform())->concatenate();
-        if (concatenatedTransform && m_supplementalTransform)
-            return *m_supplementalTransform * *concatenatedTransform;
-        return m_supplementalTransform ? *m_supplementalTransform : concatenatedTransform.value_or(identity);
+        if (m_supplementalTransform)
+            return *m_supplementalTransform * concatenatedTransform();
+        return concatenatedTransform();
     }
 
     AffineTransform matrix;
@@ -211,14 +211,14 @@ AffineTransform SVGGraphicsElement::animatedLocalTransform() const
 AffineTransform* SVGGraphicsElement::ensureSupplementalTransform()
 {
     if (!m_supplementalTransform)
-        m_supplementalTransform = makeUnique<AffineTransform>();
+        lazyInitialize(m_supplementalTransform, makeUnique<AffineTransform>());
     return m_supplementalTransform.get();
 }
 
 void SVGGraphicsElement::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason attributeModificationReason)
 {
     if (name == SVGNames::transformAttr)
-        m_transform->baseVal()->parse(newValue);
+        protect(protect(m_transform)->baseVal())->parse(newValue);
 
     SVGTests::parseAttribute(name, newValue);
     SVGElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
@@ -230,9 +230,10 @@ void SVGGraphicsElement::svgAttributeChanged(const QualifiedName& attrName)
         ASSERT(attrName == SVGNames::transformAttr);
         InstanceInvalidationGuard guard(*this);
 
+        invalidateConcatenatedTransformCache();
+
         if (document().settings().layerBasedSVGEngineEnabled()) {
-            if (CheckedPtr layerRenderer = dynamicDowncast<RenderLayerModelObject>(renderer()))
-                layerRenderer->repaintOrRelayoutAfterSVGTransformChange();
+            updateSVGRendererForElementChange(Style::SVGRendererUpdateType::TransformAttributeOnly);
             return;
         }
 
@@ -257,7 +258,7 @@ FloatRect SVGGraphicsElement::getBBox(StyleUpdateStrategy styleUpdateStrategy)
     return computeBBox(this, styleUpdateStrategy);
 }
 
-RenderPtr<RenderElement> SVGGraphicsElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
+RenderPtr<RenderElement> SVGGraphicsElement::createElementRenderer(Style::ComputedStyle&& style, const RenderTreePosition&)
 {
     if (document().settings().layerBasedSVGEngineEnabled())
         return createRenderer<RenderSVGPath>(*this, WTF::move(style));

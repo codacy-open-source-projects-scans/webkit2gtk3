@@ -67,6 +67,8 @@ public:
         virtual void startDisplayDidRefreshCallbacks(WebCore::PlatformDisplayID) = 0;
         virtual void stopDisplayDidRefreshCallbacks(WebCore::PlatformDisplayID) = 0;
 
+        virtual void didEndSyntheticMomentumScrolling() = 0;
+
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER_TEMPORARY_LOGGING)
         virtual void flushMomentumEventLoggingSoon() = 0;
 #endif
@@ -102,7 +104,7 @@ private:
         WebCore::PlatformDisplayID displayID;
         WebCore::FramesPerSecond nominalFrameRate;
     };
-    std::optional<DisplayProperties> NODELETE displayProperties(WebCore::PageIdentifier) const;
+    std::optional<DisplayProperties> LEGACY_NODELETE displayProperties(WebCore::PageIdentifier) const;
 
     void dispatchSyntheticMomentumEvent(WebWheelEvent::Phase, WebCore::FloatSize delta);
 
@@ -151,7 +153,7 @@ private:
     HistoricalDeltas m_deltaHistoryY;
 
     Markable<MonotonicTime> m_lastScrollTimestamp;
-    std::optional<WebWheelEvent> m_lastIncomingEvent;
+    RefPtr<const WebWheelEvent> m_lastIncomingEvent;
     WebCore::RectEdges<WebCore::RubberBandingBehavior> m_lastRubberBandableEdges;
     bool m_isInOverriddenPlatformMomentumGesture { false };
 
@@ -162,7 +164,7 @@ private:
 
         Markable<WebCore::PageIdentifier> pageIdentifier;
         std::optional<ScrollingAccelerationCurve> accelerationCurve;
-        std::optional<WebWheelEvent> initiatingEvent;
+        RefPtr<const WebWheelEvent> initiatingEvent;
 
         WebCore::FloatSize currentOffset;
         MonotonicTime startTime;

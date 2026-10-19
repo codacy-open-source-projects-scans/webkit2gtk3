@@ -27,6 +27,8 @@
 #include "config.h"
 #include "EnhancedSecurityTracking.h"
 
+#include "APIWebsitePolicies.h"
+#include "WebPreferences.h"
 #include <WebCore/IPAddressSpace.h>
 #include <WebCore/SecurityOrigin.h>
 #include <wtf/Condition.h>
@@ -38,7 +40,7 @@ using namespace WebCore;
 
 using EnhancedSecuritySitesMap = HashMap<WebCore::RegistrableDomain, EnhancedSecurityReason>;
 
-static EnhancedSecuritySitesMap& NODELETE enabledSitesMap()
+static EnhancedSecuritySitesMap& LEGACY_NODELETE enabledSitesMap()
 {
     static MainRunLoopNeverDestroyed<EnhancedSecuritySitesMap> staticEnabledSites;
     return staticEnabledSites;
@@ -115,7 +117,7 @@ void EnhancedSecurityTracking::makeActive()
     m_activeState = ActivationState::Active;
 }
 
-static EnhancedSecurityReason NODELETE reasonForEnhancedSecurity(EnhancedSecurity state)
+static EnhancedSecurityReason LEGACY_NODELETE reasonForEnhancedSecurity(EnhancedSecurity state)
 {
     switch (state) {
     case EnhancedSecurity::Disabled:
@@ -171,18 +173,45 @@ void EnhancedSecurityTracking::trackSameSiteNavigation(const API::Navigation& na
     }
 }
 
-bool EnhancedSecurityTracking::enableIfRequired(const API::Navigation& navigation)
+static bool isURLCandidateForEnhancedSecurity(const URL& url)
+{
+    return url.protocolIs("http"_s) && !SecurityOrigin::isLocalHostOrLoopbackIPAddress(url.host());
+}
+
+bool EnhancedSecurityTracking::enableIfRequired(const API::Navigation& navigation, bool httpFallbackInProgress)
 {
     if (navigation.isEnhancedSecurityLinkForCurrentSite()) {
+        RELEASE_LOG(EnhancedSecurity, "Enhanced Security enabled due to LinkSecurity");
         enableFor(EnhancedSecurityReason::LinkSecurity, navigation);
         return true;
     }
 
-    auto currentRequestURL = navigation.currentRequest().url();
+    if (navigation.currentRequestIsRedirect()) {
+        auto originalRequestURL = navigation.originalRequest().url();
+        auto currentRequestURL = navigation.currentRequest().url();
 
-    if (currentRequestURL.protocolIs("http"_s)
-        && !SecurityOrigin::isLocalHostOrLoopbackIPAddress(currentRequestURL.host())) {
-        enableFor(EnhancedSecurityReason::InsecureProvisional, navigation);
+        bool isSameSite = RegistrableDomain { originalRequestURL } == RegistrableDomain { currentRequestURL };
+
+        if (!isSameSite && isURLCandidateForEnhancedSecurity(originalRequestURL)) {
+            RELEASE_LOG(EnhancedSecurity, "Enhanced Security enabled due to cross-site redirect");
+            enableFor(EnhancedSecurityReason::InsecureLoad, navigation);
+            return true;
+        }
+
+        if (isSameSite && currentRequestURL.protocolIs("https"_s)) {
+            LOG(EnhancedSecurity, "Enhanced Security ignoring navigation due to HTTPS upgrade");
+            return false;
+        }
+    }
+
+    if (isURLCandidateForEnhancedSecurity(navigation.currentRequest().url())) {
+        if (httpFallbackInProgress) {
+            RELEASE_LOG(EnhancedSecurity, "Enhanced Security enabled due to insecure response");
+            enableFor(EnhancedSecurityReason::InsecureProvisional, navigation);
+            return true;
+        }
+
+        LOG(EnhancedSecurity, "Enhanced Security decision deferred until response");
         return true;
     }
 
@@ -191,7 +220,10 @@ bool EnhancedSecurityTracking::enableIfRequired(const API::Navigation& navigatio
 
 void EnhancedSecurityTracking::handleBackForwardNavigation(const API::Navigation& navigation)
 {
-    EnhancedSecurity priorState = navigation.targetItem() ? navigation.targetItem()->enhancedSecurity() : EnhancedSecurity::Disabled;
+    // targetItem() and reloadItem() are both "the item being navigated to", and only one is ever set.
+    // Reading just targetItem() would treat a reload's missing target as Enhanced Security being off.
+    RefPtr item = navigation.targetItem() ? navigation.targetItem() : navigation.reloadItem();
+    EnhancedSecurity priorState = item ? item->enhancedSecurity() : EnhancedSecurity::Disabled;
 
     if (priorState == EnhancedSecurity::Disabled) {
         if (m_activeState != ActivationState::None)
@@ -200,30 +232,36 @@ void EnhancedSecurityTracking::handleBackForwardNavigation(const API::Navigation
         enableFor(reasonForEnhancedSecurity(priorState), navigation);
 }
 
-void EnhancedSecurityTracking::trackNavigation(const API::Navigation& navigation, bool hasOpenedPage)
+static bool isNavigationExemptFromEnhancedSecurityDueToOpener(const API::Navigation& navigation, bool hasOpenedPage)
 {
-    auto lastNavigationAction = navigation.lastNavigationAction();
+    auto& lastNavigationAction = navigation.lastNavigationAction();
     if (lastNavigationAction && lastNavigationAction->hasOpener)
-        return;
+        return true;
 
     bool isRequestFromClientOrUserInput = navigation.isRequestFromClientOrUserInput() && !navigation.substituteData();
+    return navigation.hasOpenedFrames() && hasOpenedPage && !isRequestFromClientOrUserInput;
+}
 
-    if (navigation.hasOpenedFrames() && hasOpenedPage && !isRequestFromClientOrUserInput)
+void EnhancedSecurityTracking::trackNavigation(const API::Navigation& navigation, bool hasOpenedPage, bool httpFallbackInProgress)
+{
+    if (isNavigationExemptFromEnhancedSecurityDueToOpener(navigation, hasOpenedPage))
         return;
+
+    auto& lastNavigationAction = navigation.lastNavigationAction();
 
     bool isBackForward = lastNavigationAction && lastNavigationAction->navigationType == NavigationType::BackForward;
     bool isReload = lastNavigationAction && lastNavigationAction->navigationType == NavigationType::Reload;
-    bool isInitialUIDriven = navigation.isRequestFromClientOrUserInput() && !navigation.currentRequestIsRedirect();
+    bool isInitialUIDriven = lastNavigationAction && lastNavigationAction->isRequestFromClientOrUserInput && !navigation.currentRequestIsRedirect();
 
     if (isBackForward) {
         handleBackForwardNavigation(navigation);
         return;
     }
 
-    if (m_activeState != ActivationState::None && isInitialUIDriven && !isReload)
+    if (isInitialUIDriven && !isReload)
         reset();
 
-    if (m_activeState != ActivationState::Active && enableIfRequired(navigation))
+    if (m_activeState != ActivationState::Active && enableIfRequired(navigation, httpFallbackInProgress))
         return;
 
     if (m_activeState == ActivationState::Active
@@ -258,6 +296,17 @@ void EnhancedSecurityTracking::trackNavigation(const API::Navigation& navigation
         else
             enabledSitesMap().set(RegistrableDomain { navigation.currentRequest().url() }, m_activeReason);
     }
+}
+
+bool EnhancedSecurityTracking::shouldEnableForInsecureResponse(const API::Navigation& navigation, bool hasOpenedPage)
+{
+    if (m_activeState == ActivationState::Active)
+        return false;
+
+    if (isNavigationExemptFromEnhancedSecurityDueToOpener(navigation, hasOpenedPage))
+        return false;
+
+    return true;
 }
 
 } // namespace WebKit

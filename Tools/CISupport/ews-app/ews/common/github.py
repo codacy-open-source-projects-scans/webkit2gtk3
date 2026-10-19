@@ -219,13 +219,13 @@ class GitHubEWS(GitHub):
     STATUS_BUBBLE_ROWS = [['style', 'ios', 'mac', 'wpe', 'win'],  # FIXME: generate this list dynamically to have merge queue show up on top
                           ['bindings', 'ios-sim', 'mac-AS-debug', 'wpe-wk2', 'win-tests'],
                           ['webkitperl', 'ios-wk2', 'api-mac', 'api-wpe', ''],
-                          ['webkitpy', 'ios-wk2-wpt', 'api-mac-debug', 'gtk3-libwebrtc', ''],
-                          ['jsc', 'api-ios', 'mac-wk1', 'gtk', ''],
-                          ['jsc-debug-arm64', 'ios-safer-cpp', 'mac-wk2', 'gtk-wk2', ''],
-                          ['services', 'vision', 'mac-AS-debug-wk2', 'api-gtk', ''],
-                          ['merge', 'vision-sim', 'mac-wk2-stress', 'playstation', ''],
-                          ['unsafe-merge', 'vision-wk2', 'mac-intel-wk2', 'jsc-armv7', ''],
-                          ['', 'tv', 'mac-safer-cpp', 'jsc-armv7-tests', ''],
+                          ['webkitpy', 'ios-wk2-wpt', 'api-mac-debug', 'jsc-wpe', ''],
+                          ['jsc-x86-64', 'api-ios', 'mac-wk2', 'gtk3-gcc', ''],
+                          ['jsc-debug-arm64', 'ios-safer-cpp', 'mac-AS-debug-wk2', 'gtk', ''],
+                          ['services', 'vision', 'mac-wk2-stress', 'gtk-wk2', ''],
+                          ['merge', 'vision-sim', 'mac-intel-wk2', 'api-gtk', ''],
+                          ['unsafe-merge', 'vision-wk2', 'mac-safer-cpp', 'playstation', ''],
+                          ['', 'tv', 'mac-site-isolation', '', ''],
                           ['', 'tv-sim', '', '', ''],
                           ['', 'watch', '', '', ''],
                           ['', 'watch-sim', '', '', '']]
@@ -357,11 +357,11 @@ class GitHubEWS(GitHub):
             if Buildbot.get_parent_queue(queue):
                 queue = Buildbot.get_parent_queue(queue)
             queue_full_name = Buildbot.queue_name_by_shortname_mapping.get(queue)
-            url = None
             if queue_full_name:
                 url = 'https://{}/#/builders/{}'.format(config.BUILDBOT_SERVER_HOST, queue_full_name)
-            hover_over_text = 'Waiting in queue, processing has not started yet'
-            return u'| [{icon} {name} ]({url} "{hover_over_text}") '.format(icon=icon, name=name, url=url, hover_over_text=hover_over_text)
+                hover_over_text = 'Waiting in queue, processing has not started yet'
+                return f'| [{icon} {name}]({url} "{hover_over_text}") '
+            return f'| {icon} {name} '
 
         url = 'https://{}/#/builders/{}/builds/{}'.format(config.BUILDBOT_SERVER_HOST, build.builder_id, build.number)
 
@@ -416,8 +416,12 @@ class GitHubEWS(GitHub):
             hover_over_text = 'Build is being retried. Recent messages:' + self._steps_messages(build)
             icon = GitHubEWS.ICON_BUILD_ONGOING
         elif build.result == Buildbot.EXCEPTION:
-            hover_over_text = 'An unexpected error occured. Recent messages:' + self._steps_messages(build)
             icon = GitHubEWS.ICON_BUILD_ERROR
+            exception_message = self._most_recent_exception_message(build)
+            if exception_message:
+                hover_over_text = 'An unexpected error occured in step: ' + exception_message
+            else:
+                hover_over_text = 'An unexpected error occured. Recent messages:' + self._steps_messages(build)
         else:
             icon = GitHubEWS.ICON_BUILD_ERROR
             hover_over_text = 'An unexpected error occured. Recent messages:' + self._steps_messages(build)
@@ -482,5 +486,11 @@ class GitHubEWS(GitHub):
             if step.result == Buildbot.SUCCESS and 'retrying build' in step.state_string:
                 return step.state_string
             if step.result == Buildbot.FAILURE:
+                return step.state_string
+        return ''
+
+    def _most_recent_exception_message(self, build):
+        for step in build.step_set.all().order_by('-uid'):
+            if step.result == Buildbot.EXCEPTION:
                 return step.state_string
         return ''

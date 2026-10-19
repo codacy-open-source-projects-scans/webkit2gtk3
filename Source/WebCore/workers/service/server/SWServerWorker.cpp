@@ -90,7 +90,11 @@ ServiceWorkerContextData SWServerWorker::contextData() const
     RefPtr registration = m_registration.get();
     ASSERT(registration);
 
-    return { std::nullopt, registration->data(), m_data.identifier, script(), m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap, registration->serviceWorkerPageIdentifier(), registration->navigationPreloadState(), WTF::map(m_routes, [](auto& route) { return route.copy(); }) };
+    return {
+        std::nullopt, registration->data(), m_data.identifier, script(), m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap, registration->serviceWorkerPageIdentifier(), registration->navigationPreloadState(),
+        WTF::map(m_routes, [](auto& route) { return route.copy(); }),
+        std::nullopt
+    };
 }
 
 void SWServerWorker::updateAppInitiatedValue(LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
@@ -176,8 +180,10 @@ void SWServerWorker::terminationTimerFired()
 
 const ClientOrigin& SWServerWorker::origin() const
 {
+    ASSERT(!SecurityOriginData::shouldTreatAsOpaqueOrigin(m_data.scriptURL) || !m_registration || !!m_registration->serviceWorkerPageIdentifier());
+
     if (!m_origin)
-        m_origin = ClientOrigin { m_registrationKey.topOrigin(), SecurityOriginData::fromURL(m_data.scriptURL) };
+        m_origin = ClientOrigin { m_registrationKey.topOrigin(), SecurityOriginData::fromURLWithoutStrictOpaqueness(m_data.scriptURL) };
 
     return *m_origin;
 }
@@ -185,7 +191,7 @@ const ClientOrigin& SWServerWorker::origin() const
 SWServerToContextConnection* SWServerWorker::contextConnection()
 {
     RefPtr server = m_server;
-    return server ? server->contextConnectionForRegistrableDomain(topRegistrableDomain()) : nullptr;
+    return server ? server->contextConnectionForRegistrableDomain(topRegistrableDomain(), m_crossOriginEmbedderPolicy.value) : nullptr;
 }
 
 void SWServerWorker::scriptContextFailedToStart(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, const String& message)
@@ -505,7 +511,7 @@ void SWServerWorker::unregisterServiceWorkerConnection(SWServerConnectionIdentif
 }
 
 // https://w3c.github.io/ServiceWorker/#check-router-registration-limit-algorithm
-static bool NODELETE checkRouterRegistrationLimit(const Vector<ServiceWorkerRoute>& currentRoutes, const Vector<ServiceWorkerRoute>& newRoutes)
+static bool LEGACY_NODELETE checkRouterRegistrationLimit(const Vector<ServiceWorkerRoute>& currentRoutes, const Vector<ServiceWorkerRoute>& newRoutes)
 {
     size_t result = 1024;
     for (auto& route : currentRoutes) {
@@ -552,6 +558,12 @@ std::optional<RouterSource> SWServerWorker::getRouterSource(const FetchOptions& 
 RouterSource SWServerWorker::defaultRouterSource() const
 {
     return m_shouldSkipHandleFetch ? RouterSourceEnum::Network : RouterSourceEnum::FetchEvent;
+}
+
+bool SWServerWorker::shouldPersistToDisk() const
+{
+    // Do not persist service workers backing browser extensions to disk.
+    return m_registration && !m_registration->serviceWorkerPageIdentifier();
 }
 
 } // namespace WebCore

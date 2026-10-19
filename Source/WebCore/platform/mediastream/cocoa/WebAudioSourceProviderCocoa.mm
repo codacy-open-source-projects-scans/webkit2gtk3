@@ -67,7 +67,7 @@ void WebAudioSourceProviderCocoa::setClient(WeakPtr<AudioSourceProviderClient>&&
         return;
     m_client = WTF::move(client);
 
-    hasNewClient(m_client.get());
+    hasNewClient(protect(m_client).get());
 }
 
 void WebAudioSourceProviderCocoa::setPlaybackRate(double playbackRate)
@@ -244,7 +244,7 @@ void WebAudioSourceProviderCocoa::prepare(const AudioStreamBasicDescription& for
 
     callOnMainThread([protectedThis = Ref { *this }, numberOfChannels, sampleRate] {
         if (protectedThis->m_client)
-            protectedThis->m_client->setFormat(numberOfChannels, sampleRate);
+            protect(protectedThis->m_client)->setFormat(numberOfChannels, sampleRate);
     });
 }
 
@@ -260,6 +260,7 @@ void WebAudioSourceProviderCocoa::receivedNewAudioSamples(const PlatformAudioDat
 
 void WebAudioSourceProviderCocoa::setNeedsFlush()
 {
+    Locker locker { m_lock };
     if (!m_ringBuffer)
         return;
     auto [startFrame, endFrame, writeAhead] = m_ringBuffer->getFetchTimeBounds();

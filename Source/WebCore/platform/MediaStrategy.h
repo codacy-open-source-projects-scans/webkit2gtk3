@@ -61,15 +61,17 @@ public:
 #endif
 #if ENABLE(VIDEO)
     virtual RefPtr<AudioVideoRenderer> createAudioVideoRenderer(WTF::LoggerHelper*, HTMLMediaElementIdentifier, MediaPlayerIdentifier) const;
-    bool NODELETE hasRemoteRendererFor(MediaPlayerMediaEngineIdentifier) const;
-    void enableRemoteRenderer(MediaPlayerMediaEngineIdentifier, bool);
 #endif
     virtual std::unique_ptr<NowPlayingManager> createNowPlayingManager() const;
+
+    virtual void isActiveNowPlayingSessionInGPUProcessForTesting(MediaSessionIdentifier, CompletionHandler<void(bool)>&&);
+    virtual void isRemoteCommandTargetSessionInGPUProcessForTesting(MediaSessionIdentifier, CompletionHandler<void(bool)>&&);
+    virtual bool postNowPlayingRemoteControlCommandToGPUProcessForTesting(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument&);
     void resetMediaEngines();
     virtual bool hasThreadSafeMediaSourceSupport() const;
 #if ENABLE(MEDIA_SOURCE)
     virtual void enableMockMediaSource();
-    bool NODELETE mockMediaSourceEnabled() const;
+    bool LEGACY_NODELETE mockMediaSourceEnabled() const;
     static void addMockMediaSourceEngine();
 #endif
 
@@ -91,7 +93,6 @@ protected:
     MediaStrategy();
     virtual ~MediaStrategy();
     bool m_mockMediaSourceEnabled { false };
-    WTF::BitSet<16> m_remoteRenderersEnabled;
 
 private:
 #if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
@@ -105,5 +106,11 @@ inline void MediaStrategy::nativeImageFromVideoFrame(const VideoFrame&, Completi
     completionHandler(std::nullopt);
 }
 #endif
+
+inline bool MediaStrategy::postNowPlayingRemoteControlCommandToGPUProcessForTesting(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument&)
+{
+    return false;
+}
+
 
 } // namespace WebCore

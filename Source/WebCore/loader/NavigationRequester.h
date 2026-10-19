@@ -25,8 +25,10 @@
 
 #pragma once
 
+#include <WebCore/AgentClusterIdentifier.h>
 #include <WebCore/GlobalFrameIdentifier.h>
 #include <WebCore/PolicyContainer.h>
+#include <WebCore/ProcessIdentifier.h>
 #include <WebCore/ScriptExecutionContextIdentifier.h>
 #include <WebCore/SecurityContext.h>
 #include <WebCore/SecurityOrigin.h>
@@ -52,6 +54,13 @@ struct NavigationRequester {
     bool hasLoadedThirdPartyFrame { false };
     bool hasHadUserInteraction { false };
     bool parentOriginIsSameAsTopOrigin { false };
+    std::optional<ProcessIdentifier> processIdentifier;
+    bool isSecureContext { false };
+    bool localNetworkAllowedByPermissionsPolicy { false };
+    bool loopbackNetworkAllowedByPermissionsPolicy { false };
+    std::optional<AgentClusterIdentifier> agentClusterIdentifier;
 };
+
+WEBCORE_EXPORT bool shouldNavigationLoseFrameSpecificStorageAccess(const NavigationRequester&, FrameIdentifier navigatedFrame, const URL& fromURL, const URL& toURL);
 
 } // namespace WebCore

@@ -3,15 +3,25 @@ API/JSAPIWrapperObject.mm
 API/JSCallbackConstructor.cpp
 API/JSCallbackObject.h
 API/JSObjectRef.cpp
+API/JSVirtualMachine.mm
+API/JSWrapperMap.mm
 API/ObjCCallbackFunction.mm
 b3/B3InsertionSetInlines.h
 b3/B3LowerToAir.cpp
 b3/B3ProcedureInlines.h
+[ iOS ] b3/B3Value.cpp
+b3/B3ValueInlines.h
+[ iOS ] b3/air/AirArg.cpp
 b3/air/AirCode.cpp
+[ iOS ] b3/air/AirInstAnalyzer.h
 builtins/BuiltinExecutables.cpp
-builtins/BuiltinNames.cpp
+bytecode/AccessCase.cpp
+bytecode/AccessCase.h
+[ iOS ] bytecode/BytecodeGraph.h
 bytecode/CallLinkInfo.cpp
+bytecode/CallLinkInfoBase.cpp
 bytecode/CodeBlock.cpp
+[ iOS ] bytecode/CodeBlock.h
 bytecode/CodeBlockInlines.h
 bytecode/Instruction.h
 bytecode/MetadataTable.h
@@ -21,43 +31,56 @@ bytecode/UnlinkedFunctionCodeBlock.cpp
 bytecode/UnlinkedFunctionExecutable.cpp
 bytecode/UnlinkedModuleProgramCodeBlock.cpp
 bytecode/UnlinkedProgramCodeBlock.cpp
+bytecode/Watchpoint.cpp
 bytecompiler/BytecodeGenerator.cpp
 bytecompiler/BytecodeGenerator.h
 bytecompiler/NodesCodegen.cpp
 debugger/Debugger.cpp
 dfg/DFGByteCodeParser.cpp
-dfg/DFGConstantFoldingPhase.cpp
+[ iOS ] dfg/DFGGraph.h
+[ iOS ] dfg/DFGNode.h
 dfg/DFGOSRExitCompilerCommon.cpp
 dfg/DFGOperations.cpp
+[ iOS ] ftl/FTLLowerDFGToB3.cpp
 ftl/FTLState.cpp
+[ iOS ] heap/AbstractSlotVisitorInlines.h
 heap/ConservativeRoots.cpp
+[ iOS ] heap/HandleTypes.h
 heap/Heap.cpp
 heap/LocalAllocator.cpp
+[ iOS ] heap/MarkedBlock.h
 heap/MarkedSpace.cpp
 heap/PreciseAllocation.cpp
 heap/SlotVisitor.cpp
+[ iOS ] heap/SlotVisitorInlines.h
 heap/VerifierSlotVisitor.cpp
 heap/WeakBlock.h
 heap/WeakInlines.h
+[ iOS ] heap/WeakSetInlines.h
 inspector/JSInjectedScriptHost.cpp
 inspector/JSJavaScriptCallFrame.cpp
 inspector/agents/InspectorDebuggerAgent.cpp
+inspector/agents/JSGlobalObjectDebuggerAgent.cpp
 interpreter/CallFrame.cpp
 interpreter/CallFrame.h
-interpreter/CallFrameInlines.h
-interpreter/Interpreter.cpp
+[ iOS ] jit/AssemblyHelpersSpoolers.h
+jit/GCAwareJITStubRoutine.cpp
+jit/JITCode.cpp
 jit/JITOperations.cpp
+jit/JITStubRoutine.cpp
 jit/JITThunks.cpp
-jsc.cpp
+llint/LLIntSlowPaths.cpp
 parser/ASTBuilder.h
 parser/NodesAnalyzeModule.cpp
+[ iOS ] parser/Parser.cpp
+runtime/ArrayBufferView.cpp
 runtime/ArrayStorage.h
 runtime/Butterfly.h
 runtime/CacheableIdentifierInlines.h
 runtime/CachedTypes.cpp
 runtime/CodeCache.cpp
-runtime/DateInstance.h
 runtime/DirectArguments.cpp
+[ iOS ] runtime/DirectArguments.h
 runtime/ErrorInstance.h
 runtime/EvalExecutable.cpp
 runtime/Exception.cpp
@@ -65,8 +88,6 @@ runtime/ExecutableBase.cpp
 runtime/FunctionExecutable.cpp
 runtime/FunctionRareData.cpp
 runtime/GenericArgumentsImplInlines.h
-runtime/Identifier.cpp
-runtime/Identifier.h
 runtime/IdentifierInlines.h
 runtime/IndexingHeader.h
 runtime/IntlCollator.h
@@ -82,8 +103,13 @@ runtime/IntlSegmentIterator.h
 runtime/IntlSegmenter.h
 runtime/IntlSegments.h
 runtime/JSArrayBufferView.cpp
+[ iOS ] runtime/JSArrayBufferView.h
+[ iOS ] runtime/JSArrayInlines.h
+[ iOS ] runtime/JSBigInt.cpp
 runtime/JSCJSValueInlines.h
+runtime/JSCell.cpp
 runtime/JSCell.h
+runtime/JSCellInlines.h
 runtime/JSCustomGetterFunction.cpp
 runtime/JSCustomSetterFunction.cpp
 runtime/JSDestructibleObjectHeapCellType.cpp
@@ -92,10 +118,13 @@ runtime/JSFunction.cpp
 runtime/JSFunctionInlines.h
 runtime/JSGlobalLexicalEnvironment.cpp
 runtime/JSGlobalObject.cpp
+[ iOS ] runtime/JSGlobalObjectInlines.h
 runtime/JSModuleNamespaceObject.cpp
 runtime/JSModuleRecord.cpp
 runtime/JSNativeStdFunction.h
-runtime/JSRemoteFunction.cpp
+[ iOS ] runtime/JSObject.cpp
+[ iOS ] runtime/JSObject.h
+[ iOS ] runtime/JSObjectInlines.h
 runtime/JSSourceCode.cpp
 runtime/JSString.cpp
 runtime/JSString.h
@@ -105,8 +134,6 @@ runtime/ModuleProgramExecutable.cpp
 runtime/NativeExecutable.cpp
 runtime/ObjectConstructor.cpp
 runtime/ProgramExecutable.cpp
-runtime/PropertyName.h
-runtime/PropertyNameArray.h
 runtime/PropertyTable.cpp
 runtime/RegExp.cpp
 runtime/RegExpCache.cpp
@@ -114,27 +141,32 @@ runtime/SamplingProfiler.cpp
 runtime/ScopedArguments.cpp
 runtime/ScopedArgumentsTable.cpp
 runtime/ScriptExecutable.cpp
-runtime/SmallStrings.cpp
 runtime/SparseArrayValueMap.cpp
-runtime/StringReplaceCacheInlines.h
-runtime/StringSplitCacheInlines.h
+[ iOS ] runtime/StringPrototype.cpp
 runtime/Structure.cpp
 runtime/Structure.h
+[ iOS ] runtime/StructureArrayStorageInlines.h
+[ iOS ] runtime/StructureInlines.h
 runtime/StructureRareData.cpp
 runtime/Symbol.cpp
 runtime/SymbolConstructor.cpp
 runtime/SymbolTable.cpp
 runtime/SyntheticModuleRecord.cpp
 runtime/WeakMapImpl.cpp
-runtime/WriteBarrier.h
+[ iOS ] runtime/WriteBarrier.h
+[ iOS ] runtime/WriteBarrierInlines.h
 tools/CellProfile.h
 tools/HeapVerifier.cpp
+[ iOS ] tools/Integrity.cpp
 tools/JSDollarVM.cpp
 tools/VMInspector.cpp
-wasm/WasmCalleeGroup.cpp
+[ iOS ] wasm/WasmCallee.cpp
 wasm/WasmModule.cpp
 wasm/WasmOperations.cpp
 wasm/WasmStreamingCompiler.cpp
+wasm/WasmTable.cpp
+[ iOS ] wasm/WasmTypeDefinition.cpp
+[ iOS ] wasm/js/JSWebAssemblyArray.h
 wasm/js/JSWebAssemblyException.cpp
 wasm/js/JSWebAssemblyGlobal.cpp
 wasm/js/JSWebAssemblyHelpers.h
@@ -143,5 +175,6 @@ wasm/js/JSWebAssemblyMemory.cpp
 wasm/js/JSWebAssemblyModule.cpp
 wasm/js/JSWebAssemblyTable.cpp
 wasm/js/JSWebAssemblyTag.cpp
+[ iOS ] wasm/js/WebAssemblyBuiltin.cpp
 wasm/js/WebAssemblyFunction.cpp
 wasm/js/WebAssemblyModuleRecord.cpp

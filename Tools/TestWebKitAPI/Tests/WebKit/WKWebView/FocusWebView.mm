@@ -274,10 +274,8 @@ static void runFocusNavigationIntoFrameWithNestedRemoteFrameTest(bool siteIsolat
     [webView typeCharacter:'\t'];
     EXPECT_WK_STREQ([uiDelegate waitForAlert], "innerInput focused");
 
-    if (!siteIsolationEnabled) {
-        [webView typeCharacter:'\t'];
-        EXPECT_WK_STREQ([uiDelegate waitForAlert], "outerInput focused");
-    }
+    [webView typeCharacter:'\t'];
+    EXPECT_WK_STREQ([uiDelegate waitForAlert], "outerInput focused");
 }
 
 TEST(FocusWebView, FocusNavigationIntoFrameWithNestedRemoteFrame)
@@ -369,6 +367,85 @@ TEST(FocusWebView, DoNotFocusWebViewWhenUnparented)
     [webView objectByEvaluatingJavaScript:@"openNewTab()"];
     EXPECT_FALSE(calledFocusWebView);
 }
+
+TEST(FocusWebView, NoFocusEventsForBackgroundWindow)
+{
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration.get()]);
+
+    NSString *html = @"<!DOCTYPE html>"
+        "<html>"
+        "<body>"
+        "<input id='input' type='text'>"
+        "<script>"
+        "let focusEventCount = 0;"
+        "input.addEventListener('focus', () => {"
+        "    focusEventCount++;"
+        "});"
+        "function getFocusEventCount() { return focusEventCount; }"
+        "</script>"
+        "</body>"
+        "</html>";
+    [webView synchronouslyLoadHTMLString:html];
+
+    [[webView window] resignKeyWindow];
+    [webView objectByEvaluatingJavaScript:@"input.focus()"];
+    [[webView window] makeKeyWindow];
+#if PLATFORM(IOS_FAMILY)
+    // iOS requires that the window manually be made first responder to be focused.
+    [webView becomeFirstResponder];
+#endif
+    [webView waitForNextPresentationUpdate];
+
+    NSNumber *focusEventCount = [webView objectByEvaluatingJavaScript:@"getFocusEventCount()"];
+    EXPECT_EQ([focusEventCount intValue], 1);
+}
+
+TEST(FocusWebView, SingleBlurEventWhenNoLongerActiveAndFocused)
+{
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration]);
+
+    NSString *html = @"<!DOCTYPE html>"
+        "<html>"
+        "<body>"
+        "<input id='input' type='text'>"
+        "<script>"
+        "let blurEventCount = 0;"
+        "input.addEventListener('blur', () => {"
+        "    blurEventCount++;"
+        "});"
+        "function getBlurEventCount() { return blurEventCount; }"
+        "</script>"
+        "</body>"
+        "</html>";
+    [webView synchronouslyLoadHTMLString:html];
+
+    [[webView window] makeKeyWindow];
+#if PLATFORM(IOS_FAMILY)
+    [webView becomeFirstResponder];
+#else
+    [[webView window] makeFirstResponder:webView];
+#endif
+    [webView objectByEvaluatingJavaScript:@"input.focus()"];
+
+#if PLATFORM(IOS_FAMILY)
+    [webView resignFirstResponder];
+#else
+    [[webView window] makeFirstResponder:nil];
+#endif
+    [webView waitForNextPresentationUpdate];
+
+    NSNumber *blurEventCount = [webView objectByEvaluatingJavaScript:@"getBlurEventCount()"];
+    EXPECT_EQ([blurEventCount intValue], 1);
+
+    [[webView window] resignKeyWindow];
+    [webView waitForNextPresentationUpdate];
+
+    blurEventCount = [webView objectByEvaluatingJavaScript:@"getBlurEventCount()"];
+    EXPECT_EQ([blurEventCount intValue], 1);
+}
+
 
 class CrossOriginIframeRelinquishToChromeTests : public ::testing::TestWithParam<bool> {
 public:

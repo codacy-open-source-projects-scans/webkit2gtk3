@@ -32,16 +32,15 @@
 #import "WebView.h"
 #import <WebCore/FrameDestructionObserverInlines.h>
 
-using namespace WebCore;
 
-WebDocumentLoaderMac::WebDocumentLoaderMac(ResourceRequest&& request, SubstituteData&& substituteData, ResourceRequest&& originalRequest)
+WebDocumentLoaderMac::WebDocumentLoaderMac(WebCore::ResourceRequest&& request, WebCore::SubstituteData&& substituteData, WebCore::ResourceRequest&& originalRequest)
     : DocumentLoader(WTF::move(request), WTF::move(substituteData), WTF::move(originalRequest))
     , m_dataSource(nil)
     , m_isDataSourceRetained(false)
 {
 }
 
-WebDocumentLoaderMac::WebDocumentLoaderMac(ResourceRequest&& request, SubstituteData&& substituteData)
+WebDocumentLoaderMac::WebDocumentLoaderMac(WebCore::ResourceRequest&& request, WebCore::SubstituteData&& substituteData)
     : WebDocumentLoaderMac(WTF::move(request), WTF::move(substituteData), { })
 {
 }
@@ -87,7 +86,7 @@ void WebDocumentLoaderMac::attachToFrame()
     retainDataSource();
 }
 
-void WebDocumentLoaderMac::detachFromFrame(LoadWillContinueInAnotherProcess loadWillContinueInAnotherProcess)
+void WebDocumentLoaderMac::detachFromFrame(WebCore::LoadWillContinueInAnotherProcess loadWillContinueInAnotherProcess)
 {
     DocumentLoader::detachFromFrame(loadWillContinueInAnotherProcess);
 
@@ -132,7 +131,7 @@ void WebDocumentLoaderMac::retainDataSource()
     if (m_isDataSourceRetained || !m_dataSource)
         return;
     m_isDataSourceRetained = true;
-    CFRetain(m_dataSource);
+    CFRetain(protect(m_dataSource));
 }
 
 void WebDocumentLoaderMac::releaseDataSource()
@@ -141,7 +140,7 @@ void WebDocumentLoaderMac::releaseDataSource()
         return;
     ASSERT(m_dataSource);
     m_isDataSourceRetained = false;
-    CFRelease(m_dataSource);
+    CFRelease(protect(m_dataSource));
 }
 
 void WebDocumentLoaderMac::detachDataSource()

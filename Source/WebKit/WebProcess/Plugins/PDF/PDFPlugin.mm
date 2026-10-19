@@ -100,8 +100,6 @@
 #import <wtf/cocoa/VectorCocoa.h>
 #import <wtf/text/TextStream.h>
 
-#import "PDFKitSoftLink.h"
-
 // In non-continuous modes, a single scroll event with a magnitude of >= 20px
 // will jump to the next or previous page, to match PDFKit behavior.
 static const int defaultScrollMagnitudeThresholdForPageFlip = 20;
@@ -509,9 +507,16 @@ using namespace WebKit::PDFAnnotationTypeHelpers;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(PDFPlugin);
 
+// PDFLayerController is not exported by PDFKit, so it must be looked up at runtime.
+static Class pdfLayerControllerClassSingleton()
+{
+    static Class pdfLayerControllerClass = NSClassFromString(@"PDFLayerController");
+    return pdfLayerControllerClass;
+}
+
 bool PDFPlugin::pdfKitLayerControllerIsAvailable()
 {
-    return getPDFLayerControllerClassSingleton();
+    return pdfLayerControllerClassSingleton();
 }
 
 Ref<PDFPlugin> PDFPlugin::create(HTMLPlugInElement& pluginElement)
@@ -524,7 +529,7 @@ PDFPlugin::PDFPlugin(HTMLPlugInElement& element)
     , m_containerLayer(adoptNS([[CALayer alloc] init]))
     , m_contentLayer(adoptNS([[CALayer alloc] init]))
     , m_scrollCornerLayer(adoptNS([[WKPDFPluginScrollbarLayer alloc] initWithPDFPlugin:this shouldFlip:NO]))
-    , m_pdfLayerController(adoptNS([allocPDFLayerControllerInstance() init]))
+    , m_pdfLayerController(adoptNS([[pdfLayerControllerClassSingleton() alloc] init]))
     , m_pdfLayerControllerDelegate(adoptNS([[WKPDFLayerControllerDelegate alloc] initWithPDFPlugin:this]))
 {
     Ref document = element.document();
@@ -558,8 +563,8 @@ PDFPlugin::PDFPlugin(HTMLPlugInElement& element)
     if ([m_pdfLayerController respondsToSelector:@selector(setDeviceColorSpace:)])
         [m_pdfLayerController setDeviceColorSpace:screenColorSpace(protect(frame->coreLocalFrame())->view()).platformColorSpace()];
     
-    if ([getPDFLayerControllerClassSingleton() respondsToSelector:@selector(setUseIOSurfaceForTiles:)])
-        [getPDFLayerControllerClassSingleton() setUseIOSurfaceForTiles:false];
+    if ([pdfLayerControllerClassSingleton() respondsToSelector:@selector(setUseIOSurfaceForTiles:)])
+        [pdfLayerControllerClassSingleton() setUseIOSurfaceForTiles:false];
 }
 
 PDFPlugin::~PDFPlugin() = default;
@@ -670,7 +675,7 @@ void PDFPlugin::createPasswordEntryForm()
 
     auto passwordField = PDFPluginPasswordField::create(this);
     m_passwordField = passwordField.ptr();
-    passwordField->attach(m_annotationContainer.get());
+    passwordField->attach(protect(m_annotationContainer));
 }
 
 void PDFPlugin::teardownPasswordEntryForm()
@@ -1090,7 +1095,14 @@ bool PDFPlugin::showContextMenuAtPoint(const IntPoint& point)
     if (!frameView)
         return false;
     IntPoint contentsPoint = frameView->contentsToRootView(point);
-    WebMouseEvent event({ WebEventType::MouseDown, OptionSet<WebEventModifier> { }, MonotonicTime::now() }, WebMouseEventButton::Right, 0, contentsPoint, contentsPoint, 0, 0, 0, 1, WebCore::ForceAtClick);
+    Ref event = WebMouseEvent::create({ WebEventType::MouseDown, OptionSet<WebEventModifier> { }, MonotonicTime::now() }, {
+        .button = WebMouseEventButton::Right,
+        .buttons = 0,
+        .position = contentsPoint,
+        .globalPosition = contentsPoint,
+        .clickCount = 1,
+        .force = WebCore::ForceAtClick,
+    });
     return handleContextMenuEvent(event);
 }
 
@@ -1227,7 +1239,7 @@ void PDFPlugin::setActiveAnnotation(SetActiveAnnotationParams&& setActiveAnnotat
 
             auto activeAnnotation = PDFPluginAnnotation::create(annotation.get(), this);
             m_activeAnnotation = activeAnnotation.get();
-            activeAnnotation->attach(m_annotationContainer.get());
+            activeAnnotation->attach(protect(m_annotationContainer));
         } else
             m_activeAnnotation = nullptr;
     });
@@ -1278,7 +1290,7 @@ void PDFPlugin::showDefinitionForAttributedString(NSAttributedString *string, CG
     rangeRect.origin.y -= rangeRect.size.height;
 
     TextIndicatorData dataForSelection;
-    dataForSelection.selectionRectInRootViewCoordinates = rangeRect;
+    dataForSelection.selectionRectInMainFrameViewCoordinates = rangeRect;
     dataForSelection.textBoundingRectInRootViewCoordinates = rangeRect;
     dataForSelection.contentImageScaleFactor = scaleFactor;
     dataForSelection.presentationTransition = TextIndicatorPresentationTransition::FadeIn;
@@ -1325,7 +1337,7 @@ PDFSelection *PDFPlugin::nextMatchForString(const String& target, bool searchFor
         foundSelection = [m_pdfDocument findString:nsTarget.get() fromSelection:initialSelection withOptions:options];
 
     if (!foundSelection && wrapSearch) {
-        auto emptySelection = adoptNS([allocPDFSelectionInstance() initWithDocument:m_pdfDocument.get()]);
+        RetainPtr emptySelection = adoptNS([[PDFSelection alloc] initWithDocument:m_pdfDocument.get()]);
         foundSelection = [m_pdfDocument findString:nsTarget.get() fromSelection:emptySelection.get() withOptions:options];
     }
 
@@ -1405,7 +1417,7 @@ WebCore::DictionaryPopupInfo PDFPlugin::dictionaryPopupInfoForSelection(PDFSelec
     rangeRect.size.width = nsAttributedString.size.width * scaleFactor;
 
     TextIndicatorData dataForSelection;
-    dataForSelection.selectionRectInRootViewCoordinates = rangeRect;
+    dataForSelection.selectionRectInMainFrameViewCoordinates = rangeRect;
     dataForSelection.textBoundingRectInRootViewCoordinates = rangeRect;
     dataForSelection.contentImageScaleFactor = scaleFactor;
     dataForSelection.presentationTransition = presentationTransition;

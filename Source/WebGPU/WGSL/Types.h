@@ -26,6 +26,7 @@
 #pragma once
 
 #include "ASTForward.h"
+#include "ASTStructure.h"
 #include "CompilationMessage.h"
 #include "WGSLEnums.h"
 #include <array>
@@ -72,7 +73,7 @@ namespace Types {
     f(Void, "void") \
     f(Bool, "bool") \
     f(Sampler, "sampler") \
-    f(SamplerComparison, "sampler_comparion") \
+    f(SamplerComparison, "sampler_comparison") \
     f(TextureExternal, "texture_external") \
     f(AccessMode, "access_mode") \
     f(TexelFormat, "texel_format") \
@@ -174,7 +175,7 @@ public:
         static constexpr unsigned fract = 0;
         static constexpr unsigned exp = 1;
 
-        static constexpr SortedArrayMap map { std::to_array<std::pair<ComparableASCIILiteral, unsigned>>({
+        static constexpr SortedArrayMap map { WTF::toArray<std::pair<ComparableASCIILiteral, unsigned>>({
             { "exp"_s, exp },
             { "fract"_s, fract },
         }) };
@@ -185,7 +186,7 @@ public:
         static constexpr unsigned fract = 0;
         static constexpr unsigned whole = 1;
 
-        static constexpr SortedArrayMap map { std::to_array<std::pair<ComparableASCIILiteral, unsigned>>({
+        static constexpr SortedArrayMap map { WTF::toArray<std::pair<ComparableASCIILiteral, unsigned>>({
             { "fract"_s, fract },
             { "whole"_s, whole },
         }) };
@@ -196,13 +197,13 @@ public:
         static constexpr unsigned oldValue = 0;
         static constexpr unsigned exchanged = 1;
 
-        static constexpr SortedArrayMap map { std::to_array<std::pair<ComparableASCIILiteral, unsigned>>({
+        static constexpr SortedArrayMap map { WTF::toArray<std::pair<ComparableASCIILiteral, unsigned>>({
             { "exchanged"_s, exchanged },
             { "old_value"_s, oldValue },
         }) };
     };
 
-    static constexpr auto keys = std::to_array<SortedArrayMap<std::pair<ComparableASCIILiteral, unsigned>, 2>>({
+    static constexpr auto keys = WTF::toArray<SortedArrayMap<std::pair<ComparableASCIILiteral, unsigned>, 2>>({
         FrexpResult::map,
         ModfResult::map,
         AtomicCompareExchangeResult::map,
@@ -217,6 +218,8 @@ struct Function {
     WTF::Vector<const Type*> parameters;
     const Type* result;
     bool mustUse;
+    // An entry point may not be the target of a function call.
+    bool isEntryPoint;
 };
 
 struct Reference {
@@ -297,7 +300,7 @@ ConversionRank conversionRank(const Type* from, const Type* to);
 
 bool isPrimitive(const Type*, Types::Primitive::Kind);
 bool isPrimitiveReference(const Type*, Types::Primitive::Kind);
-const Type* NODELETE shaderTypeForTexelFormat(TexelFormat, const TypeStore&);
+const Type* LEGACY_NODELETE shaderTypeForTexelFormat(TexelFormat, const TypeStore&);
 
 } // namespace WGSL
 

@@ -26,15 +26,61 @@
 #include "config.h"
 #include "InspectorIdentifierRegistry.h"
 
+#include "Document.h"
+#include "DocumentLoader.h"
+#include "FrameDestructionObserverInlines.h"
+#include "LocalFrameInlines.h"
+#include "NavigationIdentifier.h"
+#include "ProcessIdentifier.h"
+#include "RemoteFrame.h"
 #include <JavaScriptCore/IdentifiersFactory.h>
-#include <WebCore/DocumentLoader.h>
-#include <WebCore/LocalFrame.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace Inspector {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(IdentifierRegistry);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyIdentifierRegistry);
+
+// The WebContent process that hosts a frame's content: the current process for a
+// LocalFrame, or the RemoteFrame's recorded hosting process for a remote stub. Both
+// UIProcess and WebContent feed this into protocolFrameId() so they compute matching
+// IDs for the same frame regardless of which process holds it. See webkit.org/b/310164.
+static WebCore::ProcessIdentifier hostingProcessForFrame(const WebCore::Frame& frame)
+{
+    if (auto* remoteFrame = dynamicDowncast<WebCore::RemoteFrame>(frame))
+        return remoteFrame->hostingProcessIdentifier();
+    return WebCore::Process::identifier();
+}
+
+Protocol::Network::LoaderId IdentifierRegistry::loaderId(WebCore::DocumentLoader* loader)
+{
+    if (!loader)
+        return emptyString();
+
+    // Derive the id from the loader's navigationID, which is assigned at provisional-load start and
+    // stays fixed for the load. The Network stream computes this at the main resource's
+    // willSendRequest (before commit) and the Page stream at frameNavigated (after commit); anchoring
+    // on navigationID makes both arrive at the same string. It is qualified with the process that
+    // minted it, which may be the UIProcess or this process.
+    if (auto navigationID = loader->navigationID())
+        return makeString("loader-"_s, navigationID->processIdentifier().toUInt64(), '.', navigationID->object().toUInt64());
+
+    // Fallback only when no navigationID exists yet (early instrumentation / non-navigation loads):
+    // keep a stable per-loader id. This produces a legacy-format ID.
+    return m_loaderToIdentifier.ensure(loader, [] {
+        return IdentifiersFactory::createIdentifier();
+    }).iterator->value;
+}
+
+Protocol::Network::LoaderId IdentifierRegistry::takeLoader(WebCore::DocumentLoader& loader)
+{
+    return m_loaderToIdentifier.take(&loader);
+}
+
+String IdentifierRegistry::protocolFrameId(const WebCore::Frame& frame)
+{
+    return protocolFrameId(frame.frameID(), hostingProcessForFrame(frame));
+}
 
 LegacyIdentifierRegistry::LegacyIdentifierRegistry() = default;
 LegacyIdentifierRegistry::~LegacyIdentifierRegistry() = default;
@@ -55,18 +101,9 @@ Protocol::Network::FrameId LegacyIdentifierRegistry::frameId(const WebCore::Fram
     }).iterator->value;
 }
 
-Protocol::Network::LoaderId LegacyIdentifierRegistry::loaderId(WebCore::DocumentLoader* loader)
+RefPtr<WebCore::LocalFrame> LegacyIdentifierRegistry::assertFrame(Protocol::ErrorString& errorString, const Protocol::Network::FrameId& frameId)
 {
-    if (!loader)
-        return emptyString();
-    return m_loaderToIdentifier.ensure(loader, [] {
-        return IdentifiersFactory::createIdentifier();
-    }).iterator->value;
-}
-
-WebCore::LocalFrame* LegacyIdentifierRegistry::assertFrame(Protocol::ErrorString& errorString, const Protocol::Network::FrameId& frameId)
-{
-    auto* frame = dynamicDowncast<WebCore::LocalFrame>(frameForId(frameId));
+    RefPtr frame = dynamicDowncast<WebCore::LocalFrame>(frameForId(frameId));
     if (!frame)
         errorString = "Missing frame for given frameId"_s;
     return frame;
@@ -80,9 +117,40 @@ Protocol::Network::FrameId LegacyIdentifierRegistry::takeFrame(const WebCore::Fr
     return identifier;
 }
 
-Protocol::Network::LoaderId LegacyIdentifierRegistry::takeLoader(WebCore::DocumentLoader& loader)
+// --- BackendIdentifierRegistry ---
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(BackendIdentifierRegistry);
+
+BackendIdentifierRegistry::BackendIdentifierRegistry() = default;
+BackendIdentifierRegistry::~BackendIdentifierRegistry() = default;
+
+Protocol::Network::FrameId BackendIdentifierRegistry::frameId(const WebCore::Frame* frame)
 {
-    return m_loaderToIdentifier.take(&loader);
+    if (!frame)
+        return emptyString();
+    auto identifier = protocolFrameId(*frame);
+    m_identifierToFrame.set(identifier, frame);
+    return identifier;
+}
+
+WebCore::Frame* BackendIdentifierRegistry::frameForId(const Protocol::Network::FrameId& frameId)
+{
+    return frameId.isEmpty() ? nullptr : m_identifierToFrame.get(frameId);
+}
+
+RefPtr<WebCore::LocalFrame> BackendIdentifierRegistry::assertFrame(Protocol::ErrorString& errorString, const Protocol::Network::FrameId& frameId)
+{
+    RefPtr frame = dynamicDowncast<WebCore::LocalFrame>(frameForId(frameId));
+    if (!frame)
+        errorString = "Missing frame for given frameId"_s;
+    return frame;
+}
+
+Protocol::Network::FrameId BackendIdentifierRegistry::takeFrame(const WebCore::Frame& frame)
+{
+    auto identifier = protocolFrameId(frame);
+    m_identifierToFrame.remove(identifier);
+    return identifier;
 }
 
 } // namespace Inspector

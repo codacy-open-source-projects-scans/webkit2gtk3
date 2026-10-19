@@ -32,7 +32,6 @@
 #include "HTMLFrameOwnerElement.h"
 #include "HTMLTextAreaElement.h"
 #include "InspectorInstrumentation.h"
-#include "NodeInlines.h"
 #include "ScriptDisallowedScope.h"
 #include "ShadowRoot.h"
 #include "TypedElementDescendantIteratorInlines.h"
@@ -91,13 +90,13 @@ void notifyChildNodeInserted(ContainerNode& parentOfInsertedTree, Node& node, No
         notifyNodeInsertedIntoTree(parentOfInsertedTree, node, treeScopeChange);
 }
 
-inline RemovedSubtreeObservability NODELETE observabilityOfRemovedNode(Node& node)
+inline RemovedSubtreeObservability LEGACY_NODELETE observabilityOfRemovedNode(Node& node)
 {
     bool isRootOfRemovedTree = !node.parentNode();
     return node.refCount() > 1 && !isRootOfRemovedTree ? RemovedSubtreeObservability::MaybeObservableByRefPtr : RemovedSubtreeObservability::NotObservable;
 }
 
-inline void NODELETE updateObservability(RemovedSubtreeObservability& currentObservability, RemovedSubtreeObservability newStatus)
+inline void LEGACY_NODELETE updateObservability(RemovedSubtreeObservability& currentObservability, RemovedSubtreeObservability newStatus)
 {
     if (newStatus == RemovedSubtreeObservability::MaybeObservableByRefPtr)
         currentObservability = newStatus;
@@ -173,6 +172,7 @@ void removeDetachedChildrenInContainer(ContainerNode& container)
         next = node->nextSibling();
         node->setNextSibling(nullptr);
         node->setParentNode(nullptr);
+        node->resetShadowIncludingRoot();
         container.setFirstChild(next.get());
         if (next)
             next->setPreviousSibling(nullptr);
@@ -180,6 +180,8 @@ void removeDetachedChildrenInContainer(ContainerNode& container)
         node->setTreeScopeRecursively(Ref<Document> { container.document() });
         if (node->isInTreeScope())
             notifyChildNodeRemoved(container, *node);
+        else if (node->refCount() > 1)
+            node->updateShadowIncludingRootForSubtree();
         ASSERT_WITH_SECURITY_IMPLICATION(!node->isInTreeScope());
     }
 }

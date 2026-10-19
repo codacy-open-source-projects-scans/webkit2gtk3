@@ -29,6 +29,7 @@
 
 #include "AuxiliaryProcess.h"
 #include "SandboxExtension.h"
+#include "SecurityFlags.h"
 #include "SharedPreferencesForWebProcess.h"
 #include <WebCore/ProcessIdentifier.h>
 #include <WebCore/Timer.h>
@@ -74,14 +75,18 @@ public:
 
     ModelConnectionToWebProcess* webProcessConnection(WebCore::ProcessIdentifier) const;
 
+    // Never sent to the WebContent process.
+    const SecurityFlags& securityFlags() const LIFETIME_BOUND { return m_securityFlags; }
+
     void tryExitIfUnusedAndUnderMemoryPressure();
 
     const String& applicationVisibleName() const LIFETIME_BOUND { return m_applicationVisibleName; }
 
-#if PLATFORM(VISION) && ENABLE(GPU_PROCESS)
+#if PLATFORM(VISION) && ENABLE(GPU_PROCESS) && HAVE(CORE_RE)
     void requestSharedSimulationConnection(WebCore::ProcessIdentifier, CompletionHandler<void(std::optional<IPC::SharedFileHandle>)>&&);
 #endif
     std::optional<int> debugEntityMemoryLimit() const { return m_debugEntityMemoryLimit; }
+    std::optional<int> debugImmersiveEntityMemoryLimit() const { return m_debugImmersiveEntityMemoryLimit; }
 
     void webProcessConnectionCountForTesting(CompletionHandler<void(uint64_t)>&&);
     void modelPlayerCountForTesting(CompletionHandler<void(uint64_t)>&&);
@@ -95,6 +100,7 @@ private:
     void initializeProcess(const AuxiliaryProcessInitializationParameters&) override;
     void initializeProcessName(const AuxiliaryProcessInitializationParameters&) override;
     void initializeSandbox(const AuxiliaryProcessInitializationParameters&, SandboxInitializationParameters&) override;
+    Thread::QOS connectionReceiveQueueQOS() const override { return Thread::QOS::UserInteractive; }
     bool shouldTerminate() override;
 
     void tryExitIfUnused();
@@ -105,8 +111,12 @@ private:
 
     // Message Handlers
     void initializeModelProcess(ModelProcessCreationParameters&&, CompletionHandler<void()>&&);
+#if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT) && ENABLE(STREAMING_IPC_IN_LOG_FORWARDING)
+    void sendCreateLogStreamToParent(IPC::Connection&, IPC::StreamServerConnectionHandle&&, LogStreamIdentifier, CompletionHandler<void()>&&) override;
+#endif
     void createModelConnectionToWebProcess(WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Handle&&, ModelProcessConnectionParameters&&, const std::optional<String>& attributionTaskID, CompletionHandler<void()>&&);
     void sharedPreferencesForWebProcessDidChange(WebCore::ProcessIdentifier, SharedPreferencesForWebProcess&&, CompletionHandler<void()>&&);
+    void securityFlagsDidChange(SecurityFlags&&);
     void addSession(PAL::SessionID);
     void removeSession(PAL::SessionID);
 
@@ -123,6 +133,8 @@ private:
     WebCore::Timer m_idleExitTimer;
     String m_applicationVisibleName;
     std::optional<int> m_debugEntityMemoryLimit;
+    std::optional<int> m_debugImmersiveEntityMemoryLimit;
+    SecurityFlags m_securityFlags;
 };
 
 } // namespace WebKit

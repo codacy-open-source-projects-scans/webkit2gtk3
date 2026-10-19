@@ -217,6 +217,10 @@ void WriteParamCaptureReplay(std::ostream &os, const CallCapture &call, const Pa
             WriteParamValueReplay<ParamType::TFramebufferIDPointer>(
                 os, call, param.value.FramebufferIDPointerVal);
             break;
+        case ParamType::TFramebufferParameter:
+            WriteParamValueReplay<ParamType::TFramebufferParameter>(
+                os, call, param.value.FramebufferParameterVal);
+            break;
         case ParamType::TGLDEBUGPROC:
             WriteParamValueReplay<ParamType::TGLDEBUGPROC>(os, call, param.value.GLDEBUGPROCVal);
             break;
@@ -412,8 +416,16 @@ void WriteParamCaptureReplay(std::ostream &os, const CallCapture &call, const Pa
             WriteParamValueReplay<ParamType::TMemoryObjectIDPointer>(
                 os, call, param.value.MemoryObjectIDPointerVal);
             break;
+        case ParamType::TMemoryTrimLevel:
+            WriteParamValueReplay<ParamType::TMemoryTrimLevel>(os, call,
+                                                               param.value.MemoryTrimLevelVal);
+            break;
         case ParamType::TObjectType:
             WriteParamValueReplay<ParamType::TObjectType>(os, call, param.value.ObjectTypeVal);
+            break;
+        case ParamType::TPackUnpackParameter:
+            WriteParamValueReplay<ParamType::TPackUnpackParameter>(
+                os, call, param.value.PackUnpackParameterVal);
             break;
         case ParamType::TPlaneParameter:
             WriteParamValueReplay<ParamType::TPlaneParameter>(os, call,
@@ -1038,6 +1050,8 @@ const char *ParamTypeToString(ParamType paramType)
             return "const GLuint *";
         case ParamType::TFramebufferIDPointer:
             return "GLuint *";
+        case ParamType::TFramebufferParameter:
+            return "GLenum";
         case ParamType::TGLDEBUGPROC:
             return "GLDEBUGPROC";
         case ParamType::TGLDEBUGPROCKHR:
@@ -1146,7 +1160,11 @@ const char *ParamTypeToString(ParamType paramType)
             return "const GLuint *";
         case ParamType::TMemoryObjectIDPointer:
             return "GLuint *";
+        case ParamType::TMemoryTrimLevel:
+            return "GLenum";
         case ParamType::TObjectType:
+            return "GLenum";
+        case ParamType::TPackUnpackParameter:
             return "GLenum";
         case ParamType::TPlaneParameter:
             return "GLenum";

@@ -47,7 +47,7 @@
 
 using namespace WebCore;
 
-static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<SchedulePairHashSet>& pairs)
+static bool LEGACY_NODELETE scheduledWithCustomRunLoopMode(const std::optional<SchedulePairHashSet>& pairs)
 {
     if (!pairs)
         return false;
@@ -65,7 +65,7 @@ static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<Schedule
 {
     // Sync xhr uses the message queue.
     if (m_messageQueue)
-        return m_messageQueue->append(makeUnique<Function<void()>>(WTF::move(function)));
+        return protect(m_messageQueue)->append(makeUnique<Function<void()>>(WTF::move(function)));
 
     // This is the common case.
     if (!scheduledWithCustomRunLoopMode(m_scheduledPairs))
@@ -80,7 +80,7 @@ static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<Schedule
         function = nullptr;
     });
     for (auto& pair : *m_scheduledPairs)
-        CFRunLoopPerformBlock(pair->runLoop(), pair->mode(), block.get());
+        CFRunLoopPerformBlock(protect(pair->runLoop()), protect(pair->mode()), block.get());
 }
 
 - (id)initWithHandle:(WebCore::ResourceHandle*)handle messageQueue:(RefPtr<WebCore::SynchronousLoaderMessageQueue>&&)messageQueue
@@ -91,7 +91,7 @@ static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<Schedule
 
     m_handle = handle;
     if (m_handle && m_handle->context()) {
-        if (auto* pairs = m_handle->context()->scheduledRunLoopPairs())
+        if (auto* pairs = protect(protect(m_handle.get())->context())->scheduledRunLoopPairs())
             m_scheduledPairs = *pairs;
     }
     m_messageQueue = WTF::move(messageQueue);
@@ -117,12 +117,12 @@ static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<Schedule
     [super dealloc];
 }
 
-- (NSURLRequest *)connection:(NSURLConnection *)connection willSendRequest:(NSURLRequest *)newRequest redirectResponse:(NSURLResponse *)redirectResponse
+- (NSURLRequest *)connection:(NSURLConnection *)connection willSendRequest:(NSURLRequest *)newRequest redirectResponse:(NSURLResponse *)originalRedirectResponse
 {
     ASSERT(!isMainThread());
     UNUSED_PARAM(connection);
 
-    redirectResponse = synthesizeRedirectResponseIfNecessary([connection currentRequest], newRequest, redirectResponse);
+    RetainPtr redirectResponse = synthesizeRedirectResponseIfNecessary([connection currentRequest], newRequest, originalRedirectResponse);
 
     // See <rdar://problem/5380697>. This is a workaround for a behavior change in CFNetwork where willSendRequest gets called more often.
     if (!redirectResponse)
@@ -130,13 +130,13 @@ static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<Schedule
 
 #if !LOG_DISABLED
     if ([redirectResponse isKindOfClass:[NSHTTPURLResponse class]])
-        LOG(Network, "Handle %p delegate connection:%p willSendRequest:%@ redirectResponse:%d, Location:<%@>", m_handle.get(), connection, [newRequest description], static_cast<int>([(id)redirectResponse statusCode]), [[(id)redirectResponse allHeaderFields] objectForKey:@"Location"]);
+        LOG(Network, "Handle %p delegate connection:%p willSendRequest:%@ redirectResponse:%d, Location:<%@>", m_handle.get(), connection, [newRequest description], static_cast<int>([(id)redirectResponse.get() statusCode]), [[(id)redirectResponse.get() allHeaderFields] objectForKey:@"Location"]);
     else
         LOG(Network, "Handle %p delegate connection:%p willSendRequest:%@ redirectResponse:non-HTTP", m_handle.get(), connection, [newRequest description]);
 #endif
 
     auto protectedSelf = retainPtr(self);
-    auto work = [protectedSelf, newRequest = retainPtr(newRequest), redirectResponse = retainPtr(redirectResponse)] mutable {
+    auto work = [protectedSelf, newRequest = retainPtr(newRequest), redirectResponse] mutable {
         if (!protectedSelf->m_handle) {
             protectedSelf->m_requestResult = nullptr;
             protectedSelf->m_semaphore.signal();
@@ -155,11 +155,11 @@ static bool NODELETE scheduledWithCustomRunLoopMode(const std::optional<Schedule
         // Check if the redirected url is allowed to access the redirecting url's timing information.
         if (!protectedSelf->m_handle->hasCrossOriginRedirect() && !WebCore::SecurityOrigin::create(redirectRequest.url())->canRequest(redirectResponse.get().URL, OriginAccessPatternsForWebProcess::singleton()))
             protectedSelf->m_handle->markAsHavingCrossOriginRedirect();
-        protectedSelf->m_handle->checkTAO(response);
+        protect(protectedSelf->m_handle.get())->checkTAO(response);
 
         protectedSelf->m_handle->incrementRedirectCount();
 
-        protectedSelf->m_handle->willSendRequest(WTF::move(redirectRequest), WTF::move(response), [protectedSelf = WTF::move(protectedSelf)](ResourceRequest&& request) {
+        protect(protectedSelf->m_handle.get())->willSendRequest(WTF::move(redirectRequest), WTF::move(response), [protectedSelf = WTF::move(protectedSelf)](ResourceRequest&& request) {
             protectedSelf->m_requestResult = request.nsURLRequest(HTTPBodyUpdatePolicy::UpdateHTTPBody);
             protectedSelf->m_semaphore.signal();
         });
@@ -195,7 +195,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             [[challenge sender] cancelAuthenticationChallenge:challenge.get()];
             return;
         }
-        protectedSelf->m_handle->didReceiveAuthenticationChallenge(core(challenge.get()));
+        protect(protectedSelf->m_handle.get())->didReceiveAuthenticationChallenge(core(challenge.get()));
     };
 
     [self callFunctionOnMainThread:WTF::move(work)];
@@ -217,7 +217,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             protectedSelf->m_semaphore.signal();
             return;
         }
-        protectedSelf->m_handle->canAuthenticateAgainstProtectionSpace(ProtectionSpace(protectionSpace.get()), [protectedSelf = WTF::move(protectedSelf)](bool result) mutable {
+        protect(protectedSelf->m_handle.get())->canAuthenticateAgainstProtectionSpace(ProtectionSpace(protectionSpace.get()), [protectedSelf = WTF::move(protectedSelf)](bool result) mutable {
             protectedSelf->m_boolResult = result;
             protectedSelf->m_semaphore.signal();
         });
@@ -302,7 +302,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         // FIXME: https://bugs.webkit.org/show_bug.cgi?id=19793
         // -1 means we do not provide any data about transfer size to inspector so it would use
         // Content-Length headers or content size to show transfer size.
-        protectedSelf->m_handle->client()->didReceiveData(protectedSelf->m_handle.get(), SharedBuffer::create(data.get()), -1);
+        protectedSelf->m_handle->client()->didReceiveData(protect(protectedSelf->m_handle.get()), SharedBuffer::create(data.get()), -1);
     };
 
     [self callFunctionOnMainThread:WTF::move(work)];
@@ -319,7 +319,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     auto work = [protectedSelf = retainPtr(self), totalBytesWritten = totalBytesWritten, totalBytesExpectedToWrite = totalBytesExpectedToWrite] mutable {
         if (!protectedSelf->m_handle || !protectedSelf->m_handle->client())
             return;
-        protectedSelf->m_handle->client()->didSendData(protectedSelf->m_handle.get(), totalBytesWritten, totalBytesExpectedToWrite);
+        protectedSelf->m_handle->client()->didSendData(protect(protectedSelf->m_handle.get()), totalBytesWritten, totalBytesExpectedToWrite);
     };
 
     [self callFunctionOnMainThread:WTF::move(work)];
@@ -338,22 +338,22 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
         if (auto metrics = protectedSelf->m_handle->networkLoadMetrics()) {
             if (double responseEndTime = [[timingData objectForKey:@"_kCFNTimingDataResponseEnd"] doubleValue])
-                metrics->responseEnd = WallTime::fromRawSeconds(adoptNS([[NSDate alloc] initWithTimeIntervalSinceReferenceDate:responseEndTime]).get().timeIntervalSince1970).approximateMonotonicTime();
+                metrics->responseEnd = WallTime::fromRawSeconds(adoptNS([[NSDate alloc] initWithTimeIntervalSinceReferenceDate:responseEndTime]).get().timeIntervalSince1970).approximate<MonotonicTime>();
             else
                 metrics->responseEnd = metrics->responseStart;
             metrics->protocol = checked_objc_cast<NSString>([timingData objectForKey:@"_kCFNTimingDataNetworkProtocolName"]);
             metrics->responseBodyBytesReceived = [[timingData objectForKey:@"_kCFNTimingDataResponseBodyBytesReceived"] unsignedLongLongValue];
             metrics->responseBodyDecodedSize = [[timingData objectForKey:@"_kCFNTimingDataResponseBodyBytesDecoded"] unsignedLongLongValue];
             metrics->markComplete();
-            protectedSelf->m_handle->client()->didFinishLoading(protectedSelf->m_handle.get(), *metrics);
+            protectedSelf->m_handle->client()->didFinishLoading(protect(protectedSelf->m_handle.get()), *metrics);
         } else {
             NetworkLoadMetrics emptyMetrics;
             emptyMetrics.markComplete();
-            protectedSelf->m_handle->client()->didFinishLoading(protectedSelf->m_handle.get(), emptyMetrics);
+            protectedSelf->m_handle->client()->didFinishLoading(protect(protectedSelf->m_handle.get()), emptyMetrics);
         }
 
         if (protectedSelf->m_messageQueue) {
-            protectedSelf->m_messageQueue->kill();
+            protect(protectedSelf->m_messageQueue)->kill();
             protectedSelf->m_messageQueue = nullptr;
         }
     };
@@ -372,9 +372,9 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         if (!protectedSelf->m_handle || !protectedSelf->m_handle->client())
             return;
 
-        protectedSelf->m_handle->client()->didFail(protectedSelf->m_handle.get(), error.get());
+        protectedSelf->m_handle->client()->didFail(protect(protectedSelf->m_handle.get()), error.get());
         if (protectedSelf->m_messageQueue) {
-            protectedSelf->m_messageQueue->kill();
+            protect(protectedSelf->m_messageQueue)->kill();
             protectedSelf->m_messageQueue = nullptr;
         }
     };
@@ -398,7 +398,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             return;
         }
 
-        protectedSelf->m_handle->client()->willCacheResponseAsync(protectedSelf->m_handle.get(), cachedResponse.get(), [protectedSelf = WTF::move(protectedSelf)](NSCachedURLResponse * response) mutable {
+        protectedSelf->m_handle->client()->willCacheResponseAsync(protect(protectedSelf->m_handle.get()), cachedResponse.get(), [protectedSelf = WTF::move(protectedSelf)](NSCachedURLResponse * response) mutable {
             protectedSelf->m_cachedResponseResult = response;
             protectedSelf->m_semaphore.signal();
         });

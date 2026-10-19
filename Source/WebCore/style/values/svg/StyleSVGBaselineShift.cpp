@@ -28,8 +28,6 @@
 #include "AnimationUtilities.h"
 #include "CSSKeywordValue.h"
 #include "StyleBuilderChecking.h"
-#include "StyleLengthWrapper+Blending.h"
-#include "StyleLengthWrapper+CSSValueConversion.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include "StylePrimitiveNumericTypes+CSSValueConversion.h"
 
@@ -40,11 +38,11 @@ auto CSSValueConversion<SVGBaselineShift>::operator()(BuilderState& state, const
 {
     if (RefPtr keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueBaseline:
+        case CSSValueID::Baseline:
             return CSS::Keyword::Baseline { };
-        case CSSValueSub:
+        case CSSValueID::Sub:
             return CSS::Keyword::Sub { };
-        case CSSValueSuper:
+        case CSSValueID::Super:
             return CSS::Keyword::Super { };
         default:
             break;
@@ -54,7 +52,7 @@ auto CSSValueConversion<SVGBaselineShift>::operator()(BuilderState& state, const
         return CSS::Keyword::Baseline { };
     }
 
-    return toStyleFromCSSValue<SVGBaselineShiftLength>(state, value);
+    return toStyleFromCSSValue<SVGBaselineShift::LengthPercentage>(state, value);
 }
 
 // MARK: - Blending
@@ -68,18 +66,18 @@ auto Blending<SVGBaselineShift>::requiresInterpolationForAccumulativeIteration(c
 {
     if (a.m_value.index() != b.m_value.index())
         return true;
-    if (!a.isLength())
+    if (!a.isLengthPercentage())
         return false;
-    return Style::requiresInterpolationForAccumulativeIteration(*a.tryLength(), *b.tryLength());
+    return Style::requiresInterpolationForAccumulativeIteration(*a.tryLengthPercentage(), *b.tryLengthPercentage());
 }
 
 auto Blending<SVGBaselineShift>::blend(const SVGBaselineShift& a, const SVGBaselineShift& b, const BlendingContext& context) -> SVGBaselineShift
 {
-    if (!a.isLength() || !b.isLength())
+    if (!a.isLengthPercentage() || !b.isLengthPercentage())
         return context.progress < 0.5 ? a : b;
 
     ASSERT(canBlend(a, b));
-    return Style::blend(*a.tryLength(), *b.tryLength(), context);
+    return Style::blend(*a.tryLengthPercentage(), *b.tryLengthPercentage(), context);
 }
 
 } // namespace Style

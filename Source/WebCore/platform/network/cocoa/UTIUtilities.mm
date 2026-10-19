@@ -80,7 +80,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (!parentTypes)
         return nullptr;
 
-    for (UTType *parentType : parentTypes.get()) {
+    // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+    for (SUPPRESS_UNRETAINED_LOCAL UTType *parentType : parentTypes.get()) {
         if (auto&& type = mimeTypeFromUTITree(parentType))
             return WTF::move(type);
     }
@@ -103,7 +104,7 @@ RetainPtr<CFStringRef> mimeTypeFromUTITree(CFStringRef uti)
 
 static NSString *UTIFromPotentiallyUnknownMIMEType(StringView mimeType)
 {
-    static constexpr SortedArrayMap typesMap { std::to_array<std::pair<ComparableLettersLiteral, NSString *>>({
+    static constexpr SortedArrayMap typesMap { WTF::toArray<std::pair<ComparableLettersLiteral, NSString *>>({
         { "model/usd"_s, @"com.pixar.universal-scene-description-mobile" },
         { "model/vnd.pixar.usd"_s, @"com.pixar.universal-scene-description-mobile" },
         { "model/vnd.reality"_s, @"com.apple.reality" },
@@ -129,7 +130,7 @@ public:
 };
 
 static Lock cacheUTIFromMIMETypeLock;
-static TinyLRUCache<String, RetainPtr<NSString>, 16, UTIFromMIMETypeCachePolicy>& NODELETE cacheUTIFromMIMEType() WTF_REQUIRES_LOCK(cacheUTIFromMIMETypeLock)
+static TinyLRUCache<String, RetainPtr<NSString>, 16, UTIFromMIMETypeCachePolicy>& LEGACY_NODELETE cacheUTIFromMIMEType() WTF_REQUIRES_LOCK(cacheUTIFromMIMETypeLock)
 {
     static NeverDestroyed<TinyLRUCache<String, RetainPtr<NSString>, 16, UTIFromMIMETypeCachePolicy>> cache;
     return cache;

@@ -31,13 +31,10 @@
 #include "XRCompositionLayer.h"
 #include "XREquirectLayerInit.h"
 #include <wtf/Ref.h>
-#include <wtf/RefPtr.h>
 
 namespace WebCore {
 
-class WebXRRigidTransform;
 class WebXRSession;
-class WebXRSpace;
 class XRLayerBacking;
 
 // https://immersive-web.github.io/layers/#xrequirectlayertype
@@ -51,36 +48,25 @@ public:
 
     virtual ~XREquirectLayer();
 
-    const WebXRSpace& space() const;
-    void setSpace(WebXRSpace&);
-    const WebXRRigidTransform& transform() const;
-    void setTransform(WebXRRigidTransform&);
-
     float radius() const { return m_radius; }
-    void setRadius(float radius) { m_radius = radius; setNeedsRedraw(true); }
+    void setRadius(float);
     float centralHorizontalAngle() const { return m_centralHorizontalAngle; }
-    void setCentralHorizontalAngle(float angle) { m_centralHorizontalAngle = angle; setNeedsRedraw(true); }
+    void setCentralHorizontalAngle(float);
     float upperVerticalAngle() const { return m_upperVerticalAngle; }
-    void setUpperVerticalAngle(float angle) { m_upperVerticalAngle = angle; setNeedsRedraw(true); }
+    void setUpperVerticalAngle(float);
     float lowerVerticalAngle() const { return m_lowerVerticalAngle; }
-    void setLowerVerticalAngle(float angle) { m_lowerVerticalAngle = angle; setNeedsRedraw(true); }
+    void setLowerVerticalAngle(float);
 
 private:
     XREquirectLayer(ScriptExecutionContext&, WebXRSession&, Ref<XRLayerBacking>&&, const XREquirectLayerInit&);
     bool isXREquirectLayer() const final { return true; }
-    void recomputePose();
 
-    RefPtr<WebXRSpace> m_space;
-    RefPtr<WebXRRigidTransform> m_transform;
+    void fillInTypeSpecificDeviceLayerData(PlatformXR::DeviceLayer&) const final;
+
     float m_radius;
     float m_centralHorizontalAngle;
     float m_upperVerticalAngle;
     float m_lowerVerticalAngle;
-    PlatformXR::FrameData::Pose m_poseInLocalSpace;
-
-    // WebXRLayer.
-    void startFrame(PlatformXR::FrameData&) final;
-    PlatformXR::DeviceLayer endFrame() final;
 };
 
 } // namespace WebCore

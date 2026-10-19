@@ -34,7 +34,6 @@
 
 typedef struct __IOSurface* IOSurfaceRef;
 
-WTF_DECLARE_CF_TYPE_TRAIT(CVPixelBuffer);
 WTF_DECLARE_CF_TYPE_TRAIT(CVPixelBufferPool);
 
 SOFT_LINK_FRAMEWORK_FOR_HEADER(WebCore, CoreVideo)
@@ -54,6 +53,11 @@ SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreVideo, CVBufferSetAttachment, void, (
 #define CVBufferGetAttachments softLink_CoreVideo_CVBufferGetAttachments
 SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreVideo, CVPixelBufferGetTypeID, CFTypeID, (), ())
 #define CVPixelBufferGetTypeID softLink_CoreVideo_CVPixelBufferGetTypeID
+// Manual equivalent of WTF_DECLARE_CF_TYPE_TRAIT(CVPixelBuffer) because the
+// soft-linked function CVPixelBufferGetTypeID lives in the WebCore namespace.
+template <> struct WTF::CFTypeTrait<CVPixelBufferRef> {
+    static inline CFTypeID typeID() { return WebCore::CVPixelBufferGetTypeID(); }
+};
 SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreVideo, CVPixelBufferGetDataSize, size_t, (CVPixelBufferRef pixelBuffer), (pixelBuffer))
 #define CVPixelBufferGetDataSize softLink_CoreVideo_CVPixelBufferGetDataSize
 SOFT_LINK_FUNCTION_FOR_HEADER(WebCore, CoreVideo, CVPixelBufferGetWidth, size_t, (CVPixelBufferRef pixelBuffer), (pixelBuffer))
@@ -157,6 +161,8 @@ SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferTransferFunction
 #define kCVImageBufferTransferFunction_SMPTE_240M_1995 get_CoreVideo_kCVImageBufferTransferFunction_SMPTE_240M_1995Singleton()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferTransferFunction_UseGamma, CFStringRef)
 #define kCVImageBufferTransferFunction_UseGamma get_CoreVideo_kCVImageBufferTransferFunction_UseGammaSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferTransferFunction_sRGB, CFStringRef)
+#define kCVImageBufferTransferFunction_sRGB get_CoreVideo_kCVImageBufferTransferFunction_sRGBSingleton()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferGammaLevelKey, CFStringRef)
 #define kCVImageBufferGammaLevelKey get_CoreVideo_kCVImageBufferGammaLevelKeySingleton()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferPixelAspectRatioKey, CFStringRef)
@@ -165,6 +171,36 @@ SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferPixelAspectRatio
 #define kCVImageBufferPixelAspectRatioHorizontalSpacingKey get_CoreVideo_kCVImageBufferPixelAspectRatioHorizontalSpacingKeySingleton()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferPixelAspectRatioVerticalSpacingKey, CFStringRef)
 #define kCVImageBufferPixelAspectRatioVerticalSpacingKey get_CoreVideo_kCVImageBufferPixelAspectRatioVerticalSpacingKeySingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocationTopFieldKey, CFStringRef)
+#define kCVImageBufferChromaLocationTopFieldKey get_CoreVideo_kCVImageBufferChromaLocationTopFieldKeySingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocationBottomFieldKey, CFStringRef)
+#define kCVImageBufferChromaLocationBottomFieldKey get_CoreVideo_kCVImageBufferChromaLocationBottomFieldKeySingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_Left, CFStringRef)
+#define kCVImageBufferChromaLocation_Left get_CoreVideo_kCVImageBufferChromaLocation_LeftSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_Center, CFStringRef)
+#define kCVImageBufferChromaLocation_Center get_CoreVideo_kCVImageBufferChromaLocation_CenterSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_TopLeft, CFStringRef)
+#define kCVImageBufferChromaLocation_TopLeft get_CoreVideo_kCVImageBufferChromaLocation_TopLeftSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_Top, CFStringRef)
+#define kCVImageBufferChromaLocation_Top get_CoreVideo_kCVImageBufferChromaLocation_TopSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_BottomLeft, CFStringRef)
+#define kCVImageBufferChromaLocation_BottomLeft get_CoreVideo_kCVImageBufferChromaLocation_BottomLeftSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_Bottom, CFStringRef)
+#define kCVImageBufferChromaLocation_Bottom get_CoreVideo_kCVImageBufferChromaLocation_BottomSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferChromaLocation_DV420, CFStringRef)
+#define kCVImageBufferChromaLocation_DV420 get_CoreVideo_kCVImageBufferChromaLocation_DV420Singleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferFieldCountKey, CFStringRef)
+#define kCVImageBufferFieldCountKey get_CoreVideo_kCVImageBufferFieldCountKeySingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferFieldDetailKey, CFStringRef)
+#define kCVImageBufferFieldDetailKey get_CoreVideo_kCVImageBufferFieldDetailKeySingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferFieldDetailTemporalTopFirst, CFStringRef)
+#define kCVImageBufferFieldDetailTemporalTopFirst get_CoreVideo_kCVImageBufferFieldDetailTemporalTopFirstSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferFieldDetailTemporalBottomFirst, CFStringRef)
+#define kCVImageBufferFieldDetailTemporalBottomFirst get_CoreVideo_kCVImageBufferFieldDetailTemporalBottomFirstSingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferFieldDetailSpatialFirstLineEarly, CFStringRef)
+#define kCVImageBufferFieldDetailSpatialFirstLineEarly get_CoreVideo_kCVImageBufferFieldDetailSpatialFirstLineEarlySingleton()
+SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferFieldDetailSpatialFirstLineLate, CFStringRef)
+#define kCVImageBufferFieldDetailSpatialFirstLineLate get_CoreVideo_kCVImageBufferFieldDetailSpatialFirstLineLateSingleton()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferCGColorSpaceKey, CFStringRef)
 #define kCVImageBufferCGColorSpaceKey get_CoreVideo_kCVImageBufferCGColorSpaceKeySingleton()
 SOFT_LINK_CONSTANT_FOR_HEADER(WebCore, CoreVideo, kCVImageBufferCleanApertureKey, CFStringRef)

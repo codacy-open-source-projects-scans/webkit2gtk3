@@ -71,6 +71,11 @@ inline bool isNamedViewTransitionPseudoElement(const std::optional<Style::Pseudo
     }
 };
 
+inline bool isHighlightPseudoElement(PseudoElementType type)
+{
+    return allHighlightPseudoElementTypes.contains(type);
+}
+
 } // namespace WebCore
 
 namespace WTF {

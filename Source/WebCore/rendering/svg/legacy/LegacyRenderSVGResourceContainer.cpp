@@ -40,7 +40,7 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyRenderSVGResourceContainer);
 
-LegacyRenderSVGResourceContainer::LegacyRenderSVGResourceContainer(Type type, SVGElement& element, RenderStyle&& style)
+LegacyRenderSVGResourceContainer::LegacyRenderSVGResourceContainer(Type type, SVGElement& element, Style::ComputedStyle&& style)
     : LegacyRenderSVGHiddenContainer(type, element, WTF::move(style), SVGModelObjectFlag::IsResourceContainer)
     , m_id(element.getIdAttribute())
 {
@@ -63,14 +63,14 @@ void LegacyRenderSVGResourceContainer::willBeDestroyed()
     SVGResourcesCache::resourceDestroyed(*this);
 
     if (m_registered) {
-        treeScopeForSVGReferences().removeSVGResource(m_id, *this);
+        protect(treeScopeForSVGReferences())->removeSVGResource(m_id, *this);
         m_registered = false;
     }
 
     LegacyRenderSVGHiddenContainer::willBeDestroyed();
 }
 
-void LegacyRenderSVGResourceContainer::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
+void LegacyRenderSVGResourceContainer::styleDidChange(Style::Difference diff, const Style::ComputedStyle* oldStyle)
 {
     LegacyRenderSVGHiddenContainer::styleDidChange(diff, oldStyle);
 
@@ -86,7 +86,7 @@ void LegacyRenderSVGResourceContainer::idChanged()
     removeAllClientsFromCacheAndMarkForInvalidation();
 
     // Remove old id, that is guaranteed to be present in cache.
-    treeScopeForSVGReferences().removeSVGResource(m_id, *this);
+    protect(treeScopeForSVGReferences())->removeSVGResource(m_id, *this);
     m_id = element().getIdAttribute();
 
     registerResource();
@@ -153,7 +153,7 @@ void LegacyRenderSVGResourceContainer::markAllClientLayersForInvalidation()
         return;
 
     Ref document = (*m_clientLayers.begin())->renderer().document();
-    if (!document->view() || document->renderTreeBeingDestroyed())
+    if (!document->view() || document->renderTreeState() == Document::RenderTreeState::BeingDestroyed)
         return;
 
     auto inLayout = document->view()->layoutContext().isInLayout();
@@ -242,7 +242,7 @@ float LegacyRenderSVGResourceContainer::computeTextPaintingScale(const RenderEle
     // This method should only be called for RenderObjects that deal with text rendering. Cmp. RenderObject.h's is*() methods.
     ASSERT(renderer.isRenderSVGText() || renderer.isRenderSVGTextPath() || renderer.isRenderSVGInline());
 
-    // In text drawing, the scaling part of the graphics context CTM is removed, compare SVGInlineTextBox::paintTextWithShadows.
+    // In text drawing, the scaling part of the graphics context CTM is removed, compare SVGTextBoxPainter::paintTextWithShadows.
     // So, we use that scaling factor here, too, and then push it down to pattern or gradient space
     // in order to keep the pattern or gradient correctly scaled.
     return SVGRenderingContext::calculateScreenFontSizeScalingFactor(renderer);

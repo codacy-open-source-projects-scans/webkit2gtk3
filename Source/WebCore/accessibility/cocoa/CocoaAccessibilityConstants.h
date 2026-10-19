@@ -177,6 +177,13 @@
 #define NSAccessibilityEndTextMarkerAttribute @"AXEndTextMarker"
 #define NSAccessibilityEndTextMarkerForTextMarkerRangeAttribute @"_AXEndTextMarkerForTextMarkerRange"
 #define NSAccessibilityErrorMessageElementsAttribute @"AXErrorMessageElements"
+
+#define NSAccessibilityPossibleFormValidationErrorNotification @"AXPossibleFormValidationError"
+
+// AXPossibleFormValidationError notification userInfo attributes.
+#define NSAccessibilityFormValidationUnannouncedTextKey @"AXFormValidationUnannouncedText"
+#define NSAccessibilityFormValidationErrorFieldCountKey @"AXFormValidationErrorFieldCount"
+#define NSAccessibilityFormValidationTargetIsSubmitterKey @"AXFormValidationTargetIsSubmitter"
 #define NSAccessibilityErrorMessageForAttribute @"AXErrorMessageFor"
 #define NSAccessibilityExpandedTextValueAttribute @"AXExpandedTextValue"
 #define NSAccessibilityFlowFromAttribute @"AXFlowFrom"
@@ -271,6 +278,7 @@
 #define NSAccessibilityPreviousTextMarkerForTextMarkerAttribute @"AXPreviousTextMarkerForTextMarker"
 #define NSAccessibilityPreviousWordStartTextMarkerForTextMarkerAttribute @"AXPreviousWordStartTextMarkerForTextMarker"
 #define NSAccessibilityRangesForSearchPredicateParameterizedAttribute @"AXRangesForSearchPredicate"
+#define NSAccessibilityRelativeIndexForTextMarkerAttribute @"AXRelativeIndexForTextMarker"
 #define NSAccessibilityRightLineTextMarkerRangeForTextMarkerAttribute @"AXRightLineTextMarkerRangeForTextMarker"
 #define NSAccessibilityRightWordTextMarkerRangeForTextMarkerAttribute @"AXRightWordTextMarkerRangeForTextMarker"
 #define NSAccessibilitySentenceTextMarkerRangeForTextMarkerAttribute @"AXSentenceTextMarkerRangeForTextMarker"
@@ -301,6 +309,7 @@
 #endif
 
 #define NSAccessibilityDismissAction @"AXDismissAction"
+#define NSAccessibilityShowWritingToolsAction @"AXShowWritingTools"
 #define NSAccessibilitySyncDecrementAction @"AXSyncDecrementAction"
 #define NSAccessibilitySyncIncrementAction @"AXSyncIncrementAction"
 #define NSAccessibilitySyncPressAction @"AXSyncPressAction"

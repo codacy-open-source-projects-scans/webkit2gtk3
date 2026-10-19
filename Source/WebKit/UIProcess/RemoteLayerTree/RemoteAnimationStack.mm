@@ -31,6 +31,7 @@
 #import "RemoteAnimationUtilities.h"
 #import "RemoteProgressBasedTimeline.h"
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
+#import <wtf/Borrow.h>
 #import <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
@@ -56,7 +57,9 @@ RemoteAnimationStack::RemoteAnimationStack(RemoteAnimations&& animations, WebCor
         affectsFilter = affectsFilter || properties.containsAny({ WebCore::AcceleratedEffectProperty::Filter, WebCore::AcceleratedEffectProperty::BackdropFilter });
         affectsOpacity = affectsOpacity || properties.contains(WebCore::AcceleratedEffectProperty::Opacity);
         affectsTransform = affectsTransform || properties.containsAny(WebCore::transformRelatedAcceleratedProperties);
-        if (affectsFilter && affectsOpacity && affectsTransform)
+        m_hasProgressBasedAnimations = m_hasProgressBasedAnimations || animation->timeline().isProgressBased();
+        m_hasTimeBasedAnimations = m_hasTimeBasedAnimations || animation->timeline().isMonotonic();
+        if (affectsFilter && affectsOpacity && affectsTransform && m_hasProgressBasedAnimations && m_hasTimeBasedAnimations)
             break;
     }
 
@@ -148,7 +151,7 @@ void RemoteAnimationStack::initEffectsFromMainThread(PlatformLayer *layer)
 
     if (canonicalFilters) {
         WebCore::PlatformCAFilters::presentationModifiers(computedValues.filter, canonicalFilters, m_filterPresentationModifiers, m_presentationModifierGroup);
-        for (auto& filterPresentationModifier : m_filterPresentationModifiers)
+        for (auto& filterPresentationModifier : borrow(m_filterPresentationModifiers))
             [layer addPresentationModifier:filterPresentationModifier.second.get()];
     }
 
@@ -179,6 +182,10 @@ void RemoteAnimationStack::applyEffects() const
         WebCore::PlatformCAFilters::updatePresentationModifiers(computedValues.filter, m_filterPresentationModifiers);
 
     if (m_opacityPresentationModifier) {
+        // Setting 0.f here may result in a stale value for the CAPresentationModifier.
+        // FIXME: rdar://188819673.
+        if (!computedValues.opacity.value)
+            computedValues.opacity.value = std::numeric_limits<float>::min();
         RetainPtr opacity = @(computedValues.opacity.value);
         [m_opacityPresentationModifier setValue:opacity.get()];
     }
@@ -215,7 +222,7 @@ void RemoteAnimationStack::applyEffectsFromMainThread(PlatformLayer *layer, bool
 WebCore::AcceleratedEffectValues RemoteAnimationStack::computeValues() const
 {
     auto values = m_baseValues;
-    for (auto& animation : m_animations)
+    for (auto& animation : borrow(m_animations))
         animation->apply(values);
     return values;
 }
@@ -226,7 +233,7 @@ void RemoteAnimationStack::clear(PlatformLayer *layer)
     if (!m_presentationModifierGroup)
         return;
 
-    for (auto& filterPresentationModifier : m_filterPresentationModifiers)
+    for (auto& filterPresentationModifier : borrow(m_filterPresentationModifiers))
         [layer removePresentationModifier:filterPresentationModifier.second.get()];
     if (m_opacityPresentationModifier)
         [layer removePresentationModifier:m_opacityPresentationModifier.get()];
@@ -250,19 +257,12 @@ bool RemoteAnimationStack::isDependentOnScrollingNodeWithID(WebCore::ScrollingNo
     });
 }
 
-bool RemoteAnimationStack::isTimeDependent() const
-{
-    return m_animations.containsIf([](auto& animation) {
-        return animation->timeline().isMonotonic();
-    });
-}
-
 Ref<JSON::Object> RemoteAnimationStack::toJSONForTesting() const
 {
     Ref convertedAnimations = JSON::Array::create();
     OptionSet<WebCore::AcceleratedEffectProperty> animatedProperties;
 
-    for (auto& animation : m_animations) {
+    for (auto& animation : borrow(m_animations)) {
         animatedProperties.add(animation->animatedProperties());
         convertedAnimations->pushObject(animation->toJSONForTesting());
     }

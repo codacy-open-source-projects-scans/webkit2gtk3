@@ -32,18 +32,32 @@ namespace WebCore {
 
 class HTMLAreaElement;
 class HTMLMapElement;
+class ConcreteObjectSize;
+class GraphicsContext;
+class ImageBuffer;
+class NativeImage;
+class ShareableBitmap;
 
 enum ImageSizeChangeType {
     ImageSizeChangeNone,
     ImageSizeChangeForAltText
 };
 
+struct CreateShareableBitmapFromImageOptions {
+    enum class AllowAnimatedImages : bool { No, Yes };
+    enum class UseSnapshotForTransparentImages : bool { No, Yes };
+
+    std::optional<FloatSize> screenSizeInPixels;
+    AllowAnimatedImages allowAnimatedImages { AllowAnimatedImages::Yes };
+    UseSnapshotForTransparentImages useSnapshotForTransparentImages { UseSnapshotForTransparentImages::No };
+};
+
 class RenderImage : public RenderReplaced {
     WTF_MAKE_TZONE_ALLOCATED(RenderImage);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderImage);
 public:
-    RenderImage(Type, Element&, RenderStyle&&, Style::Image* = nullptr, const float imageDevicePixelRatio = 1.0f);
-    RenderImage(Type, Document&, RenderStyle&&, Style::Image* = nullptr);
+    RenderImage(Type, Element&, Style::ComputedStyle&&, Style::Image* = nullptr, float currentPixelDensity = 1);
+    RenderImage(Type, Document&, Style::ComputedStyle&&, Style::Image* = nullptr);
     virtual ~RenderImage();
 
     RenderImageResource& imageResource() { return *m_imageResource; }
@@ -66,8 +80,9 @@ public:
     const String& altText() const LIFETIME_BOUND { return m_altText; }
     void setAltText(const String& altText) { m_altText = altText; }
 
-    void setImageDevicePixelRatio(float factor);
-    float imageDevicePixelRatio() const { return m_imageDevicePixelRatio; }
+    // https://html.spec.whatwg.org/multipage/images.html#current-pixel-density
+    float currentPixelDensity() const { return m_currentPixelDensity; }
+    void setCurrentPixelDensity(float);
 
     void setHasShadowControls(bool hasShadowControls) { m_hasShadowControls = hasShadowControls; }
     void setHasImageOverlay() { m_hasImageOverlay = true; }
@@ -76,26 +91,46 @@ public:
     bool isShowingAltText() const;
 
     virtual bool shouldDisplayBrokenImageIcon() const;
-    bool shouldRespectZeroIntrinsicWidth() const override;
 
-    String accessibilityDescription() const { return imageResource().image()->accessibilityDescription(); }
+    String accessibilityDescription() const;
 
 #if ENABLE(MULTI_REPRESENTATION_HEIC)
     bool isMultiRepresentationHEIC() const;
 #endif
 
+    WEBCORE_EXPORT std::optional<FloatSize> usedImageSize() const final;
+
+    // FIXME: Condense these into fewer concrete categories of sizing algorithms once we know all the different sizing rules needed.
+    ConcreteObjectSize concreteObjectSizeForPasteboard() const;
+    ConcreteObjectSize concreteObjectSizeForAccessibility() const;
+    ConcreteObjectSize concreteObjectSizeForImageAnalysis() const;
+    WEBCORE_EXPORT ConcreteObjectSize concreteObjectSizeForPositionInformation() const;
+
+    // FIXME: Condense these into fewer concrete categories of bitmap extraction once we know all the different behaviors needed.
+    WEBCORE_EXPORT RefPtr<ShareableBitmap> createShareableBitmapForHitTestResult() const;
+    WEBCORE_EXPORT RefPtr<ShareableBitmap> createShareableBitmapForPositionInformation(FloatSize screenSizeInPixels) const;
+    WEBCORE_EXPORT RefPtr<ShareableBitmap> createShareableBitmapForImageBitmapRequest() const;
+    WEBCORE_EXPORT Ref<NativePromise<Ref<ShareableBitmap>, void>> createShareableBitmapAsyncForImageAnalysis(CreateShareableBitmapFromImageOptions::UseSnapshotForTransparentImages) const;
+
+    // Returns an image as `paint()` would draw it. Sized and placed respecting 'object-fit', 'object-position', 'object-view-box', and orientation, and clipped to the content box.
+    RefPtr<NativeImage> createNativeImageAsPainted(float deviceScaleFactor, const FloatSize& maximumSize);
+
+    FloatSize preferredAspectRatioAsSize() const final;
+
 protected:
-    RenderImage(Type, Element&, RenderStyle&&, OptionSet<ReplacedFlag>, Style::Image* = nullptr, const float imageDevicePixelRatio = 1.0f);
+    RenderImage(Type, Element&, Style::ComputedStyle&&, OptionSet<ReplacedFlag>, Style::Image* = nullptr, float currentPixelDensity = 1);
     void willBeDestroyed() override;
 
-    bool shouldInvalidatePreferredWidths() const final;
-    RenderBox* embeddedContentBox() const final;
-    FloatSize computeIntrinsicSize() const final;
-    FloatSize preferredAspectRatio() const final;
+#if ENABLE(SMART_IMAGE_RESIZER)
+    void insertedIntoTree() override;
+#endif
+
+    bool shouldInvalidateContentWidths() const final;
+    RenderReplaced* embeddedSVGRoot() const final;
     bool foregroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect, unsigned maxDepthToTest) const override;
 
-    void styleWillChange(Style::Difference, const RenderStyle& newStyle) override;
-    void styleDidChange(Style::Difference, const RenderStyle*) override;
+    void styleWillChange(Style::Difference, const Style::ComputedStyle& newStyle) override;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle*) override;
 
     void imageChanged(WrappedImagePtr, const IntRect* = nullptr) override;
 
@@ -108,6 +143,14 @@ protected:
         imageChanged(imageResource().imagePtr());
     }
 
+    NaturalDimensions zoomedNaturalDimensions() const override;
+
+    ConcreteObjectSize defaultConcreteObjectSize() const;
+    ConcreteObjectSize defaultConcreteObjectSize(NaturalDimensions) const;
+
+    virtual RefPtr<ShareableBitmap> createShareableBitmap(const CreateShareableBitmapFromImageOptions& = { }) const;
+    virtual Ref<NativePromise<Ref<ShareableBitmap>, void>> createShareableBitmapAsync(const CreateShareableBitmapFromImageOptions& = { }) const;
+
 private:
     ASCIILiteral renderName() const override { return "RenderImage"_s; }
 
@@ -117,6 +160,7 @@ private:
 
     void paintReplaced(PaintInfo&, const LayoutPoint&) override;
     void paintIncompleteImageOutline(PaintInfo&, LayoutPoint, LayoutUnit) const;
+    void paintMissingImageState(PaintInfo&, const LayoutPoint&) const;
 
     bool computeBackgroundIsKnownToBeObscured(const LayoutPoint& paintOffset) final;
 
@@ -129,27 +173,22 @@ private:
     void repaintOrMarkForLayout(ImageSizeChangeType, const IntRect* = nullptr);
     void updateIntrinsicSizeIfNeeded(const LayoutSize&);
     // Update the size of the image to be rendered. Object-fit may cause this to be different from the CSS box's content rect.
-    void updateInnerContentRect();
+    IntSize imageContainerSize() const;
 
     void paintAreaElementFocusRing(PaintInfo&, const LayoutPoint& paintOffset);
 
-    bool isDimensionlessSVG() const;
-
     bool hasShadowContent() const { return m_hasShadowControls || m_hasImageOverlay; }
 
-    LayoutUnit computeReplacedLogicalWidth(ShouldComputePreferred = ShouldComputePreferred::ComputeActual) const override;
-    LayoutUnit computeReplacedLogicalHeight(std::optional<LayoutUnit> estimatedUsedWidth = std::nullopt) const override;
-
-    bool shouldCollapseToEmpty() const;
+    bool imageRepresentsNothing() const;
 
     // Text to display as long as the image isn't available.
     String m_altText;
-    std::unique_ptr<RenderImageResource> m_imageResource;
+    const std::unique_ptr<RenderImageResource> m_imageResource;
     bool m_needsToSetSizeForAltText { false };
     bool m_isGeneratedContent { false };
     bool m_hasShadowControls { false };
     bool m_hasImageOverlay { false };
-    float m_imageDevicePixelRatio { 1 };
+    float m_currentPixelDensity { 1 };
 
     friend class RenderImageScaleObserver;
 };

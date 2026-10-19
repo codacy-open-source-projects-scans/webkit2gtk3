@@ -69,6 +69,7 @@ struct MatchElement {
         IndirectSibling, // :has(~ .changed)
         SiblingChild, // :has(~ .a > .changed)
         SiblingDescendant, // :has(~ .a .changed)
+        HostDescendant, // :host:has(...) — has-bearer is a shadow host, .changed is anywhere in its shadow tree (covers the Child case too).
     };
 
     Relation relation;
@@ -90,23 +91,22 @@ struct RuleAndSelector {
     uint16_t selectorIndex; // Keep in sync with RuleData's selectorIndex size.
     uint16_t selectorListIndex; // Keep in sync with RuleData's selectorListIndex size.
 
-    const CSSSelector& NODELETE selector() const;
+    const CSSSelector& LEGACY_NODELETE selector() const;
 };
 
 struct RuleFeature : public RuleAndSelector {
-    RuleFeature(const RuleData&, MatchElement, IsNegation);
+    RuleFeature(const RuleData&, MatchElement, IsNegation, CSSSelectorList&& invalidationSelector = { }, CSSSelectorList&& scopeSelector = { });
 
     MatchElement matchElement;
     IsNegation isNegation; // Whether the selector is in a (non-paired) :not() context.
-};
-static_assert(sizeof(RuleFeature) <= 16, "RuleFeature is a frequently allocated object. Keep it small.");
-
-struct RuleFeatureWithInvalidationSelector : public RuleFeature {
-    RuleFeatureWithInvalidationSelector(const RuleData&, MatchElement, IsNegation, CSSSelectorList&& invalidationSelector, CSSSelectorList&& scopeSelector = { });
-
+    // Invalidation selector is used for attribute selector and :has() invalidation.
+    // For attribute selectors it is the simple selector for fast testing whether an attribute mutation may have an effect.
+    // For :has() it is the complex argument selector for testing if adding or removing a node may affect :has() matching.
     CSSSelectorList invalidationSelector;
+    // Selector for the :has() scope element, used to bound invalidation traversal.
     CSSSelectorList scopeSelector;
 };
+static_assert(sizeof(RuleFeature) <= 32, "RuleFeature is a frequently allocated object. Keep it small.");
 #pragma pack(pop)
 
 using PseudoClassInvalidationKey = std::tuple<unsigned, uint8_t, AtomString>;
@@ -132,7 +132,6 @@ struct RuleFeatureSet {
         HashSet<GenericHashKey<SelectorDeduplicationKey>> selectorDeduplicationSet;
     };
     void collectFeatures(CollectionContext&, const RuleData&, const Vector<Ref<const StyleRuleScope>>& scopeRules = { });
-    void registerSubstitutionAttribute(const AtomString&);
 
     bool usesRelation(MatchElement::Relation relation) const { return usedRelations[std::to_underlying(relation)]; }
     void setUsesRelation(MatchElement::Relation relation) { usedRelations[std::to_underlying(relation)] = true; }
@@ -141,13 +140,12 @@ struct RuleFeatureSet {
     HashSet<AtomString> idsMatchingAncestorsInRules;
     HashSet<AtomString> attributeLowercaseLocalNamesInRules;
     HashSet<AtomString> attributeLocalNamesInRules;
-    HashSet<AtomString> substitutionAttributeNamesInRules;
 
     HashMap<AtomString, std::unique_ptr<RuleFeatureVector>> idRules;
     HashMap<AtomString, std::unique_ptr<RuleFeatureVector>> classRules;
-    HashMap<AtomString, std::unique_ptr<Vector<RuleFeatureWithInvalidationSelector>>> attributeRules;
+    HashMap<AtomString, std::unique_ptr<RuleFeatureVector>> attributeRules;
     HashMap<PseudoClassInvalidationKey, std::unique_ptr<RuleFeatureVector>> pseudoClassRules;
-    HashMap<PseudoClassInvalidationKey, std::unique_ptr<Vector<RuleFeatureWithInvalidationSelector>>> hasPseudoClassRules;
+    HashMap<PseudoClassInvalidationKey, std::unique_ptr<RuleFeatureVector>> hasPseudoClassRules;
 
     HashSet<AtomString> classesAffectingHost;
     HashSet<AtomString> attributesAffectingHost;
@@ -163,27 +161,26 @@ struct RuleFeatureSet {
 
 private:
     struct SelectorFeatures {
-        using InvalidationFeature = std::tuple<const CSSSelector*, MatchElement, IsNegation>;
-        using HasInvalidationFeature = std::tuple<const CSSSelector*, MatchElement, IsNegation, const CSSSelector*>;
+        using InvalidationFeature = std::tuple<const CSSSelector*, MatchElement, IsNegation, Vector<const CSSSelector*>>;
 
         Vector<InvalidationFeature> ids;
         Vector<InvalidationFeature> classes;
         Vector<InvalidationFeature> attributes;
         Vector<InvalidationFeature> pseudoClasses;
-        Vector<HasInvalidationFeature> hasPseudoClasses;
+        Vector<InvalidationFeature> hasPseudoClasses;
     };
     struct RecursiveCollectionContext;
     void collectFeaturesFromSelector(SelectorFeatures&, const CSSSelector&, MatchElement = { MatchElement::Relation::Subject, { } });
     void recursivelyCollectFeaturesFromSelector(SelectorFeatures&, const CSSSelector&, const RecursiveCollectionContext&);
-    void NODELETE collectPseudoElementFeatures(const RuleData&);
+    void LEGACY_NODELETE collectPseudoElementFeatures(const RuleData&);
 };
 
 MatchElement::HasRelation computeHasArgumentRelation(const CSSSelector&);
 
 enum class InvalidationKeyType : uint8_t { Universal = 1, Class, Id, Attribute, Tag };
-PseudoClassInvalidationKey makePseudoClassInvalidationKey(CSSSelector::PseudoClass, InvalidationKeyType, const AtomString& = starAtom());
+PseudoClassInvalidationKey LEGACY_NODELETE makePseudoClassInvalidationKey(CSSSelector::PseudoClass, InvalidationKeyType, const AtomString& = starAtom());
 
-bool NODELETE unlikelyToHaveSelectorForAttribute(const AtomString&);
+bool LEGACY_NODELETE unlikelyToHaveSelectorForAttribute(const AtomString&);
 
 inline bool isUniversalInvalidation(const PseudoClassInvalidationKey& key)
 {

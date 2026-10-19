@@ -25,11 +25,11 @@
 
 #pragma once
 
-#include "FloatSize.h"
-#include "PlatformExportMacros.h"
-#include "PlatformVideoColorSpace.h"
-#include "SharedBuffer.h"
 #include <JavaScriptCore/DataView.h>
+#include <WebCore/FloatSize.h>
+#include <WebCore/PlatformExportMacros.h>
+#include <WebCore/PlatformVideoColorSpace.h>
+#include <WebCore/SharedBuffer.h>
 #include <wtf/EnumTraits.h>
 #include <wtf/RefPtr.h>
 #include <wtf/text/StringView.h>
@@ -180,13 +180,13 @@ class VideoInfo;
 WEBCORE_EXPORT std::optional<AV1CodecConfigurationRecord> parseAV1CodecParameters(StringView codecString);
 WEBCORE_EXPORT String createAV1CodecParametersString(const AV1CodecConfigurationRecord&);
 
-WEBCORE_EXPORT bool NODELETE validateAV1ConfigurationRecord(const AV1CodecConfigurationRecord&);
+WEBCORE_EXPORT bool LEGACY_NODELETE validateAV1ConfigurationRecord(const AV1CodecConfigurationRecord&);
 WEBCORE_EXPORT bool validateAV1PerLevelConstraints(const AV1CodecConfigurationRecord&, const PlatformMediaCapabilitiesVideoConfiguration&);
 
 std::optional<AV1CodecConfigurationRecord> parseAV1DecoderConfigurationRecord(std::span<const uint8_t>);
 std::optional<AV1CodecConfigurationRecord> parseSequenceHeaderOBU(std::span<const uint8_t>);
 WEBCORE_EXPORT PlatformVideoColorSpace createPlatformVideoColorSpaceFromAV1CodecConfigurationRecord(const AV1CodecConfigurationRecord&);
-WEBCORE_EXPORT RefPtr<VideoInfo> createVideoInfoFromAV1Stream(std::span<const uint8_t>, std::optional<FloatSize> = std::nullopt);
+WEBCORE_EXPORT RefPtr<VideoInfo> createVideoInfoFromAV1Stream(std::span<const uint8_t>, std::optional<FloatSize> = std::nullopt, const std::optional<PlatformVideoColorSpace>& colorSpaceOverride = std::nullopt);
 
 template<typename E>
 std::optional<E> parseEnumFromStringView(StringView stringView)

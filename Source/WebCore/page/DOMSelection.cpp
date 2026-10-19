@@ -39,7 +39,6 @@
 #include "LocalFrame.h"
 #include "LocalFrameInlines.h"
 #include "NodeDocument.h"
-#include "NodeInlines.h"
 #include "Range.h"
 #include "ShadowRoot.h"
 #include "StaticRange.h"
@@ -47,7 +46,7 @@
 
 namespace WebCore {
 
-static Node* NODELETE selectionShadowAncestor(LocalFrame& frame)
+static Node* LEGACY_NODELETE selectionShadowAncestor(LocalFrame& frame)
 {
     auto* node = frame.selection().selection().base().anchorNode();
     if (!node || !node->isInShadowTree())
@@ -189,7 +188,7 @@ ExceptionOr<void> DOMSelection::collapseToEnd()
         return { };
     CheckedRef selection = frame->selection();
     if (selection->isNone())
-        return Exception { ExceptionCode::InvalidStateError };
+        return Exception { ExceptionCode::InvalidStateError, "collapseToEnd() requires a Range to be associated with Selection"_s };
     selection->disassociateLiveRange();
     selection->moveTo(selection->selection().uncanonicalizedEnd(), Affinity::Downstream);
     return { };
@@ -202,7 +201,7 @@ ExceptionOr<void> DOMSelection::collapseToStart()
         return { };
     CheckedRef selection = frame->selection();
     if (selection->isNone())
-        return Exception { ExceptionCode::InvalidStateError };
+        return Exception { ExceptionCode::InvalidStateError, "collapseToStart() requires a Range to be associated with Selection"_s };
     selection->disassociateLiveRange();
     selection->moveTo(selection->selection().uncanonicalizedStart(), Affinity::Downstream);
     return { };

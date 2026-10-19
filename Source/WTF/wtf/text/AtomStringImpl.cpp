@@ -37,6 +37,14 @@ namespace WTF {
 
 using namespace Unicode;
 
+IGNORE_CLANG_WARNINGS_BEGIN("missing-noreturn")
+// Always destroyed via StringImpl::destroy().
+AtomStringImpl::~AtomStringImpl()
+{
+    RELEASE_ASSERT_NOT_REACHED();
+}
+IGNORE_CLANG_WARNINGS_END
+
 #if USE(WEB_THREAD)
 
 class AtomStringTableLocker : public Locker<Lock> {
@@ -90,12 +98,12 @@ static inline Ref<AtomStringImpl> addToStringTable(const T& value)
 
 using UTF16Buffer = HashTranslatorCharBuffer<char16_t>;
 struct UTF16BufferTranslator {
-    static unsigned NODELETE hash(const UTF16Buffer& buf)
+    static unsigned LEGACY_NODELETE hash(const UTF16Buffer& buf)
     {
         return buf.hash;
     }
 
-    static bool equal(AtomStringTable::StringEntry const& str, const UTF16Buffer& buf)
+    static bool LEGACY_NODELETE equal(AtomStringTable::StringEntry const& str, const UTF16Buffer& buf)
     {
         return WTF::equal(str.get(), buf.characters);
     }
@@ -154,7 +162,7 @@ struct SubstringTranslator8 : SubstringTranslator {
         return StringHasher::computeHashAndMaskTop8Bits(buffer.baseString->span8().subspan(buffer.start, buffer.length));
     }
 
-    static bool equal(AtomStringTable::StringEntry const& string, const SubstringLocation& buffer)
+    static bool LEGACY_NODELETE equal(AtomStringTable::StringEntry const& string, const SubstringLocation& buffer)
     {
         return WTF::equal(string.get(), buffer.baseString->span8().subspan(buffer.start, buffer.length));
     }
@@ -166,7 +174,7 @@ struct SubstringTranslator16 : SubstringTranslator {
         return StringHasher::computeHashAndMaskTop8Bits(buffer.baseString->span16().subspan(buffer.start, buffer.length));
     }
 
-    static bool equal(AtomStringTable::StringEntry const& string, const SubstringLocation& buffer)
+    static bool LEGACY_NODELETE equal(AtomStringTable::StringEntry const& string, const SubstringLocation& buffer)
     {
         return WTF::equal(string.get(), buffer.baseString->span16().subspan(buffer.start, buffer.length));
     }
@@ -195,12 +203,12 @@ RefPtr<AtomStringImpl> AtomStringImpl::add(StringImpl* baseString, unsigned star
     
 using Latin1Buffer = HashTranslatorCharBuffer<Latin1Character>;
 struct Latin1BufferTranslator {
-    static unsigned NODELETE hash(const Latin1Buffer& buf)
+    static unsigned LEGACY_NODELETE hash(const Latin1Buffer& buf)
     {
         return buf.hash;
     }
 
-    static bool equal(AtomStringTable::StringEntry const& str, const Latin1Buffer& buf)
+    static bool LEGACY_NODELETE equal(AtomStringTable::StringEntry const& str, const Latin1Buffer& buf)
     {
         return WTF::equal(str.get(), buf.characters);
     }
@@ -217,12 +225,12 @@ struct Latin1BufferTranslator {
 template<typename CharType>
 struct BufferFromStaticDataTranslator {
     using Buffer = HashTranslatorCharBuffer<CharType>;
-    static unsigned NODELETE hash(const Buffer& buf)
+    static unsigned LEGACY_NODELETE hash(const Buffer& buf)
     {
         return buf.hash;
     }
 
-    static bool equal(AtomStringTable::StringEntry const& str, const Buffer& buf)
+    static bool LEGACY_NODELETE equal(AtomStringTable::StringEntry const& str, const Buffer& buf)
     {
         return WTF::equal(str.get(), buf.characters);
     }
@@ -233,6 +241,37 @@ struct BufferFromStaticDataTranslator {
         stringImpl->setHash(hash);
         stringImpl->setIsAtom(true);
         location = &stringImpl.leakRef();
+    }
+};
+
+template<typename CharType>
+struct StaticStringAtomBuffer {
+    SUPPRESS_UNCOUNTED_MEMBER const StringImpl& staticImpl;
+    std::span<const CharType> characters;
+    unsigned hash;
+};
+
+// Translator that stores a StaticStringImpl directly in the atom table without
+// heap-allocating a copy. The StaticStringImpl must have been constructed with
+// StringImpl::StringAtom so that isAtom() returns true. This enables global
+// atom strings that share the same StringImpl* across all threads.
+template<typename CharType>
+struct StaticStringAtomTranslator {
+    using Buffer = StaticStringAtomBuffer<CharType>;
+
+    static unsigned LEGACY_NODELETE hash(const Buffer& buf)
+    {
+        return buf.hash;
+    }
+
+    static bool LEGACY_NODELETE equal(AtomStringTable::StringEntry const& str, const Buffer& buf)
+    {
+        return WTF::equal(str.get(), buf.characters);
+    }
+
+    static void LEGACY_NODELETE translate(AtomStringTable::StringEntry& location, const Buffer& buf, unsigned)
+    {
+        location = const_cast<StringImpl*>(&buf.staticImpl);
     }
 };
 
@@ -289,6 +328,20 @@ static Ref<AtomStringImpl> addStatic(AtomStringTableLocker& locker, StringTableI
 {
     ASSERT(base.length());
     ASSERT(base.isStatic());
+
+    // StaticStringImpl with StringAtom: store the static pointer directly in the
+    // atom table with no heap allocation. The isAtom() flag is already set at
+    // construction time, enabling uncheckedDowncast<AtomStringImpl> and the
+    // dynamicDowncast fast path in add(StringImpl&). All threads that register
+    // the same StaticStringImpl share the same StringImpl pointer.
+    if (base.isAtom()) {
+        if (base.is8Bit()) {
+            StaticStringAtomBuffer<Latin1Character> buffer { base, base.span8(), base.hash() };
+            return addToStringTable<StaticStringAtomBuffer<Latin1Character>, StaticStringAtomTranslator<Latin1Character>>(locker, atomStringTable, buffer);
+        }
+        StaticStringAtomBuffer<char16_t> buffer { base, base.span16(), base.hash() };
+        return addToStringTable<StaticStringAtomBuffer<char16_t>, StaticStringAtomTranslator<char16_t>>(locker, atomStringTable, buffer);
+    }
 
     if (base.is8Bit()) {
         Latin1Buffer buffer { base.span8(), base.hash() };
@@ -396,7 +449,7 @@ Ref<AtomStringImpl> AtomStringImpl::addSlowCase(AtomStringTable& stringTable, St
 // When removing a string from the table, we know it's already the one in the table, so no need for a string equality check.
 struct AtomStringTableRemovalHashTranslator {
     static unsigned hash(const AtomStringImpl* string) { return string->hash(); }
-    static bool equal(const AtomStringTable::StringEntry& a, const AtomStringImpl* b) { return a == b; }
+    static bool LEGACY_NODELETE equal(const AtomStringTable::StringEntry& a, const AtomStringImpl* b) { return a == b; }
 };
 
 void AtomStringImpl::remove(AtomStringImpl* string)

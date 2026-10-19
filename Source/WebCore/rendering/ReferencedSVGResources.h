@@ -26,6 +26,7 @@
 #pragma once
 
 #include "SVGNames.h"
+#include <wtf/CheckedPtr.h>
 #include <wtf/RobinHoodHashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
@@ -42,7 +43,6 @@ class LegacyRenderSVGResourceContainer;
 class QualifiedName;
 class RenderElement;
 class RenderSVGResourceFilter;
-class RenderStyle;
 class SVGClipPathElement;
 class SVGElement;
 class SVGFilterElement;
@@ -51,14 +51,16 @@ class SVGMaskElement;
 class TreeScope;
 
 namespace Style {
+class ComputedStyle;
 class Image;
 struct FilterReference;
 struct ReferencePath;
 struct URL;
 }
 
-class ReferencedSVGResources {
+class ReferencedSVGResources : public CanMakeCheckedPtr<ReferencedSVGResources> {
     WTF_MAKE_TZONE_ALLOCATED(ReferencedSVGResources);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ReferencedSVGResources);
 public:
     ReferencedSVGResources(RenderElement&);
     ~ReferencedSVGResources();
@@ -66,7 +68,7 @@ public:
     using SVGQualifiedNames = Vector<SVGQualifiedName>;
     using SVGElementIdentifierAndTagPairs = Vector<std::pair<AtomString, SVGQualifiedNames>>;
 
-    static SVGElementIdentifierAndTagPairs referencedSVGResourceIDs(const RenderStyle&, const Document&);
+    static SVGElementIdentifierAndTagPairs referencedSVGResourceIDs(const Style::ComputedStyle&, const Document&);
     void updateReferencedResources(TreeScope&, const SVGElementIdentifierAndTagPairs&);
     bool addReferencedSVGResourceIfNeeded(SVGElement&, const AtomString&);
 

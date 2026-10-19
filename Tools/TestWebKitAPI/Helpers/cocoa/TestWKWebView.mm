@@ -36,6 +36,7 @@
 #import "Helpers/Test.h"
 #import "Helpers/cocoa/TestCocoa.h"
 #import "Helpers/cocoa/TestNavigationDelegate.h"
+#import "Helpers/cocoa/TestUIDelegate.h"
 #import "Helpers/Utilities.h"
 
 #import <WebCore/Color.h>
@@ -62,6 +63,7 @@
 #endif
 
 #if PLATFORM(MAC)
+#import "SyntheticNSEvent.h"
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
 #else
@@ -297,6 +299,12 @@ static NSString *overrideBundleIdentifier(id, SEL)
     }
 #endif
     [self.textInputContentView insertTextSuggestion:textSuggestion];
+}
+
+- (void)focusInWindow
+{
+    [[self window] makeKeyWindow];
+    [self becomeFirstResponder];
 }
 
 #if HAVE(UI_WK_DOCUMENT_CONTEXT)
@@ -1489,6 +1497,12 @@ static UIWindowScene *windowScene()
 
 - (void)evaluateJavaScriptAndWaitForInputSessionToChange:(NSString *)script inFrame:(WKFrameInfo *)frame
 {
+#if PLATFORM(IOS_FAMILY)
+    [[self window] makeKeyWindow];
+    [[self textInputContentView] becomeFirstResponder];
+    [self waitForNextPresentationUpdate];
+#endif
+
     auto initialChangeCount = _inputSessionChangeCount;
     BOOL hasEmittedWarning = NO;
     NSTimeInterval secondsToWaitUntilWarning = 2;
@@ -1568,6 +1582,11 @@ static UIWindowScene *windowScene()
 - (UITextSelectionDisplayInteraction *)textSelectionDisplayInteraction
 {
     return dynamic_objc_cast<UITextSelectionDisplayInteraction>([self.textInputContentView valueForKeyPath:@"interactionAssistant._selectionViewManager"]);
+}
+
+- (UIView *)selectionHighlightView
+{
+    return self.textSelectionDisplayInteraction.highlightView;
 }
 
 #endif
@@ -1728,6 +1747,28 @@ static WKContentView *recursiveFindWKContentView(UIView *view)
 
     RetainPtr event = [NSEvent eventWithCGEvent:cgScrollEvent.get()];
     [self scrollWheel:event.get()];
+}
+
+- (void)magnifyAtPoint:(NSPoint)pointInWindow phase:(NSEventPhase)phase magnification:(CGFloat)magnification
+{
+    static NSInteger eventNumber = 0;
+
+    RetainPtr window = [self hostWindow];
+    NSPoint globalLocation = [window convertRectToScreen:NSMakeRect(pointInWindow.x, pointInWindow.y, 1, 1)].origin;
+
+    RetainPtr event = adoptNS([[SyntheticNSEvent alloc] initMagnifyEventAtLocation:pointInWindow
+        globalLocation:globalLocation
+        magnification:magnification
+        phase:phase
+        time:NSProcessInfo.processInfo.systemUptime
+        eventNumber:++eventNumber
+        window:window.get()]);
+
+    dispatchSyntheticEvent(event.get(), self, @"magnify", ^(NSView *targetView, NSEvent *syntheticEvent) {
+        [targetView magnifyWithEvent:syntheticEvent];
+    });
+
+    [self waitForNextPresentationUpdate];
 }
 
 - (NSWindow *)hostWindow

@@ -27,6 +27,8 @@
 
 #if ENABLE(B3_JIT)
 
+#include "B3Effects.h"
+#include "B3HeapRange.h"
 #include "B3Value.h"
 #include "WasmTypeDefinition.h"
 #include <wtf/StdLibExtras.h>
@@ -53,11 +55,14 @@ public:
     Value* initValue() const { ASSERT(m_hasInitValue); return child(3); }
 
     Ref<const Wasm::RTT> rtt() const { return m_rtt; }
-    const Wasm::ArrayType* arrayType() const { return m_arrayType; }
     uint32_t typeIndex() const { return m_typeIndex; }
 
     // Offset from instance for allocator lookup (pre-computed from ModuleInformation)
     int32_t allocatorsBaseOffset() const { return m_allocatorsBaseOffset; }
+
+    // The GC state that a collection triggered by this allocation may mutate.
+    const HeapRange& range() const { return m_range; }
+    void setRange(HeapRange range) { m_range = range; }
 
     B3_SPECIALIZE_VALUE_FOR_NON_VARARGS_CHILDREN
     B3_SPECIALIZE_VALUE_FOR_FINAL_SIZE_FIXED_CHILDREN
@@ -71,22 +76,20 @@ private:
     template<typename... Arguments>
     static Opcode opcodeFromConstructor(Arguments...) { return WasmArrayNew; }
 
-    // 3-child constructor (no init value — for addArrayNewFixed)
-    WasmArrayNewValue(Origin origin, Type resultType, Ref<const Wasm::RTT> rtt, const Wasm::ArrayType* arrayType, uint32_t typeIndex, int32_t allocatorsBaseOffset, Value* instance, Value* structureID, Value* size)
+    // 3-child constructor (no init value -- for addArrayNewFixed)
+    WasmArrayNewValue(Origin origin, Type resultType, Ref<const Wasm::RTT> rtt, uint32_t typeIndex, int32_t allocatorsBaseOffset, Value* instance, Value* structureID, Value* size)
         : Value(CheckedOpcode, WasmArrayNew, resultType, Three, origin, instance, structureID, size)
         , m_rtt(WTF::move(rtt))
-        , m_arrayType(arrayType)
         , m_typeIndex(typeIndex)
         , m_allocatorsBaseOffset(allocatorsBaseOffset)
         , m_hasInitValue(false)
     {
     }
 
-    // 4-child constructor (with init value — for addArrayNew/addArrayNewDefault)
-    WasmArrayNewValue(Origin origin, Type resultType, Ref<const Wasm::RTT> rtt, const Wasm::ArrayType* arrayType, uint32_t typeIndex, int32_t allocatorsBaseOffset, Value* instance, Value* structureID, Value* size, Value* initValue)
+    // 4-child constructor (with init value -- for addArrayNew/addArrayNewDefault)
+    WasmArrayNewValue(Origin origin, Type resultType, Ref<const Wasm::RTT> rtt, uint32_t typeIndex, int32_t allocatorsBaseOffset, Value* instance, Value* structureID, Value* size, Value* initValue)
         : Value(CheckedOpcode, WasmArrayNew, resultType, Four, origin, instance, structureID, size, initValue)
         , m_rtt(WTF::move(rtt))
-        , m_arrayType(arrayType)
         , m_typeIndex(typeIndex)
         , m_allocatorsBaseOffset(allocatorsBaseOffset)
         , m_hasInitValue(true)
@@ -94,9 +97,9 @@ private:
     }
 
     const Ref<const Wasm::RTT> m_rtt;
-    SUPPRESS_UNCOUNTED_MEMBER const Wasm::ArrayType* m_arrayType;
     uint32_t m_typeIndex;
     int32_t m_allocatorsBaseOffset;
+    HeapRange m_range { HeapRange::top() };
     bool m_hasInitValue;
 };
 

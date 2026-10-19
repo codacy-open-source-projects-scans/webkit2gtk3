@@ -123,6 +123,11 @@ ApplicationManifest ApplicationManifestParser::parseManifest(const JSON::Object&
     parsedManifest.id = parseId(manifest, parsedManifest.startURL);
     parsedManifest.orientation = parseOrientation(manifest);
 
+    if (auto darkManifest = manifest.getObject("color_scheme_dark"_s)) {
+        parsedManifest.backgroundColorDark = parseColor(*darkManifest, "background_color"_s);
+        parsedManifest.themeColorDark = parseColor(*darkManifest, "theme_color"_s);
+    }
+
     if (m_document)
         m_document->processApplicationManifest(parsedManifest);
 
@@ -190,7 +195,7 @@ ApplicationManifest::Direction ApplicationManifestParser::parseDir(const JSON::O
         return Auto;
     }
 
-    static constexpr SortedArrayMap directions { std::to_array<std::pair<ComparableLettersLiteral, ApplicationManifest::Direction>>({
+    static constexpr SortedArrayMap directions { WTF::toArray<std::pair<ComparableLettersLiteral, ApplicationManifest::Direction>>({
         { "auto"_s, Auto },
         { "ltr"_s, LTR },
         { "rtl"_s, RTL },
@@ -215,7 +220,7 @@ ApplicationManifest::Display ApplicationManifestParser::parseDisplay(const JSON:
         return ApplicationManifest::Display::Browser;
     }
 
-    static constexpr SortedArrayMap displayValues { std::to_array<std::pair<ComparableLettersLiteral, ApplicationManifest::Display>>({
+    static constexpr SortedArrayMap displayValues { WTF::toArray<std::pair<ComparableLettersLiteral, ApplicationManifest::Display>>({
         { "browser"_s, ApplicationManifest::Display::Browser },
         { "fullscreen"_s, ApplicationManifest::Display::Fullscreen },
         { "minimal-ui"_s, ApplicationManifest::Display::MinimalUI },
@@ -241,7 +246,7 @@ const std::optional<ScreenOrientationLockType> ApplicationManifestParser::parseO
         return std::nullopt;
     }
 
-    static SortedArrayMap orientationValues { std::to_array<std::pair<ComparableLettersLiteral, WebCore::ScreenOrientationLockType>>({
+    static SortedArrayMap orientationValues { WTF::toArray<std::pair<ComparableLettersLiteral, WebCore::ScreenOrientationLockType>>({
         { "any"_s, WebCore::ScreenOrientationLockType::Any },
         { "landscape"_s, WebCore::ScreenOrientationLockType::Landscape },
         { "landscape-primary"_s, WebCore::ScreenOrientationLockType::LandscapePrimary },
@@ -357,33 +362,28 @@ Vector<ApplicationManifest::Icon> ApplicationManifestParser::parseIcons(const JS
         auto purposeValue = iconJSON->getValue("purpose"_s);
         OptionSet<ApplicationManifest::Icon::Purpose> purposes;
 
-        if (!purposeValue) {
+        if (!purposeValue)
             purposes.add(ApplicationManifest::Icon::Purpose::Any);
-            currentIcon.purposes = purposes;
+        else if (auto purposeStringValue = purposeValue->asString(); !purposeStringValue) {
+            logManifestPropertyNotAString("purpose"_s);
+            purposes.add(ApplicationManifest::Icon::Purpose::Any);
         } else {
-            auto purposeStringValue = purposeValue->asString();
-            if (!purposeStringValue) {
-                logManifestPropertyNotAString("purpose"_s);
-                purposes.add(ApplicationManifest::Icon::Purpose::Any);
-                currentIcon.purposes = purposes;
-            } else {
-                for (auto keyword : StringView(purposeStringValue).trim(isASCIIWhitespace<char16_t>).splitAllowingEmptyEntries(' ')) {
-                    if (equalLettersIgnoringASCIICase(keyword, "monochrome"_s))
-                        purposes.add(ApplicationManifest::Icon::Purpose::Monochrome);
-                    else if (equalLettersIgnoringASCIICase(keyword, "maskable"_s))
-                        purposes.add(ApplicationManifest::Icon::Purpose::Maskable);
-                    else if (equalLettersIgnoringASCIICase(keyword, "any"_s))
-                        purposes.add(ApplicationManifest::Icon::Purpose::Any);
-                    else
-                        logDeveloperWarning(makeString("\""_s, purposeStringValue, "\" is not a valid purpose."_s));
-                }
-
-                if (purposes.isEmpty())
-                    continue;
-
-                currentIcon.purposes = purposes;
+            for (auto keyword : StringView(purposeStringValue).trim(isASCIIWhitespace<char16_t>).splitAllowingEmptyEntries(' ')) {
+                if (equalLettersIgnoringASCIICase(keyword, "monochrome"_s))
+                    purposes.add(ApplicationManifest::Icon::Purpose::Monochrome);
+                else if (equalLettersIgnoringASCIICase(keyword, "maskable"_s))
+                    purposes.add(ApplicationManifest::Icon::Purpose::Maskable);
+                else if (equalLettersIgnoringASCIICase(keyword, "any"_s))
+                    purposes.add(ApplicationManifest::Icon::Purpose::Any);
+                else
+                    logDeveloperWarning(makeString("\""_s, purposeStringValue, "\" is not a valid purpose."_s));
             }
+
+            if (purposes.isEmpty())
+                continue;
         }
+
+        currentIcon.purposes = purposes;
 
         imageResources.append(WTF::move(currentIcon));
     }

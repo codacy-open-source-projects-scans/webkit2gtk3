@@ -27,6 +27,7 @@
 #include "SpatialImageControls.h"
 
 #include "ContainerNodeInlines.h"
+#include "DiagnosticLoggingClient.h"
 #include "DocumentEventLoop.h"
 #include "DocumentPage.h"
 #include "ElementInlines.h"
@@ -40,6 +41,7 @@
 #include "HTMLNames.h"
 #include "HTMLSpanElement.h"
 #include "HTMLStyleElement.h"
+#include "Image.h"
 #include "LocalizedStrings.h"
 #include "MouseEvent.h"
 #include "RenderImage.h"
@@ -158,13 +160,13 @@ void ensureSpatialControls(HTMLImageElement& imageElement)
         controlLayer->setIdAttribute(spatialImageControlsElementIdentifier());
         controlLayer->setAttributeWithoutSynchronization(HTMLNames::contenteditableAttr, falseAtom());
         controlLayer->setAttributeWithoutSynchronization(HTMLNames::dirAttr, isRTL ? "rtl"_s : "ltr"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyDisplay, "flex"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyFlexDirection, "column"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyJustifyContent, "space-between"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyPosition, "relative"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyBoxSizing, "border-box"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyBorderRadius, "inherit"_s);
-        controlLayer->setInlineStyleProperty(CSSPropertyPadding, paddingValue, CSSUnitType::CSS_PX);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::Display, "flex"_s);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::FlexDirection, "column"_s);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::JustifyContent, "space-between"_s);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::Position, "relative"_s);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::BoxSizing, "border-box"_s);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::BorderRadius, "inherit"_s);
+        controlLayer->setInlineStyleProperty(CSSPropertyID::Padding, paddingValue, CSSUnitType::Px);
         shadowRoot->appendChild(controlLayer);
 
         static MainThreadNeverDestroyed<const String> shadowStyle(StringImpl::createWithoutCopying(spatialImageControlsUserAgentStyleSheet));
@@ -172,7 +174,7 @@ void ensureSpatialControls(HTMLImageElement& imageElement)
         style->setTextContent(String { shadowStyle });
         controlLayer->appendChild(WTF::move(style));
 
-        Ref button = HTMLButtonElement::create(HTMLNames::buttonTag, document.get(), nullptr);
+        Ref button = HTMLButtonElement::create(HTMLNames::buttonTag, document.get());
         button->setIdAttribute(spatialImageControlsButtonIdentifier());
         button->setAttributeWithoutSynchronization(HTMLNames::aria_labelAttr, AtomString(localizedMediaControlElementString("EnterFullscreenButton"_s)));
         controlLayer->appendChild(button);
@@ -215,6 +217,29 @@ void ensureSpatialControls(HTMLImageElement& imageElement)
     });
 }
 
+static void logImageControlsInteraction(const HTMLImageElement& imageElement)
+{
+    RefPtr page = imageElement.document().page();
+    if (!page)
+        return;
+
+    // We log image type for analytics as:
+    // Unknown = 0
+    int64_t imageType = 0;
+    if (RefPtr image = imageElement.image()) {
+        // Spatial = 2
+        if (image->isSpatial())
+            imageType = 2;
+        // Panoramic = 1
+        else if (image->isMaybePanoramic())
+            imageType = 1;
+    }
+
+    DiagnosticLoggingClient::ValueDictionary dictionary;
+    dictionary.set("type"_s, imageType);
+    protect(page->diagnosticLoggingClient())->logDiagnosticMessageWithValueDictionary("ImageControlsInteraction"_s, "Safari"_s, dictionary, ShouldSample::No);
+}
+
 bool handleEvent(HTMLElement& element, Event& event)
 {
     if (!isAnyClick(event))
@@ -239,6 +264,7 @@ bool handleEvent(HTMLElement& element, Event& event)
     if (SpatialImageControls::isSpatialImageControlsButtonElement(*target)) {
         RefPtr img = dynamicDowncast<HTMLImageElement>(target->shadowHost());
         img->webkitRequestFullscreen();
+        logImageControlsInteraction(*img);
 
         event.setDefaultHandled();
         return true;

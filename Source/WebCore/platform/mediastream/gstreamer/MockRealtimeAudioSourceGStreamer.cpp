@@ -91,7 +91,7 @@ MockRealtimeAudioSourceGStreamer::MockRealtimeAudioSourceGStreamer(String&& devi
         return;
 
     device->setIsMockDevice(true);
-    m_capturer = adoptRef(*new GStreamerAudioCapturer(WTF::move(*device)));
+    lazyInitialize(m_capturer, adoptRef(*new GStreamerAudioCapturer(WTF::move(*device))));
     m_capturer->addObserver(*this);
     m_capturer->setupPipeline();
     m_capturer->setSinkAudioCallback([this](auto&& sample, auto&& presentationTime) {
@@ -183,7 +183,7 @@ void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
             GstMappedBuffer map(buffer.get(), GST_MAP_WRITE);
 
             if (muted())
-                webkitGstAudioFormatFillSilence(info.finfo, map.data(), map.size());
+                gst_audio_format_info_fill_silence(info.finfo, map.data(), map.size());
             else {
                 auto destination = map.mutableSpan<float>();
                 memcpySpan(destination, m_bipBopBuffer.subspan(bipBopStart, bipBopCount));
@@ -201,7 +201,7 @@ void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
 
         gst_buffer_add_audio_meta(buffer.get(), &m_info, bipBopCount, nullptr);
 
-        auto sample = adoptGRef(gst_sample_new(buffer.get(), m_caps.get(), nullptr, nullptr));
+        GRefPtr sample = adoptGRef(gst_sample_new(buffer.get(), m_caps.get(), nullptr, nullptr));
         // Mock GstDevice is an appsrc, see webkitMockDeviceCreateElement().
         auto appSrc = m_capturer->source();
         if (!appSrc || !GST_IS_APP_SRC(appSrc.get())) {

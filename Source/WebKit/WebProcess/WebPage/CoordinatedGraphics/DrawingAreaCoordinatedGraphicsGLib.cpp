@@ -114,9 +114,11 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
 {
     Ref page = *m_webPage->corePage();
     Settings& settings = page->settings();
-#if PLATFORM(GTK)
-    if (settings.hardwareAccelerationEnabled())
+#if PLATFORM(GTK) || ENABLE(WPE_PLATFORM)
+    if (settings.hardwareAccelerationEnabled()) {
         WebProcess::singleton().initializePlatformDisplayIfNeeded();
+        WebProcess::singleton().initializeVulkanIfNeeded();
+    }
 #endif
     settings.setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));
     // Fixed position elements need to be composited and create stacking contexts
@@ -137,12 +139,6 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     if (!m_supportsAsyncScrolling) {
         settings.setAsyncFrameScrollingEnabled(false);
         settings.setAsyncOverflowScrollingEnabled(false);
-    }
-
-    if (!settings.useSkiaForComposition()) {
-        static auto useSkiaForComposition = String::fromLatin1(getenv("WEBKIT_USE_SKIA_FOR_COMPOSITION"));
-        if (!useSkiaForComposition.isEmpty() && useSkiaForComposition != "0"_s)
-            settings.setUseSkiaForComposition(true);
     }
 }
 
@@ -170,6 +166,12 @@ void DrawingAreaCoordinatedGraphics::backgroundColorDidChange()
         return;
 
     m_renderer->backgroundColorDidChange();
+}
+
+void DrawingAreaCoordinatedGraphics::releaseMemory(WTF::Critical critical)
+{
+    if (m_renderer)
+        m_renderer->releaseMemory(critical);
 }
 
 void DrawingAreaCoordinatedGraphics::setDeviceScaleFactor(float deviceScaleFactor, CompletionHandler<void()>&& completionHandler)
@@ -283,6 +285,16 @@ void DrawingAreaCoordinatedGraphics::dispatchPendingCallbacksAfterEnsuringDrawin
 }
 
 #if PLATFORM(GTK)
+void DrawingAreaCoordinatedGraphics::didDiscardBackingStore()
+{
+    if (!m_renderer)
+        return;
+
+    protect(m_webPage)->corePage()->forceRepaintAllFrames();
+    m_renderer->setNeedsDisplay();
+    m_renderer->scheduleRenderingUpdate();
+}
+
 void DrawingAreaCoordinatedGraphics::adjustTransientZoom(double scale, FloatPoint origin)
 {
     if (!m_transientZoom) {
@@ -372,12 +384,12 @@ void DrawingAreaCoordinatedGraphics::resetDamageHistoryForTesting()
     m_renderer->resetDamageHistoryForTesting();
 }
 
-void DrawingAreaCoordinatedGraphics::foreachRegionInDamageHistoryForTesting(Function<void(const Region&)>&& callback) const
+void DrawingAreaCoordinatedGraphics::foreachRegionInDamageHistoryForTesting(NOESCAPE const Function<void(const Region&)>& callback) const
 {
     if (!m_renderer)
         return;
 
-    m_renderer->foreachRegionInDamageHistoryForTesting(WTF::move(callback));
+    m_renderer->foreachRegionInDamageHistoryForTesting(callback);
 }
 #endif
 

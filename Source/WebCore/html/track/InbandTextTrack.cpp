@@ -86,13 +86,13 @@ void InbandTextTrack::setPrivate(InbandTextTrackPrivate& trackPrivate)
     setId(protect(m_private)->id());
 }
 
-void InbandTextTrack::setMode(Mode mode)
+void InbandTextTrack::setMode(Mode mode, ModeChangeType changeType)
 {
-    TextTrack::setMode(mode);
+    TextTrack::setMode(mode, changeType);
     setModeInternal(mode);
 }
 
-static inline InbandTextTrackPrivate::Mode NODELETE toPrivate(TextTrack::Mode mode)
+static inline InbandTextTrackPrivate::Mode LEGACY_NODELETE toPrivate(TextTrack::Mode mode)
 {
     switch (mode) {
     case TextTrack::Mode::Disabled:
@@ -139,6 +139,11 @@ bool InbandTextTrack::isEasyToRead() const
 bool InbandTextTrack::isDefault() const
 {
     return protect(m_private)->isDefault();
+}
+
+bool InbandTextTrack::isMachineGenerated() const
+{
+    return protect(m_private)->isMachineGenerated();
 }
 
 size_t InbandTextTrack::inbandTrackIndex()

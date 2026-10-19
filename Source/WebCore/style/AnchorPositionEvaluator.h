@@ -54,10 +54,13 @@ class RenderBox;
 class RenderBoxModelObject;
 class RenderLayerModelObject;
 class RenderElement;
-class RenderStyle;
 class RenderView;
 
-enum CSSPropertyID : uint16_t;
+enum class CSSPropertyID : uint16_t;
+
+namespace Style {
+class ComputedStyle;
+}
 
 struct AnchorScrollSnapshot {
     SingleThreadWeakPtr<const RenderBox> m_scroller;
@@ -80,9 +83,9 @@ public:
 class AnchorScrollAdjuster {
 public:
     AnchorScrollAdjuster(RenderBox& anchored, const RenderBoxModelObject& defaultAnchor);
-    RenderBox* NODELETE anchored() const;
+    RenderBox* LEGACY_NODELETE anchored() const;
 
-    inline bool NODELETE isEmpty() const;
+    inline bool LEGACY_NODELETE isEmpty() const;
     bool mayNeedAdjustment() const { return m_needsXAdjustment | m_needsYAdjustment; }
     bool mayNeedXAdjustment() const { return m_needsXAdjustment; }
     bool mayNeedYAdjustment() const { return m_needsYAdjustment; }
@@ -91,13 +94,15 @@ public:
     void setHidden(bool hide) { m_isHidden = hide; }
 
     inline void addScrollSnapshot(const RenderBox& scroller);
-    inline void addViewportSnapshot(const RenderView&);
-    bool hasViewportSnapshot() const { return m_adjustForViewport; }
+    enum Direction : int8_t { Normal = 1, Reverse = -1 };
+    inline void addViewportSnapshot(const RenderView&, Direction = Reverse);
+    bool hasViewportSnapshot() const { return m_adjustmentForViewport; }
 
     inline void addStickySnapshot(const RenderBoxModelObject& sticky);
 
     enum Diff : uint8_t { New, SnapshotsDiffer, SnapshotsMatch };
-    bool NODELETE recaptureDiffers(const AnchorScrollAdjuster&) const; // Snapshot differences can require invalidation.
+    bool LEGACY_NODELETE recaptureDiffers(const AnchorScrollAdjuster&) const; // Snapshot differences can require invalidation.
+    void removeMatchingSnapshots(const AnchorScrollAdjuster&);
 
     void setFallbackLimits(const RenderBox& anchored);
     bool hasFallbackLimits() const { return m_hasFallback; }
@@ -112,9 +117,9 @@ private:
     CheckedRef<RenderBox> m_anchored;
     Vector<AnchorScrollSnapshot, 1> m_scrollSnapshots;
     Vector<AnchorStickySnapshot> m_stickySnapshots;
+    int8_t m_adjustmentForViewport { 0 }; /* Boolean and directional multiplier. */
     bool m_needsXAdjustment : 1 { false };
     bool m_needsYAdjustment : 1 { false };
-    bool m_adjustForViewport : 1 { false };
     bool m_hasChainedAnchor : 1 { false };
     bool m_isHidden : 1 { false };
     bool m_hasFallback : 1 { false };
@@ -199,16 +204,16 @@ public:
 
     static void updateAnchorPositioningStatesAfterInterleavedLayout(Document&, AnchorPositionedStates&);
     static void updateScrollAdjustments(RenderView&);
-    static void updateAnchorPositionedStateForDefaultAnchorAndPositionVisibility(Element&, const RenderStyle&, AnchorPositionedStates&);
+    static void updateAnchorPositionedStateForDefaultAnchorAndPositionVisibility(Element&, const Style::ComputedStyle&, AnchorPositionedStates&);
 
     static LayoutRect computeAnchorRectRelativeToContainingBlock(CheckedRef<const RenderBoxModelObject> anchorBox, const RenderLayerModelObject& containingBlock, const RenderBox& anchoredBox);
     static void captureScrollSnapshots(RenderBox& anchored, bool invalidateStyleForScrollPositionChanges = true);
 
     static AnchorToAnchorPositionedMap makeAnchorPositionedForAnchorMap(AnchorPositionedToAnchorMap&);
 
-    static bool NODELETE isAnchorPositioned(const RenderStyle&);
-    static bool NODELETE isStyleTimeAnchorPositioned(const RenderStyle&);
-    static bool NODELETE isLayoutTimeAnchorPositioned(const RenderStyle&);
+    static bool LEGACY_NODELETE isAnchorPositioned(const Style::ComputedStyle&);
+    static bool LEGACY_NODELETE isStyleTimeAnchorPositioned(const Style::ComputedStyle&);
+    static bool LEGACY_NODELETE isLayoutTimeAnchorPositioned(const Style::ComputedStyle&);
 
     static CSSPropertyID resolvePositionTryFallbackProperty(CSSPropertyID, WritingMode, const BuilderPositionTryFallback&);
     static CSSValueID resolvePositionTryFallbackValueForSelfPosition(CSSPropertyID, CSSValueID, WritingMode, const BuilderPositionTryFallback&);
@@ -216,9 +221,13 @@ public:
     static bool overflowsInsetModifiedContainingBlock(const RenderBox& anchoredBox);
     static bool isDefaultAnchorInvisibleOrClippedByInterveningBoxes(const RenderBox& anchoredBox);
 
-    static ScopedName defaultAnchorName(const RenderStyle&);
-    static bool isAnchor(const RenderStyle&);
-    static bool isImplicitAnchor(const RenderStyle&);
+    // Given a style, determine the name of the default anchor. If it has a default anchor,
+    // return the name (either an explicit name, or the name of the implicit anchor).
+    // Otherwise, it doesn't have a default anchor, and returns std::nullopt.
+    static std::optional<ScopedName> defaultAnchorName(const Style::ComputedStyle&);
+
+    static bool isAnchor(const Style::ComputedStyle&);
+    static bool isImplicitAnchor(const Style::ComputedStyle&);
 
     static CheckedPtr<RenderBoxModelObject> defaultAnchorForBox(const RenderBox&);
 
@@ -227,7 +236,7 @@ public:
 private:
     static CheckedPtr<RenderBoxModelObject> findAnchorForAnchorFunctionAndAttemptResolution(BuilderState&, std::optional<ScopedName> elementName);
     static RefPtr<const Element> anchorPositionedElementOrPseudoElement(BuilderState&);
-    static void addAnchorFunctionScrollCompensatedAxis(RenderStyle&, const RenderBox& anchored, const RenderBoxModelObject& anchor, BoxAxis);
+    static void addAnchorFunctionScrollCompensatedAxis(Style::ComputedStyle&, const RenderBox& anchored, const RenderBoxModelObject& anchor, BoxAxis);
     static LayoutSize scrollOffsetFromAnchor(const RenderBoxModelObject& anchor, const RenderBox& anchored);
 };
 

@@ -31,6 +31,7 @@
 #include "WebPage.h"
 #include <WebCore/FrameInspectorController.h>
 #include <WebCore/LocalFrame.h>
+#include <WebCore/LocalFrameInlines.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
@@ -54,17 +55,32 @@ String FrameInspectorTarget::identifier() const
 
 void FrameInspectorTarget::connect(Inspector::FrontendChannel::ConnectionType connectionType)
 {
-    if (m_channel)
+    // The UI process destroys frame targets without disconnecting them, so the channel can outlive its LocalFrame.
+    if (!m_channel) {
+        Ref frame = m_frame.get();
+        RefPtr page = frame->page();
+        ASSERT(page);
+        m_channel = makeUnique<UIProcessForwardingFrontendChannel>(*page, identifier(), connectionType);
+    }
+
+    connectToCurrentFrame();
+}
+
+void FrameInspectorTarget::connectToCurrentFrame()
+{
+    ASSERT(m_channel);
+    Ref frame = m_frame.get();
+    RefPtr currentFrame = frame->provisionalFrame() ?: frame->coreLocalFrame();
+    RefPtr inspectedFrame = m_inspectedFrame.get();
+    if (currentFrame == inspectedFrame)
         return;
 
-    Ref frame = m_frame.get();
-    RefPtr page = frame->page();
-    ASSERT(page);
-    m_channel = makeUnique<UIProcessForwardingFrontendChannel>(*page, identifier(), connectionType);
+    if (inspectedFrame)
+        protect(inspectedFrame->inspectorController())->disconnectFrontend(*m_channel);
 
-    RefPtr coreFrame = frame->provisionalFrame() ?: frame->coreLocalFrame();
-    if (coreFrame)
-        protect(coreFrame->inspectorController())->connectFrontend(*m_channel);
+    m_inspectedFrame = currentFrame.get();
+    if (currentFrame)
+        protect(currentFrame->inspectorController())->connectFrontend(*m_channel);
 }
 
 void FrameInspectorTarget::disconnect()
@@ -72,20 +88,21 @@ void FrameInspectorTarget::disconnect()
     if (!m_channel)
         return;
 
-    Ref frame = m_frame.get();
-    RefPtr coreFrame = frame->provisionalFrame() ?: frame->coreLocalFrame();
-    if (coreFrame)
-        protect(coreFrame->inspectorController())->disconnectFrontend(*m_channel);
+    if (RefPtr inspectedFrame = m_inspectedFrame.get())
+        protect(inspectedFrame->inspectorController())->disconnectFrontend(*m_channel);
 
+    m_inspectedFrame = nullptr;
     m_channel.reset();
 }
 
 void FrameInspectorTarget::sendMessageToTargetBackend(const String& message)
 {
-    Ref frame = m_frame.get();
-    RefPtr coreFrame = frame->provisionalFrame() ?: frame->coreLocalFrame();
-    if (coreFrame)
-        protect(coreFrame->inspectorController())->dispatchMessageFromFrontend(message);
+    if (!m_channel)
+        return;
+
+    connectToCurrentFrame();
+    if (RefPtr inspectedFrame = m_inspectedFrame.get())
+        protect(inspectedFrame->inspectorController())->dispatchMessageFromFrontend(message);
 }
 
 String FrameInspectorTarget::toTargetID(WebCore::FrameIdentifier frameID, WebCore::ProcessIdentifier processID)

@@ -58,8 +58,9 @@ bool AccessibilityTableHeaderContainer::computeIsIgnored() const
 {
 #if PLATFORM(IOS_FAMILY) || USE(ATSPI)
     return true;
+#else
+    return !m_parent || protect(m_parent)->isIgnored();
 #endif
-    return !m_parent || m_parent->isIgnored();
 }
 
 void AccessibilityTableHeaderContainer::addChildren()

@@ -131,8 +131,10 @@ JSC_DEFINE_HOST_FUNCTION(regExpConstructorEscape, (JSGlobalObject* globalObject,
             continue;
         }
 
-        if (StringView("^$\\.*+?()[]{}|/"_s).contains(codePoint)) {
-            builder.append('\\', codePoint);
+        bool isASCIICodePoint = isASCII(codePoint);
+
+        if (isASCIICodePoint && StringView("^$\\.*+?()[]{}|/"_s).contains(static_cast<char16_t>(codePoint))) {
+            builder.append('\\', static_cast<char16_t>(codePoint));
             continue;
         }
 
@@ -156,15 +158,12 @@ JSC_DEFINE_HOST_FUNCTION(regExpConstructorEscape, (JSGlobalObject* globalObject,
             break;
         }
 
-        if (StringView(",-=<>#&!%:;@~'`\""_s).contains(codePoint) || isStrWhiteSpace(codePoint) || U16_IS_SURROGATE(codePoint)) {
+        if ((isASCIICodePoint && StringView(",-=<>#&!%:;@~'`\""_s).contains(static_cast<char16_t>(codePoint)))
+            || (U_IS_BMP(codePoint) && (isStrWhiteSpace(static_cast<char16_t>(codePoint)) || U16_IS_SURROGATE(codePoint)))) {
             if (isLatin1(codePoint))
                 builder.append('\\', 'x', pad('0', 2, toStringWithRadix(codePoint, 16)));
-            else if (U_IS_BMP(codePoint))
+            else
                 builder.append('\\', 'u', pad('0', 4, toStringWithRadix(codePoint, 16)));
-            else {
-                builder.append('\\', 'u', pad('0', 4, toStringWithRadix(U16_LEAD(codePoint), 16)));
-                builder.append('\\', 'u', pad('0', 4, toStringWithRadix(U16_TRAIL(codePoint), 16)));
-            }
             continue;
         }
 
@@ -276,7 +275,7 @@ JSC_DEFINE_CUSTOM_SETTER(setRegExpConstructorMultiline, (JSGlobalObject* globalO
     return true;
 }
 
-static inline bool NODELETE areLegacyFeaturesEnabled(JSGlobalObject* globalObject, JSValue newTarget)
+static inline bool LEGACY_NODELETE areLegacyFeaturesEnabled(JSGlobalObject* globalObject, JSValue newTarget)
 {
     if (!newTarget)
         return true;
@@ -309,16 +308,10 @@ inline OptionSet<Yarr::Flags> toFlags(JSGlobalObject* globalObject, JSValue flag
     return result.value();
 }
 
-static JSObject* regExpCreate(JSGlobalObject* globalObject, JSValue newTarget, JSValue patternArg, JSValue flagsArg)
+RegExpObject* regExpCreate(JSGlobalObject* globalObject, JSValue newTarget, const String& pattern, OptionSet<Yarr::Flags> flags)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-
-    String pattern = patternArg.isUndefined() ? emptyString() : patternArg.toWTFString(globalObject);
-    RETURN_IF_EXCEPTION(scope, nullptr);
-
-    auto flags = toFlags(globalObject, flagsArg);
-    RETURN_IF_EXCEPTION(scope, nullptr);
 
     RegExp* regExp = RegExp::create(vm, pattern, flags);
     if (!regExp->isValid()) [[unlikely]] {
@@ -329,6 +322,19 @@ static JSObject* regExpCreate(JSGlobalObject* globalObject, JSValue newTarget, J
     Structure* structure = getRegExpStructure(globalObject, newTarget);
     RETURN_IF_EXCEPTION(scope, nullptr);
     return RegExpObject::create(vm, structure, regExp, areLegacyFeaturesEnabled(globalObject, newTarget));
+}
+
+RegExpObject* regExpCreate(JSGlobalObject* globalObject, JSValue newTarget, JSValue patternArg, JSValue flagsArg)
+{
+    auto scope = DECLARE_THROW_SCOPE(globalObject->vm());
+
+    String pattern = patternArg.isUndefined() ? emptyString() : patternArg.toWTFString(globalObject);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+
+    auto flags = toFlags(globalObject, flagsArg);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+
+    RELEASE_AND_RETURN(scope, regExpCreate(globalObject, newTarget, pattern, flags));
 }
 
 JSObject* constructRegExp(JSGlobalObject* globalObject, const ArgList& args,  JSObject* callee, JSValue newTarget)

@@ -80,8 +80,8 @@ void PlatformXRSystemProxy::requestPermissionOnSessionFeatures(const WebCore::Se
 
 void PlatformXRSystemProxy::initializeTrackingAndRendering(std::optional<WebCore::XRCanvasConfiguration>&& optionalInit)
 {
-    std::optional<WebCore::WebGPU::TextureFormat> colorFormat;
-    std::optional<WebCore::WebGPU::TextureFormat> depthStencilFormat;
+    std::optional<::WebGPU::TextureFormat> colorFormat;
+    std::optional<::WebGPU::TextureFormat> depthStencilFormat;
     if (optionalInit) {
         colorFormat = optionalInit->colorFormat;
         depthStencilFormat = optionalInit->depthStencilFormat;
@@ -159,6 +159,14 @@ void PlatformXRSystemProxy::sessionDidUpdateVisibilityState(XRDeviceIdentifier d
         device->updateSessionVisibilityState(visibilityState);
 }
 
+void PlatformXRSystemProxy::sessionDidInitializeRendering(XRDeviceIdentifier deviceIdentifier, uint32_t width, uint32_t height, uint32_t arrayLength)
+{
+    RELEASE_ASSERT(webXREnabled());
+
+    if (auto device = deviceByIdentifier(deviceIdentifier))
+        device->sessionDidInitializeRendering(width, height, arrayLength);
+}
+
 RefPtr<XRDeviceProxy> PlatformXRSystemProxy::deviceByIdentifier(XRDeviceIdentifier identifier)
 {
     for (auto& device : m_devices) {
@@ -189,7 +197,7 @@ void PlatformXRSystemProxy::deref() const
 #if ENABLE(WEBXR_HIT_TEST)
 void PlatformXRSystemProxy::requestHitTestSource(const PlatformXR::HitTestOptions& options, CompletionHandler<void(WebCore::ExceptionOr<PlatformXR::HitTestSource>)>&& completionHandler)
 {
-    protect(m_page)->sendWithAsyncReply(Messages::PlatformXRSystem::RequestHitTestSource(options), [protectedThis = protect(*this), completionHandler = WTF::move(completionHandler)](Expected<PlatformXR::HitTestSource, WebCore::ExceptionData> exceptionOrSource) mutable {
+    protect(m_page)->sendWithAsyncReply(Messages::PlatformXRSystem::RequestHitTestSource(options), [protectedThis = protect(*this), completionHandler = WTF::move(completionHandler)](std::expected<PlatformXR::HitTestSource, WebCore::ExceptionData> exceptionOrSource) mutable {
         if (exceptionOrSource)
             completionHandler(WTF::move(exceptionOrSource).value());
         else
@@ -204,7 +212,7 @@ void PlatformXRSystemProxy::deleteHitTestSource(PlatformXR::HitTestSource source
 
 void PlatformXRSystemProxy::requestTransientInputHitTestSource(const PlatformXR::TransientInputHitTestOptions& options, CompletionHandler<void(WebCore::ExceptionOr<PlatformXR::TransientInputHitTestSource>)>&& completionHandler)
 {
-    protect(m_page)->sendWithAsyncReply(Messages::PlatformXRSystem::RequestTransientInputHitTestSource(options), [protectedThis = protect(*this), completionHandler = WTF::move(completionHandler)](Expected<PlatformXR::TransientInputHitTestSource, WebCore::ExceptionData> exceptionOrSource) mutable {
+    protect(m_page)->sendWithAsyncReply(Messages::PlatformXRSystem::RequestTransientInputHitTestSource(options), [protectedThis = protect(*this), completionHandler = WTF::move(completionHandler)](std::expected<PlatformXR::TransientInputHitTestSource, WebCore::ExceptionData> exceptionOrSource) mutable {
         if (exceptionOrSource)
             completionHandler(WTF::move(exceptionOrSource).value());
         else

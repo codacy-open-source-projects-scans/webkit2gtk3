@@ -31,20 +31,16 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 #include <JavaScriptCore/AllocatorForMode.h>
 #include <JavaScriptCore/AllocatorInlines.h>
-#include <JavaScriptCore/CPU.h>
 #include <JavaScriptCore/CallFrameInlines.h>
 #include <JavaScriptCore/CompleteSubspaceInlines.h>
 #include <JavaScriptCore/DeferGCInlines.h>
 #include <JavaScriptCore/FreeListInlines.h>
-#include <JavaScriptCore/Handle.h>
 #include <JavaScriptCore/HeapInlines.h>
 #include <JavaScriptCore/IsoSubspaceInlines.h>
 #include <JavaScriptCore/JSBigInt.h>
 #include <JavaScriptCore/JSCast.h>
 #include <JavaScriptCore/JSDestructibleObject.h>
 #include <JavaScriptCore/JSFunction.h>
-#include <JavaScriptCore/JSHeapDouble.h>
-#include <JavaScriptCore/JSHeapInt32.h>
 #include <JavaScriptCore/JSObject.h>
 #include <JavaScriptCore/JSString.h>
 #include <JavaScriptCore/LocalAllocatorInlines.h>
@@ -86,21 +82,19 @@ inline JSCell::JSCell(VM&, Structure* structure)
 // Structure must be kept alive somehow (e.g. by JSGlobalObject, or ensureStillAliveHere).
 ALWAYS_INLINE JSCell::JSCell(CreatingWellDefinedBuiltinCellTag, StructureID structureID, uint32_t blob)
     : m_structureID(structureID)
-#if CPU(LITTLE_ENDIAN)
     , m_blob(blob)
-#else
-    , m_indexingTypeAndMisc(static_cast<uint8_t>(blob >> 24))
-    , m_type(std::bit_cast<JSType>(static_cast<uint8_t>(blob >> 16)))
-    , m_flags(std::bit_cast<TypeInfo::InlineTypeFlags>(static_cast<uint8_t>(blob >> 8)))
-    , m_cellState(std::bit_cast<CellState>(static_cast<uint8_t>(blob >> 0)))
-#endif
 {
 }
 
+// finishCreation() marks the end of the cell's construction: after this the cell pointer may escape.
+// Between allocateCell() and here there must be no safepoint (whose conservative stack scan would
+// find this cell), and the cell pointer must not be stored into an already-reachable object (which
+// markers can follow). Either would let the partially constructed cell be visited. Callers that
+// construct a cell whose auxiliary storage is deliberately left uninitialized must extend that
+// window themselves: see ObjectInitializationScope.
 inline void JSCell::finishCreation(VM& vm)
 {
-    // This object is ready to be escaped so the concurrent GC may see it at any time. We have
-    // to make sure that none of our stores sink below here.
+    // Ensure the cell's initializing stores are visible before any store of this cell into an already-reachable object.
     vm.mutatorFence();
 #if ENABLE(GC_VALIDATION)
     ASSERT(vm.isInitializingObject());
@@ -145,13 +139,6 @@ ALWAYS_INLINE void JSCell::visitOutputConstraintsImpl(JSCell*, Visitor&)
 }
 
 DEFINE_VISIT_OUTPUT_CONSTRAINTS_WITH_MODIFIER(inline, JSCell);
-
-ALWAYS_INLINE VM& CallFrame::deprecatedVM() const
-{
-    JSCell* callee = this->callee().asCell();
-    ASSERT(callee);
-    return callee->vm();
-}
 
 template<typename Type>
 inline Allocator allocatorForConcurrently(VM& vm, size_t allocationSize, AllocatorForMode mode)
@@ -383,14 +370,6 @@ ALWAYS_INLINE JSString* JSCell::toStringInline(JSGlobalObject* globalObject) con
     if (isString())
         return asString(this);
     return toStringSlowCase(globalObject);
-}
-
-ALWAYS_INLINE bool JSCell::putInline(JSGlobalObject* globalObject, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
-{
-    Structure* structure = this->structure();
-    if (!structure->typeInfo().overridesPut()) [[likely]]
-        return JSObject::putInlineForJSObject(asObject(this), globalObject, propertyName, value, slot);
-    return structure->methodTable()->put(this, globalObject, propertyName, value, slot);
 }
 
 inline bool isWebAssemblyInstance(const JSCell* cell)

@@ -242,7 +242,7 @@ def __lldb_init_module(debugger, dict):
     debugger.HandleCommand('type summary add -F lldb_webkit.WebCoreSecurityOrigin_SummaryProvider WebCore::SecurityOrigin')
     debugger.HandleCommand('type summary add -F lldb_webkit.WebCoreFrame_SummaryProvider WebCore::Frame')
 
-    for className in ['Document', 'FTPDirectoryDocument', 'HTMLDocument', 'ImageDocument', 'MediaDocument', 'PluginDocument', 'SVGDocument', 'SinkDocument', 'TextDocument', 'XMLDocument']:
+    for className in ['Document', 'HTMLDocument', 'ImageDocument', 'MediaDocument', 'PluginDocument', 'SVGDocument', 'SinkDocument', 'TextDocument', 'XMLDocument']:
         debugger.HandleCommand('type summary add -F lldb_webkit.WebCoreDocument_SummaryProvider WebCore::' + className)
 
     # synthetic types (see <https://lldb.llvm.org/varformats.html>)
@@ -723,7 +723,7 @@ class WebCoreColorProvider:
 
         color_space = self._color_space(rgba_and_flags)
 
-        # From ColorSpace.h.
+        # From ColorSpaceName.h.
         color_spaces = [
             'A98RGB',
             'DisplayP3',

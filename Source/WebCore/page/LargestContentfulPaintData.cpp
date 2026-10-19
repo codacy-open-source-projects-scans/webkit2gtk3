@@ -41,7 +41,6 @@
 #include "RenderBlockFlow.h"
 #include "RenderBox.h"
 #include "RenderElementInlines.h"
-#include "RenderInline.h"
 #include "RenderLayer.h"
 #include "RenderLayerInlines.h"
 #include "RenderLineBreak.h"
@@ -50,7 +49,6 @@
 #include "RenderSVGImage.h"
 #include "RenderText.h"
 #include "RenderView.h"
-#include "VisibleRectContext.h"
 #include <wtf/CheckedRef.h>
 #include <wtf/Ref.h>
 #include <wtf/text/TextStream.h>
@@ -129,11 +127,12 @@ std::optional<float> LargestContentfulPaintData::effectiveVisualArea(const Eleme
         auto intersectingContentRect = intersection(absoluteContentRect, intersectionRect);
         area = intersectingContentRect.area();
 
-        auto naturalSize = image->imageSizeForRenderer(renderer.get(), 1);
-        if (naturalSize.isEmpty())
+        auto naturalDimensions = image->naturalDimensions();
+        auto naturalArea = naturalDimensions.width.value_or(0) * naturalDimensions.height.value_or(0);
+        if (!naturalArea)
             return { };
 
-        auto scaleFactor = absoluteContentRect.area() / FloatSize { naturalSize }.area();
+        auto scaleFactor = absoluteContentRect.area() / naturalArea;
         if (scaleFactor > 1)
             area /= scaleFactor;
 
@@ -198,12 +197,20 @@ void LargestContentfulPaintData::potentiallyAddLargestContentfulPaintEntry(Eleme
         pendingEntry->setURLString(image->url().string());
         auto loadTimestamp = protect(window->performance())->relativeTimeFromTimeOriginInReducedResolution(loadTime);
         pendingEntry->setLoadTime(loadTimestamp);
-    }
+
+        // FIXME: Adopt ReducedResolutionSeconds: webkit.org/b/316824.
+        auto reduceResolution = [](Seconds value, Seconds resolution) {
+            return Seconds(std::floor(value.value() / resolution.value()) * resolution.value());
+        };
+
+        // https://w3c.github.io/largest-contentful-paint/#sec-report-largest-contentful-paint coarsens renderTime to 4ms for images.
+        static constexpr auto renderTimeSecondsResolution = 4_ms;
+        pendingEntry->setRenderTime(reduceResolution(Seconds::fromMilliseconds(paintTimestamp), renderTimeSecondsResolution).milliseconds());
+    } else
+        pendingEntry->setRenderTime(paintTimestamp);
 
     if (element.hasID())
         pendingEntry->setID(element.getIdAttribute().string());
-
-    pendingEntry->setRenderTime(paintTimestamp);
 
     LOG_WITH_STREAM(LargestContentfulPaint, stream << " making new entry for " << element << " image " << (image ? image->url().string() : emptyString()) << " id " << pendingEntry->id() <<
         ": entry size " << pendingEntry->size() << ", loadTime " << pendingEntry->loadTime() << ", renderTime " << pendingEntry->renderTime());
@@ -262,7 +269,6 @@ RefPtr<LargestContentfulPaint> LargestContentfulPaintData::generateLargestConten
     return std::exchange(m_pendingEntry, nullptr);
 }
 
-// This is a simplified version of IntersectionObserver::computeIntersectionState(). Some code should be shared.
 FloatRect LargestContentfulPaintData::computeViewportIntersectionRect(Element& element, FloatRect localRect)
 {
     RefPtr frameView = element.document().view();
@@ -273,32 +279,12 @@ FloatRect LargestContentfulPaintData::computeViewportIntersectionRect(Element& e
     if (!targetRenderer)
         return { };
 
-    if (targetRenderer->isSkippedContent())
+    auto clippedBounds = targetRenderer->computeClippedRectInContentCoordinates(LayoutRect { localRect });
+    if (!clippedBounds)
         return { };
 
-    CheckedPtr rootRenderer = frameView->renderView();
-    auto layoutViewport = frameView->layoutViewportRect();
-
-    auto localTargetBounds = LayoutRect { localRect };
-    auto absoluteRects = targetRenderer->computeVisibleRectsInContainer(
-        { localTargetBounds },
-        &protect(targetRenderer->view()).get(),
-        {
-            .hasPositionFixedDescendant = false,
-            .dirtyRectIsFlipped = false,
-            .options = {
-                VisibleRectContext::Option::UseEdgeInclusiveIntersection,
-                VisibleRectContext::Option::ApplyCompositedClips,
-                VisibleRectContext::Option::ApplyCompositedContainerScrolls
-            },
-        }
-    );
-
-    if (!absoluteRects)
-        return { };
-
-    auto intersectionRect = layoutViewport;
-    intersectionRect.edgeInclusiveIntersect(absoluteRects->clippedOverflowRect);
+    auto intersectionRect = frameView->layoutViewportRect();
+    intersectionRect.edgeInclusiveIntersect(*clippedBounds);
     return intersectionRect;
 }
 

@@ -50,6 +50,7 @@
 #include "WebCoreOpaqueRootInlines.h"
 #include <JavaScriptCore/BuiltinNames.h>
 #include <JavaScriptCore/ConsoleTypes.h>
+#include <JavaScriptCore/GetterSetter.h>
 #include <JavaScriptCore/GlobalObjectMethodTable.h>
 #include <JavaScriptCore/HeapAnalyzer.h>
 #include <JavaScriptCore/HeapCellInlines.h>
@@ -198,7 +199,7 @@ bool JSDOMWindow::getOwnPropertySlot(JSObject* object, JSGlobalObject* lexicalGl
     if (std::optional<unsigned> index = parseIndex(propertyName))
         return getOwnPropertySlotByIndex(object, lexicalGlobalObject, index.value(), slot);
 
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(object);
+    auto* thisObject = downcast<JSDOMWindow>(object);
 
     ASSERT(lexicalGlobalObject->vm().currentThreadIsHoldingAPILock());
 
@@ -209,7 +210,7 @@ bool JSDOMWindow::getOwnPropertySlot(JSObject* object, JSGlobalObject* lexicalGl
         return jsDOMWindowGetOwnPropertySlotRestrictedAccess(thisObject, window.get(), *lexicalGlobalObject, propertyName, slot, errorMessage);
 
     if (!thisObject->m_windowCloseWatchpoints) [[unlikely]]
-        thisObject->m_windowCloseWatchpoints = WatchpointSet::create(window->frame() ? IsWatched : IsInvalidated);
+        lazyInitialize(thisObject->m_windowCloseWatchpoints, WatchpointSet::create(window->frame() ? IsWatched : IsInvalidated));
     // We use m_windowCloseWatchpoints to clear any inline caches once the frame is cleared.
     // This is sound because DOMWindow can be associated with at most one frame in its lifetime.
     if (thisObject->m_windowCloseWatchpoints->isStillValid())
@@ -234,7 +235,7 @@ bool JSDOMWindow::getOwnPropertySlot(JSObject* object, JSGlobalObject* lexicalGl
 
 bool JSDOMWindow::getOwnPropertySlotByIndex(JSObject* object, JSGlobalObject* lexicalGlobalObject, unsigned index, PropertySlot& slot)
 {
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(object);
+    auto* thisObject = downcast<JSDOMWindow>(object);
     Ref window = thisObject->wrapped();
 
     // Indexed getters take precendence over regular properties, so caching would be invalid.
@@ -273,7 +274,7 @@ bool JSDOMWindow::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Propert
     VM& vm = lexicalGlobalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(cell);
+    auto* thisObject = downcast<JSDOMWindow>(cell);
 
     String errorMessage;
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, protect(thisObject->wrapped()), errorMessage)) {
@@ -296,7 +297,7 @@ bool JSDOMWindow::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Propert
 bool JSDOMWindow::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, unsigned index, JSValue value, bool shouldThrow)
 {
     VM& vm = lexicalGlobalObject->vm();
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(cell);
+    auto* thisObject = downcast<JSDOMWindow>(cell);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     String errorMessage;
@@ -316,7 +317,7 @@ bool JSDOMWindow::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, 
 
 bool JSDOMWindow::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, DeletePropertySlot& slot)
 {
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(cell);
+    auto* thisObject = downcast<JSDOMWindow>(cell);
     // Only allow deleting properties by frames in the same origin.
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped()), ThrowSecurityError))
         return false;
@@ -331,7 +332,7 @@ bool JSDOMWindow::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObje
 
 bool JSDOMWindow::deletePropertyByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, unsigned propertyName)
 {
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(cell);
+    auto* thisObject = downcast<JSDOMWindow>(cell);
     // Only allow deleting properties by frames in the same origin.
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped()), ThrowSecurityError))
         return false;
@@ -344,7 +345,7 @@ bool JSDOMWindow::deletePropertyByIndex(JSCell* cell, JSGlobalObject* lexicalGlo
 
 void JSDOMWindow::analyzeHeap(JSCell* cell, HeapAnalyzer& analyzer)
 {
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(cell);
+    auto* thisObject = downcast<JSDOMWindow>(cell);
     Ref location = protect(thisObject->wrapped())->location();
     analyzer.setLabelForCell(cell, location->href());
 
@@ -419,7 +420,7 @@ static void addScopedChildrenIndexes(JSGlobalObject& lexicalGlobalObject, DOMWin
 // https://html.spec.whatwg.org/#windowproxy-ownpropertykeys
 void JSDOMWindow::getOwnPropertyNames(JSObject* object, JSGlobalObject* lexicalGlobalObject, PropertyNameArrayBuilder& propertyNames, DontEnumPropertiesMode mode)
 {
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(object);
+    auto* thisObject = downcast<JSDOMWindow>(object);
     Ref window = thisObject->wrapped();
 
     addScopedChildrenIndexes(*lexicalGlobalObject, window.get(), propertyNames);
@@ -437,7 +438,7 @@ bool JSDOMWindow::defineOwnProperty(JSC::JSObject* object, JSC::JSGlobalObject* 
     VM& vm = lexicalGlobalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(object);
+    auto* thisObject = downcast<JSDOMWindow>(object);
     // Only allow defining properties in this way by frames in the same origin, as it allows setters to be introduced.
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped()), ThrowSecurityError))
         return false;
@@ -454,14 +455,14 @@ bool JSDOMWindow::defineOwnProperty(JSC::JSObject* object, JSC::JSGlobalObject* 
 
 JSValue JSDOMWindow::getPrototype(JSObject* object, JSGlobalObject* lexicalGlobalObject)
 {
-    auto* thisObject = uncheckedDowncast<JSDOMWindow>(object);
+    auto* thisObject = downcast<JSDOMWindow>(object);
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped()), DoNotReportSecurityError))
         return jsNull();
 
     return Base::getPrototype(object, lexicalGlobalObject);
 }
 
-bool NODELETE JSDOMWindow::preventExtensions(JSObject*, JSGlobalObject*)
+bool LEGACY_NODELETE JSDOMWindow::preventExtensions(JSObject*, JSGlobalObject*)
 {
     return false;
 }
@@ -473,7 +474,8 @@ JSValue JSDOMWindow::event(JSGlobalObject& lexicalGlobalObject) const
     RefPtr event = currentEvent();
     if (!event)
         return jsUndefined();
-    return toJS(&lexicalGlobalObject, const_cast<JSDOMWindow*>(this), *event);
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return toJS(&lexicalGlobalObject, const_cast<JSDOMWindow*>(this), *event);
 }
 
 // Custom functions
@@ -611,15 +613,15 @@ JSValue JSDOMWindow::queueMicrotask(JSGlobalObject& lexicalGlobalObject, CallFra
     return jsUndefined();
 }
 
-DOMWindow* NODELETE JSDOMWindow::toWrapped(VM&, JSValue value)
+DOMWindow* LEGACY_NODELETE JSDOMWindow::toWrapped(VM&, JSValue value)
 {
     if (!value.isObject())
         return nullptr;
     JSObject* object = asObject(value);
-    if (object->inherits<JSDOMWindow>())
-        return &uncheckedDowncast<JSDOMWindow>(object)->wrapped();
-    if (object->inherits<JSWindowProxy>()) {
-        if (auto* jsDOMWindow = dynamicDowncast<JSDOMWindow>(uncheckedDowncast<JSWindowProxy>(object)->window()))
+    if (auto* jsDOMWindow = dynamicDowncast<JSDOMWindow>(*object))
+        return &jsDOMWindow->wrapped();
+    if (auto* windowProxy = dynamicDowncast<JSWindowProxy>(*object)) {
+        if (auto* jsDOMWindow = dynamicDowncast<JSDOMWindow>(windowProxy->window()))
             return &jsDOMWindow->wrapped();
     }
     return nullptr;
@@ -640,17 +642,17 @@ void JSDOMWindow::setOpener(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSVal
     createDataProperty(&lexicalGlobalObject, builtinNames(lexicalGlobalObject.vm()).openerPublicName(), value, shouldThrow);
 }
 
-JSValue NODELETE JSDOMWindow::self(JSC::JSGlobalObject&) const
+JSValue LEGACY_NODELETE JSDOMWindow::self(JSC::JSGlobalObject&) const
 {
     return globalThis();
 }
 
-JSValue NODELETE JSDOMWindow::window(JSC::JSGlobalObject&) const
+JSValue LEGACY_NODELETE JSDOMWindow::window(JSC::JSGlobalObject&) const
 {
     return globalThis();
 }
 
-JSValue NODELETE JSDOMWindow::frames(JSC::JSGlobalObject&) const
+JSValue LEGACY_NODELETE JSDOMWindow::frames(JSC::JSGlobalObject&) const
 {
     return globalThis();
 }
@@ -683,7 +685,7 @@ static inline JSC::EncodedJSValue jsDOMWindowInstanceFunctionOpenDatabaseBody(JS
     if (!DeprecatedGlobalSettings::webSQLEnabled()) {
         if (name.returnValue() != "null"_s || version.returnValue() != "null"_s || displayName.returnValue() != "null"_s || estimatedSize.returnValue())
             propagateException(*lexicalGlobalObject, throwScope, Exception(ExceptionCode::UnknownError, "Web SQL is deprecated"_s));
-        return JSValue::encode(constructEmptyObject(lexicalGlobalObject, castedThis->realm()->objectPrototype()));
+        return JSValue::encode(JSC::constructEmptyObject(lexicalGlobalObject, castedThis->realm()->objectPrototype()));
     }
 
     auto creationCallback = convert<IDLNullable<IDLCallbackFunction<JSDatabaseCallback>>>(*lexicalGlobalObject, callFrame->argument(4), *castedThis->realm(), [](JSC::JSGlobalObject& lexicalGlobalObject, JSC::ThrowScope& scope) {
@@ -697,7 +699,7 @@ static inline JSC::EncodedJSValue jsDOMWindowInstanceFunctionOpenDatabaseBody(JS
 
 JSC_DEFINE_HOST_FUNCTION(jsDOMWindowInstanceFunction_openDatabase, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
-    return IDLOperation<JSDOMWindow>::call<jsDOMWindowInstanceFunctionOpenDatabaseBody>(*globalObject, *callFrame, "openDatabase");
+    return IDLOperation<JSDOMWindow>::call<jsDOMWindowInstanceFunctionOpenDatabaseBody>(*globalObject, *callFrame, "openDatabase"_s);
 }
 
 JSValue JSDOMWindow::openDatabase(JSC::JSGlobalObject& lexicalGlobalObject) const
@@ -724,7 +726,7 @@ JSDOMWindow& mainWorldGlobalObject(LocalFrame& frame)
     // FIXME: What guarantees the result of jsWindowProxy() is non-null?
     // FIXME: What guarantees the result of window() is non-null?
     // FIXME: What guarantees the result of window() a JSDOMWindow?
-    return *uncheckedDowncast<JSDOMWindow>(protect(frame.windowProxy())->jsWindowProxy(mainThreadNormalWorldSingleton())->window());
+    return *downcast<JSDOMWindow>(protect(frame.windowProxy())->jsWindowProxy(mainThreadNormalWorldSingleton())->window());
 }
 
 } // namespace WebCore

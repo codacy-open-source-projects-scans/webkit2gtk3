@@ -30,18 +30,18 @@
 #include "CSSFilterFunctionDescriptor.h"
 #include "FEDropShadow.h"
 #include "FilterOperation.h"
-#include "RenderStyle.h"
-#include "RenderStyle+GettersInlines.h"
 #include "StyleColor.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
+#include "StyleResolvedColors.h"
 
 namespace WebCore {
 namespace Style {
 
 DropShadow DropShadow::passthroughForInterpolation()
 {
-    using Descriptor = CSSFilterFunctionDescriptor<CSSValueDropShadow>;
+    using Descriptor = CSSFilterFunctionDescriptor<CSSValueID::DropShadow>;
 
     return {
         .color = Descriptor::initialColorValueForInterpolation,
@@ -65,7 +65,7 @@ IntOutsets DropShadow::calculateOutsets(ZoomFactor zoom) const
 
 // MARK: - Conversion
 
-auto ToCSS<DropShadow>::operator()(const DropShadow& value, const RenderStyle& style) -> CSS::DropShadow
+auto ToCSS<DropShadow>::operator()(const DropShadow& value, const Style::ComputedStyle& style) -> CSS::DropShadow
 {
     return {
         .color = toCSS(value.color, style),
@@ -76,18 +76,18 @@ auto ToCSS<DropShadow>::operator()(const DropShadow& value, const RenderStyle& s
 
 auto ToStyle<CSS::DropShadow>::operator()(const CSS::DropShadow& value, const BuilderState& state) -> DropShadow
 {
-    using Descriptor = CSSFilterFunctionDescriptor<CSSValueDropShadow>;
+    using Descriptor = CSSFilterFunctionDescriptor<CSSValueID::DropShadow>;
 
     return {
         .color = value.color ? toStyle(*value.color, state, ForVisitedLink::No) : Style::Color { Descriptor::defaultColorValue },
         .location = toStyle(value.location, state),
-        .stdDeviation = value.stdDeviation ? toStyle(*value.stdDeviation, state) : Length<CSS::NonnegativeUnzoomed> { Descriptor::defaultStdDeviationValue },
+        .stdDeviation = value.stdDeviation ? toStyle(*value.stdDeviation, state) : Length<CSS::Nonnegative> { Descriptor::defaultStdDeviationValue },
     };
 }
 
 // MARK: - Evaluation
 
-auto Evaluation<DropShadow, Ref<FilterEffect>>::operator()(const DropShadow& value, const RenderStyle& style) -> Ref<FilterEffect>
+auto Evaluation<DropShadow, Ref<FilterEffect>>::operator()(const DropShadow& value, const Style::ComputedStyle& style) -> Ref<FilterEffect>
 {
     auto zoom = style.usedZoomForLength();
 
@@ -96,17 +96,17 @@ auto Evaluation<DropShadow, Ref<FilterEffect>>::operator()(const DropShadow& val
     auto y = Style::roundForImpreciseConversion<int>(evaluate<float>(value.location.y(), zoom));
     auto stdDeviation = Style::roundForImpreciseConversion<int>(evaluate<float>(value.stdDeviation, zoom));
 
-    return FEDropShadow::create(stdDeviation, stdDeviation, x, y, value.color.resolveColor(style.color()), 1);
+    return FEDropShadow::create(stdDeviation, stdDeviation, x, y, value.color.resolveColor(ResolvedColors::fromStyle(style, StyleColorOptionsPurpose::Rendering)), 1);
 }
 
 // MARK: - Platform
 
-auto ToPlatform<DropShadow>::operator()(const DropShadow& value, const RenderStyle& style) -> Ref<FilterOperation>
+auto ToPlatform<DropShadow>::operator()(const DropShadow& value, const Style::ComputedStyle& style) -> Ref<FilterOperation>
 {
     auto zoom = style.usedZoomForLength();
 
     return DropShadowFilterOperation::create(
-        value.color.resolveColor(style.color()),
+        value.color.resolveColor(ResolvedColors::fromStyle(style, StyleColorOptionsPurpose::Rendering)),
         IntPoint {
             Style::roundForImpreciseConversion<int>(evaluate<float>(value.location.x(), zoom)),
             Style::roundForImpreciseConversion<int>(evaluate<float>(value.location.y(), zoom)),

@@ -34,7 +34,7 @@ using namespace WebCore;
 
 // This version number is in the DB and marks the current generation of the schema
 // Currently, a mismatched schema causes the DB to be wiped and reset.
-static const int currentDatabaseVersion = 6;
+static const int currentDatabaseVersion = 7;
 
 // Icons expire once every 4 days.
 static const Seconds iconExpirationTime { 60 * 60 * 24 * 4 };
@@ -63,7 +63,7 @@ IconDatabase::IconDatabase(const String& path, AllowDatabaseWrite allowDatabaseW
         auto databaseDirectory = FileSystem::parentPath(path);
         FileSystem::makeAllDirectories(databaseDirectory);
         if (!m_db->open(path)) {
-            RELEASE_LOG_ERROR(IconDatabase, "Unable to open favicon database '%s' (%i) - %s", path.utf8().data(), m_db->lastError(), m_db->lastErrorMsg());
+            RELEASE_LOG_ERROR(IconDatabase, "Unable to open favicon database '%s' (%i) - %s", path.utf8(), m_db->lastError(), m_db->lastErrorMsg());
             return;
         }
 
@@ -132,7 +132,7 @@ bool IconDatabase::createTablesIfNeeded()
 
     m_db->clearAllTables();
 
-    if (!m_db->executeCommand("CREATE TABLE PageURL (url TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT REPLACE,iconID INTEGER NOT NULL ON CONFLICT FAIL);"_s)) {
+    if (!m_db->executeCommand("CREATE TABLE PageURL (url TEXT NOT NULL ON CONFLICT FAIL, iconID INTEGER NOT NULL ON CONFLICT FAIL, UNIQUE (url, iconID) ON CONFLICT REPLACE);"_s)) {
         RELEASE_LOG_ERROR(IconDatabase, "Could not create PageURL table in database (%i) - %s", m_db->lastError(), m_db->lastErrorMsg());
         m_db->close();
         return false;
@@ -272,14 +272,9 @@ void IconDatabase::clearLoadedIconsTimerFired()
 
     Locker locker { m_loadedIconsLock };
     auto now = MonotonicTime::now();
-    Vector<String> iconsToRemove;
-    for (auto iter : m_loadedIcons) {
-        if (now - iter.value.second >= loadedIconExpirationTime)
-            iconsToRemove.append(iter.key);
-    }
-
-    for (auto& iconURL : iconsToRemove)
-        m_loadedIcons.remove(iconURL);
+    m_loadedIcons.removeIf([&](auto& iter) {
+        return now - iter.value.second >= loadedIconExpirationTime;
+    });
 
     if (!m_loadedIcons.isEmpty())
         startClearLoadedIconsTimer();
@@ -380,7 +375,7 @@ std::optional<int64_t> IconDatabase::addIcon(const String& iconURL, const Vector
     ASSERT(m_allowDatabaseWrite == AllowDatabaseWrite::Yes);
 
     if (!m_addIconStatement) {
-        m_addIconStatement = m_db->prepareStatement("INSERT INTO IconInfo (url, stamp) VALUES (?, 0);"_s);
+        m_addIconStatement = m_db->prepareStatement("INSERT INTO IconInfo (url, stamp) VALUES (?, unixepoch());"_s);
         if (!m_addIconStatement) {
             RELEASE_LOG_ERROR(IconDatabase, "Preparing statement addIcon failed (%i) - %s", m_db->lastError(), m_db->lastErrorMsg());
             return std::nullopt;
@@ -485,7 +480,7 @@ void IconDatabase::checkIconURLAndSetPageURLIfNeeded(const String& iconURL, cons
 {
     ASSERT(isMainRunLoop());
 
-    m_workQueue->dispatch([this, protectedThis = Ref { *this }, iconURL = iconURL.isolatedCopy(), pageURL = pageURL.isolatedCopy(), allowDatabaseWrite, completionHandler = WTF::move(completionHandler)]() mutable {
+    m_workQueue->dispatch([this, protectedThis = protect(*this), iconURL = iconURL.isolatedCopy(), pageURL = pageURL.isolatedCopy(), allowDatabaseWrite, completionHandler = WTF::move(completionHandler)]() mutable {
         bool result = false;
         bool changed = false;
         if (m_db->isOpen()) {
@@ -544,7 +539,7 @@ void IconDatabase::loadIconsForPageURL(const String& pageURL, AllowDatabaseWrite
 {
     ASSERT(isMainRunLoop());
 
-    m_workQueue->dispatch([this, protectedThis = Ref { *this }, pageURL = pageURL.isolatedCopy(), allowDatabaseWrite, timestamp = WallTime::now().secondsSinceEpoch(), completionHandler = WTF::move(completionHandler)]() mutable {
+    m_workQueue->dispatch([this, protectedThis = protect(*this), pageURL = pageURL.isolatedCopy(), allowDatabaseWrite, timestamp = WallTime::now().secondsSinceEpoch(), completionHandler = WTF::move(completionHandler)]() mutable {
         ListHashSet<String> iconURLs;
         {
             Locker locker { m_pageURLToIconURLMapLock };
@@ -655,7 +650,7 @@ void IconDatabase::setIconForPageURL(const String& iconURL, std::span<const uint
         return;
     }
 
-    m_workQueue->dispatch([this, protectedThis = Ref { *this }, iconURL = iconURL.isolatedCopy(), iconData = Vector(iconData), pageURL = pageURL.isolatedCopy(), completionHandler = WTF::move(completionHandler)]() mutable {
+    m_workQueue->dispatch([this, protectedThis = protect(*this), iconURL = iconURL.isolatedCopy(), iconData = Vector(iconData), pageURL = pageURL.isolatedCopy(), completionHandler = WTF::move(completionHandler)]() mutable {
         bool result = false;
         if (m_db->isOpen()) {
             SQLiteTransaction transaction(m_db);
@@ -694,7 +689,7 @@ void IconDatabase::clear(CompletionHandler<void()>&& completionHandler)
         Locker locker { m_loadedIconsLock };
         m_loadedIcons.clear();
     }
-    m_workQueue->dispatch([this, protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)]() mutable {
+    m_workQueue->dispatch([this, protectedThis = protect(*this), completionHandler = WTF::move(completionHandler)]() mutable {
         {
             Locker locker { m_pageURLToIconURLMapLock };
             m_pageURLToIconURLMap.clear();

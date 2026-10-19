@@ -37,6 +37,7 @@
 #include <webrtc/api/stats/rtcstats_objects.h>
 #include <wtf/Assertions.h>
 #include <wtf/MainThread.h>
+#include <wtf/ReducedResolutionSeconds.h>
 
 namespace WebCore {
 
@@ -342,7 +343,7 @@ RTCStatsReport::IceCandidateStats RTCStatsReport::IceCandidateStats::convert(con
     };
 
     if (result.candidateType == RTCIceCandidateType::Prflx || result.candidateType == RTCIceCandidateType::Host)
-        result.address = { };
+        result.address = String { };
 
     return result;
 }

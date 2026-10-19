@@ -68,11 +68,11 @@ Ref<AbortSignal> AbortSignal::timeout(ScriptExecutionContext& context, uint64_t 
     auto action = [signal](ScriptExecutionContext& context) mutable {
         signal->setHasActiveTimeoutTimer(false);
 
-        auto* globalObject = uncheckedDowncast<JSDOMGlobalObject>(context.globalObject());
+        auto* globalObject = downcast<JSDOMGlobalObject>(context.globalObject());
         if (!globalObject)
             return;
 
-        Locker locker { globalObject->vm().apiLock() };
+        JSC::JSLockHolder locker(globalObject->vm());
         signal->signalAbort(toJS(globalObject, globalObject, DOMException::create(ExceptionCode::TimeoutError)));
     };
     DOMTimer::install(context, WTF::move(action), Seconds::fromMilliseconds(milliseconds), DOMTimer::Type::SingleShot);
@@ -142,7 +142,7 @@ void AbortSignal::signalAbort(JSC::JSValue reason)
     if (!context)
         return;
 
-    auto* globalObject = uncheckedDowncast<JSDOMGlobalObject>(context->globalObject());
+    auto* globalObject = downcast<JSDOMGlobalObject>(context->globalObject());
     if (!globalObject)
         return;
 

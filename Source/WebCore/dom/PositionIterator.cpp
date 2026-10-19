@@ -57,7 +57,7 @@ PositionIterator::operator Position() const
         // FIXME: This check is inadaquete because any ancestor could be ignored by editing
         if (positionBeforeOrAfterNodeIsCandidate(*anchorNode))
             return positionBeforeNode(*anchorNode);
-        return positionInParentBeforeNode(*m_nodeAfterPositionInAnchor);
+        return positionInParentBeforeNode(protect(*m_nodeAfterPositionInAnchor));
     }
     if (positionBeforeOrAfterNodeIsCandidate(*anchorNode))
         return atStartOfNode() ? positionBeforeNode(*anchorNode) : positionAfterNode(*anchorNode);
@@ -109,7 +109,7 @@ void PositionIterator::decrement()
     
     if (m_anchorNode->hasChildNodes()) {
         m_anchorNode = m_anchorNode->lastChild();
-        m_offsetInAnchor = m_anchorNode->hasChildNodes()? 0: lastOffsetForEditing(*m_anchorNode);
+        m_offsetInAnchor = m_anchorNode->hasChildNodes()? 0: lastOffsetForEditing(*protect(m_anchorNode));
     } else {
         if (m_offsetInAnchor && m_anchorNode->renderer())
             m_offsetInAnchor = Position::uncheckedPreviousOffset(m_anchorNode.get(), m_offsetInAnchor);
@@ -159,7 +159,7 @@ bool PositionIterator::atEndOfNode() const
 }
 
 // This function should be kept in sync with Position::isCandidate().
-bool PositionIterator::isCandidate() const
+bool PositionIterator::isCandidate(AllowUserSelectNone allowUserSelectNone) const
 {
     RefPtr anchorNode = node();
     if (!anchorNode)
@@ -172,18 +172,22 @@ bool PositionIterator::isCandidate() const
     if (renderer->style().visibility() != Visibility::Visible)
         return false;
 
-    if (renderer->isBR())
-        return Position(*this).isCandidate();
+    if (renderer->isBR()) {
+        // FIXME: Remove suppression once rdar://189998444 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST return Position(*this).isCandidate();
+    }
 
     if (is<RenderText>(*renderer)) {
-        if (Position::nodeIsUserSelectNone(anchorNode.get()))
+        if (Position::nodeIsUserSelectNone(anchorNode.get()) && allowUserSelectNone == AllowUserSelectNone::No)
             return false;
-        auto [resolvedText, resolvedOffset] = Position(*this).resolvedTextRendererAndOffset();
-        return resolvedText && resolvedText->containsCaretOffset(resolvedOffset);
+        // FIXME: Remove suppression once rdar://189998444 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST auto resolved = Position(*this).resolvedTextRendererAndOffset();
+        CheckedPtr resolvedText = resolved.first;
+        return resolvedText && resolvedText->containsCaretOffset(resolved.second);
     }
 
     if (positionBeforeOrAfterNodeIsCandidate(*anchorNode))
-        return (atStartOfNode() || atEndOfNode()) && !Position::nodeIsUserSelectNone(anchorNode->parentNode());
+        return (atStartOfNode() || atEndOfNode()) && (allowUserSelectNone == AllowUserSelectNone::Yes || !Position::nodeIsUserSelectNone(anchorNode->parentNode()));
 
     if (is<HTMLHtmlElement>(*anchorNode))
         return false;
@@ -192,14 +196,16 @@ bool PositionIterator::isCandidate() const
         if (isAnyOf<RenderBlockFlow, RenderGrid, RenderFlexibleBox>(*block)) {
             if (block->logicalHeight() || is<HTMLBodyElement>(*anchorNode) || anchorNode->isRootEditableElement()) {
                 if (!Position::hasRenderedNonAnonymousDescendantsWithHeight(*block))
-                    return atStartOfNode() && !Position::nodeIsUserSelectNone(anchorNode.get());
-                return anchorNode->hasEditableStyle() && !Position::nodeIsUserSelectNone(anchorNode.get()) && Position(*this).atEditingBoundary();
+                    return atStartOfNode() && (allowUserSelectNone == AllowUserSelectNone::Yes || !Position::nodeIsUserSelectNone(anchorNode.get()));
+                // FIXME: Remove suppression once rdar://189998444 is fixed.
+                SUPPRESS_MEMORY_UNSAFE_CAST return anchorNode->hasEditableStyle() && (allowUserSelectNone == AllowUserSelectNone::Yes || !Position::nodeIsUserSelectNone(anchorNode.get())) && Position(*this).atEditingBoundary();
             }
             return false;
         }
     }
 
-    return anchorNode->hasEditableStyle() && !Position::nodeIsUserSelectNone(anchorNode.get()) && Position(*this).atEditingBoundary();
+    // FIXME: Remove suppression once rdar://189998444 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return anchorNode->hasEditableStyle() && (allowUserSelectNone == AllowUserSelectNone::Yes || !Position::nodeIsUserSelectNone(anchorNode.get())) && Position(*this).atEditingBoundary();
 }
 
 } // namespace WebCore

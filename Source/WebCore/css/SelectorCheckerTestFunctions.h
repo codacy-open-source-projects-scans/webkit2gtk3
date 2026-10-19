@@ -33,6 +33,7 @@
 #include "HTMLDetailsElement.h"
 #include "HTMLDialogElement.h"
 #include "HTMLFrameElement.h"
+#include "HTMLHeadingElement.h"
 #include "HTMLIFrameElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLInputElement.h"
@@ -131,8 +132,10 @@ ALWAYS_INLINE bool isChecked(const Element& element)
 {
     if (auto* inputElement = dynamicDowncast<HTMLInputElement>(element))
         return inputElement->matchesCheckedPseudoClass();
-    if (auto* option = dynamicDowncast<HTMLOptionElement>(element))
-        return const_cast<HTMLOptionElement&>(*option).selected(AllowStyleInvalidation::No);
+    if (auto* option = dynamicDowncast<HTMLOptionElement>(element)) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<HTMLOptionElement&>(*option).selected(AllowStyleInvalidation::No);
+    }
     return false;
 }
 
@@ -259,6 +262,16 @@ ALWAYS_INLINE bool matchesLangPseudoClass(const Element& element, const FixedVec
             return true;
     }
     return false;
+}
+
+ALWAYS_INLINE bool matchesHeadingPseudoClass(const Element& element, const FixedVector<int>* integerList)
+{
+    CheckedPtr headingElement = dynamicDowncast<HTMLHeadingElement>(element);
+    if (!headingElement)
+        return false;
+    if (!integerList)
+        return true;
+    return integerList->contains(static_cast<int>(headingElement->level()));
 }
 
 ALWAYS_INLINE bool matchesDirPseudoClass(const Element& element, const AtomString& argument)
@@ -415,7 +428,7 @@ ALWAYS_INLINE bool matchesFullscreenPseudoClass(const Element& element)
     if (element.hasFullscreenFlag())
         return true;
     if (element.shadowRoot())
-        return DocumentOrShadowRootFullscreen::fullscreenElement(element.document()) == &element;
+        return DocumentOrShadowRootFullscreen::fullscreenElement(protect(element.document())) == &element;
     return false;
 }
 
@@ -438,7 +451,8 @@ ALWAYS_INLINE bool matchesFullscreenDocumentPseudoClass(const Element& element)
 ALWAYS_INLINE bool matchesInWindowFullscreenPseudoClass(const Element& element)
 {
 #if ENABLE(VIDEO)
-    if (&element != element.document().fullscreen().fullscreenElement())
+    RefPtr documentFullscreen = element.document().fullscreenIfExists();
+    if (!documentFullscreen || &element != documentFullscreen->fullscreenElement())
         return false;
 
     auto* mediaElement = dynamicDowncast<HTMLMediaElement>(element);
@@ -455,7 +469,7 @@ ALWAYS_INLINE bool matchesInWindowFullscreenPseudoClass(const Element& element)
 
 ALWAYS_INLINE bool matchesPictureInPicturePseudoClass(const Element& element)
 {
-    return is<HTMLVideoElement>(element) && element.document().pictureInPictureElement() == &element;
+    return is<HTMLVideoElement>(element) && protect(element.document())->pictureInPictureElement() == &element;
 }
 
 #endif
@@ -655,6 +669,12 @@ ALWAYS_INLINE bool matchesUsesMenulistPseudoClass(const Element& element)
 ALWAYS_INLINE bool matchesSelectPopoverPseudoClass(const Element& element)
 {
     return is<SelectPopoverElement>(element);
+}
+
+ALWAYS_INLINE bool matchesSelectPreferredSizeOnePseudoClass(const Element& element)
+{
+    auto* select = dynamicDowncast<HTMLSelectElement>(element);
+    return select && select->preferredSize() == 1;
 }
 
 } // namespace WebCore

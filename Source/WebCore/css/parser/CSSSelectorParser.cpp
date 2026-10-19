@@ -38,11 +38,13 @@
 #include "CSSTokenizer.h"
 #include "CommonAtomStrings.h"
 #include "Document.h"
+#include "HTMLNames.h"
 #include "MutableCSSSelector.h"
 #include "PseudoElementIdentifier.h"
 #include "SelectorPseudoTypeMap.h"
 #include "UserAgentParts.h"
 #include <memory>
+#include <wtf/MathExtras.h>
 #include <wtf/OptionSet.h>
 #include <wtf/SetForScope.h>
 #include <wtf/text/StringBuilder.h>
@@ -131,7 +133,7 @@ CSSSelectorParser::CSSSelectorParser(const CSSSelectorParserContext& context, St
 }
 
 template <typename ConsumeSelector>
-MutableCSSSelectorList CSSSelectorParser::consumeSelectorList(CSSParserTokenRange& range, ConsumeSelector&& consumeSelector)
+MutableCSSSelectorList CSSSelectorParser::consumeSelectorList(CSSParserTokenRange& range, NOESCAPE const ConsumeSelector& consumeSelector)
 {
     MutableCSSSelectorList selectorList;
     auto selector = consumeSelector(range);
@@ -175,7 +177,7 @@ MutableCSSSelectorList CSSSelectorParser::consumeNestedSelectorList(CSSParserTok
 }
 
 template<typename ConsumeSelector>
-MutableCSSSelectorList CSSSelectorParser::consumeForgivingSelectorList(CSSParserTokenRange& range, ConsumeSelector&& consumeSelector)
+MutableCSSSelectorList CSSSelectorParser::consumeForgivingSelectorList(CSSParserTokenRange& range, NOESCAPE const ConsumeSelector& consumeSelector)
 {
     if (m_failedParsing)
         return { };
@@ -365,7 +367,7 @@ enum class CompoundSelectorFlag {
     HasPseudoElementForRightmostCompound = 1 << 0,
 };
 
-static OptionSet<CompoundSelectorFlag> NODELETE extractCompoundFlags(const MutableCSSSelector& simpleSelector, CSSParserMode parserMode)
+static OptionSet<CompoundSelectorFlag> LEGACY_NODELETE extractCompoundFlags(const MutableCSSSelector& simpleSelector, CSSParserMode parserMode)
 {
     if (simpleSelector.match() != CSSSelector::Match::PseudoElement)
         return { };
@@ -379,7 +381,7 @@ static OptionSet<CompoundSelectorFlag> NODELETE extractCompoundFlags(const Mutab
     return CompoundSelectorFlag::HasPseudoElementForRightmostCompound;
 }
 
-static bool NODELETE isDescendantCombinator(CSSSelector::Relation relation)
+static bool LEGACY_NODELETE isDescendantCombinator(CSSSelector::Relation relation)
 {
     return relation == CSSSelector::Relation::DescendantSpace;
 }
@@ -477,7 +479,7 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeRelativeNestedSele
     return selector;
 }
 
-static bool NODELETE isScrollbarPseudoClass(CSSSelector::PseudoClass pseudo)
+static bool LEGACY_NODELETE isScrollbarPseudoClass(CSSSelector::PseudoClass pseudo)
 {
     switch (pseudo) {
     case CSSSelector::PseudoClass::Enabled:
@@ -501,7 +503,7 @@ static bool NODELETE isScrollbarPseudoClass(CSSSelector::PseudoClass pseudo)
     }
 }
 
-static bool NODELETE isUserActionPseudoClass(CSSSelector::PseudoClass pseudo)
+static bool LEGACY_NODELETE isUserActionPseudoClass(CSSSelector::PseudoClass pseudo)
 {
     switch (pseudo) {
     case CSSSelector::PseudoClass::Hover:
@@ -515,7 +517,7 @@ static bool NODELETE isUserActionPseudoClass(CSSSelector::PseudoClass pseudo)
     }
 }
 
-static bool NODELETE isPseudoClassValidAfterPseudoElement(CSSSelector::PseudoClass pseudoClass, CSSSelector::PseudoElement compoundPseudoElement)
+static bool LEGACY_NODELETE isPseudoClassValidAfterPseudoElement(CSSSelector::PseudoClass pseudoClass, CSSSelector::PseudoElement compoundPseudoElement)
 {
     // FIXME: https://drafts.csswg.org/selectors-4/#pseudo-element-states states all pseudo-elements
     // can be followed by isUserActionPseudoClass().
@@ -594,7 +596,7 @@ static bool isSimpleSelectorValidAfterPseudoElement(const MutableCSSSelector& si
     return isPseudoClassValidAfterPseudoElement(simpleSelector.pseudoClass(), compoundPseudoElement.pseudoElement());
 }
 
-static bool NODELETE atEndIgnoringWhitespace(CSSParserTokenRange range)
+static bool LEGACY_NODELETE atEndIgnoringWhitespace(CSSParserTokenRange range)
 {
     range.consumeWhitespace();
     return range.atEnd();
@@ -747,11 +749,23 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeClass(CSSParserTok
     if (range.peek().type() != IdentToken)
         return nullptr;
 
-    auto selector = makeUnique<MutableCSSSelector>();
-    selector->setMatch(CSSSelector::Match::Class);
-
     auto token = range.consume();
-    selector->setValue(token.value().toAtomString(), m_context.mode == HTMLQuirksMode);
+    auto identifier = token.value();
+
+    auto selector = makeUnique<MutableCSSSelector>();
+
+    // The class prefix selector (.foo-*) is a dash-terminated identifier immediately followed by
+    // an asterisk, with no intervening whitespace. https://drafts.csswg.org/selectors/#class-prefix
+    bool matchLowerCase = false;
+    if (m_context.cssClassPrefixSelectorEnabled && identifier.endsWith('-')
+        && range.peek().type() == DelimiterToken && range.peek().delimiter() == '*') {
+        range.consume();
+        selector->setMatch(CSSSelector::Match::ClassPrefix);
+    } else {
+        selector->setMatch(CSSSelector::Match::Class);
+        matchLowerCase = m_context.mode == HTMLQuirksMode;
+    }
+    selector->setValue(identifier.toAtomString(), matchLowerCase);
 
     return selector;
 }
@@ -766,6 +780,34 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeNesting(CSSParserT
     selector->setMatch(CSSSelector::Match::NestingParent);
     
     return selector;
+}
+
+// [class~="foo"] selects the same elements as .foo: both compare the whitespace-separated
+// tokens of the class attribute case-sensitively. Marking it lets matching use the tokenized
+// ElementData::classNames() instead of searching the raw attribute value.
+static bool isEquivalentToClassSelector(const CSSSelector& selector, CSSParserMode mode)
+{
+    // Only HTMLStandardMode. Quirks mode ASCII-lowercases the class list while [class~=] stays
+    // case-sensitive, and UA sheets are parsed once and shared with quirks mode documents.
+    if (mode != HTMLStandardMode)
+        return false;
+
+    if (selector.match() != CSSSelector::Match::List)
+        return false;
+
+    // A prefixed or uppercase attribute name is a different attribute, except for HTML elements
+    // where the name is matched ASCII-case-insensitively. Requiring an exact match keeps
+    // [CLASS~=foo] and [html|class~=foo] on the general attribute path.
+    if (selector.attribute() != HTMLNames::classAttr)
+        return false;
+
+    if (selector.attributeMatchType() == CSSSelector::AttributeMatchType::CaseInsensitive)
+        return false;
+
+    // Neither [class~=""] nor a value with whitespace can match anything, which is not what a
+    // class selector would do.
+    auto& value = selector.value();
+    return !value.isEmpty() && value.find(isASCIIWhitespace<char16_t>) == notFound;
 }
 
 std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeAttribute(CSSParserTokenRange& range)
@@ -790,7 +832,7 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeAttribute(CSSParse
     auto selector = makeUnique<MutableCSSSelector>();
 
     if (block.atEnd()) {
-        selector->setAttribute(qualifiedName, CSSSelector::CaseSensitive);
+        selector->setAttribute(qualifiedName, CSSSelector::AttributeMatchType::Default);
         selector->setMatch(CSSSelector::Match::Set);
         return selector;
     }
@@ -806,6 +848,10 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeAttribute(CSSParse
 
     if (!block.atEnd())
         return nullptr;
+
+    if (isEquivalentToClassSelector(selector->selector(), m_context.mode))
+        selector->setIsEquivalentToClassSelector();
+
     return selector;
 }
 
@@ -1005,11 +1051,18 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumePseudo(CSSParserTo
         }
 #endif
         case CSSSelector::PseudoElement::Highlight: {
-            auto& ident = block.consumeIncludingWhitespace();
-            if (ident.type() != IdentToken || !block.atEnd())
+            auto& token = block.consumeIncludingWhitespace();
+            if (!block.atEnd())
                 return nullptr;
-            selector->setStringList({ { ident.value().toAtomString() } });
-            return selector;
+            if (token.type() == IdentToken) {
+                selector->setStringList({ { token.value().toAtomString() } });
+                return selector;
+            }
+            if (token.type() == DelimiterToken && token.delimiter() == '*') {
+                selector->setStringList({ { universalPseudoElementNameAtom() } });
+                return selector;
+            }
+            return nullptr;
         }
 
         case CSSSelector::PseudoElement::Picker: {
@@ -1029,7 +1082,7 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumePseudo(CSSParserTo
 
             // Check for implicit universal selector.
             if (block.peek().type() == DelimiterToken && block.peek().delimiter() == '.')
-                nameAndClasses.append(starAtom());
+                nameAndClasses.append(universalPseudoElementNameAtom());
 
             // Parse name or explicit universal selector.
             if (nameAndClasses.isEmpty()) {
@@ -1037,7 +1090,7 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumePseudo(CSSParserTo
                 if (ident.type() == IdentToken && isValidCustomIdentifier(ident.id()))
                     nameAndClasses.append(ident.value().toAtomString());
                 else if (ident.type() == DelimiterToken && ident.delimiter() == '*')
-                    nameAndClasses.append(starAtom());
+                    nameAndClasses.append(universalPseudoElementNameAtom());
                 else
                     return nullptr;
             }
@@ -1140,12 +1193,14 @@ CSSSelector::Match CSSSelectorParser::consumeAttributeMatch(CSSParserTokenRange&
 CSSSelector::AttributeMatchType CSSSelectorParser::consumeAttributeFlags(CSSParserTokenRange& range)
 {
     if (range.peek().type() != IdentToken)
-        return CSSSelector::CaseSensitive;
+        return CSSSelector::AttributeMatchType::Default;
     const CSSParserToken& flag = range.consumeIncludingWhitespace();
     if (equalLettersIgnoringASCIICase(flag.value(), "i"_s))
-        return CSSSelector::CaseInsensitive;
+        return CSSSelector::AttributeMatchType::CaseInsensitive;
+    if (equalLettersIgnoringASCIICase(flag.value(), "s"_s))
+        return CSSSelector::AttributeMatchType::CaseSensitive;
     m_failedParsing = true;
-    return CSSSelector::CaseSensitive;
+    return CSSSelector::AttributeMatchType::Default;
 }
 
 // <an+b> token sequences have special serialization rules: https://www.w3.org/TR/css-syntax-3/#serializing-anb
@@ -1175,7 +1230,7 @@ static bool consumeANPlusB(CSSParserTokenRange& range, std::pair<int, int>& resu
 {
     const CSSParserToken& token = range.consume();
     if (token.type() == NumberToken && token.numericValueType() == IntegerValueType) {
-        result = std::make_pair(0, static_cast<int>(token.numericValue()));
+        result = std::make_pair(0, clampTo<int>(token.numericValue()));
         return true;
     }
     if (token.type() == IdentToken) {
@@ -1197,7 +1252,7 @@ static bool consumeANPlusB(CSSParserTokenRange& range, std::pair<int, int>& resu
         result.first = 1;
         nString = range.consume().value();
     } else if (token.type() == DimensionToken && token.numericValueType() == IntegerValueType) {
-        result.first = token.numericValue();
+        result.first = clampTo<int>(token.numericValue());
         nString = token.unitString();
     } else if (token.type() == IdentToken) {
         if (token.value()[0] == '-') {
@@ -1243,7 +1298,7 @@ static bool consumeANPlusB(CSSParserTokenRange& range, std::pair<int, int>& resu
         return false;
     if ((b.numericSign() == NoSign) == (sign == NoSign))
         return false;
-    result.second = b.numericValue();
+    result.second = clampTo<int>(b.numericValue());
     if (sign == MinusSign)
         result.second = -result.second;
     return true;
@@ -1365,8 +1420,8 @@ CSSSelectorList CSSSelectorParser::resolveNestingParent(const CSSSelectorList& n
 
     auto canInline = [](const CSSSelector& nestingSelector, const CSSSelectorList& list) {
         auto hasTagInCompound = [](const CSSSelector& simpleSelector) {
-            // A compound is organized so that any tag selector is always last.
-            return simpleSelector.lastInCompound()->match() == CSSSelector::Match::Tag;
+            // A compound is organized so that any tag selector is always leftmost.
+            return simpleSelector.leftmostInCompound()->match() == CSSSelector::Match::Tag;
         };
 
         if (list.size() != 1) {
@@ -1385,7 +1440,7 @@ CSSSelectorList CSSSelectorParser::resolveNestingParent(const CSSSelectorList& n
             // .foo .bar { & .baz {...} } -> .foo .bar .baz {...}
             return true;
         }
-        bool hasSingleCompound = !list.first().firstInCompound()->precedingInComplexSelector();
+        bool hasSingleCompound = !list.first().rightmostInCompound()->precedingInComplexSelector();
         if (hasSingleCompound) {
             // .foo.bar { .baz & {...} } -> .baz .foo.bar {...}
             return true;
@@ -1459,7 +1514,7 @@ CSSSelectorList CSSSelectorParser::resolveNestingParent(const CSSSelectorList& n
     return CSSSelectorList { WTF::move(result) };
 }
 
-static std::optional<Style::PseudoElementIdentifier> NODELETE pseudoElementIdentifierFor(CSSSelectorPseudoElement selectorPseudoElement)
+static std::optional<Style::PseudoElementIdentifier> LEGACY_NODELETE pseudoElementIdentifierFor(CSSSelectorPseudoElement selectorPseudoElement)
 {
     auto type = CSSSelector::stylePseudoElementTypeFor(selectorPseudoElement);
     if (!type)
@@ -1469,7 +1524,7 @@ static std::optional<Style::PseudoElementIdentifier> NODELETE pseudoElementIdent
 
 // FIXME: It's probably worth investigating if more logic can be shared with
 // CSSSelectorParser::consumePseudo(), though note that the requirements are subtly different.
-std::optional<Style::PseudoElementIdentifier> CSSSelectorParser::parsePseudoElement(const String& input, const CSSSelectorParserContext& context)
+std::optional<Style::PseudoElementIdentifier> CSSSelectorParser::parsePseudoElement(StringView input, const CSSSelectorParserContext& context)
 {
     auto tokenizer = CSSTokenizer { input };
     auto range = tokenizer.tokenRange();
@@ -1512,20 +1567,21 @@ std::optional<Style::PseudoElementIdentifier> CSSSelectorParser::parsePseudoElem
         return { };
     block.consumeWhitespace();
     switch (*pseudoElement) {
-    case CSSSelector::PseudoElement::Highlight: {
-        auto& ident = block.consumeIncludingWhitespace();
-        if (ident.type() != IdentToken || !block.atEnd())
-            return { };
-        return { Style::PseudoElementIdentifier { PseudoElementType::Highlight, ident.value().toAtomString() } };
-    }
+    case CSSSelector::PseudoElement::Highlight:
     case CSSSelector::PseudoElement::ViewTransitionGroup:
     case CSSSelector::PseudoElement::ViewTransitionImagePair:
     case CSSSelector::PseudoElement::ViewTransitionOld:
     case CSSSelector::PseudoElement::ViewTransitionNew: {
-        auto& ident = block.consumeIncludingWhitespace();
-        if (ident.type() != IdentToken || !isValidCustomIdentifier(ident.id()) || !block.atEnd())
+        auto& token = block.consumeIncludingWhitespace();
+        if (!block.atEnd())
             return { };
-        return { Style::PseudoElementIdentifier { *CSSSelector::stylePseudoElementTypeFor(*pseudoElement), ident.value().toAtomString() } };
+        if (token.type() == IdentToken) {
+            if (!isValidCustomIdentifier(token.id()) && *pseudoElement != CSSSelector::PseudoElement::Highlight)
+                return { };
+            return { Style::PseudoElementIdentifier { *CSSSelector::stylePseudoElementTypeFor(*pseudoElement), token.value().toAtomString() } };
+        }
+        // Intentionally don't parse the universal selector here, because getComputedStyle() only supports returning styles for unique identifiers.
+        return { };
     }
     case CSSSelector::PseudoElement::Picker: {
         auto argument = consumePickerArgument(block);
@@ -1547,16 +1603,20 @@ struct HasCompoundContext {
 static std::optional<HasCompoundContext> collectHasCompoundContext(const CSSSelector& hasPseudoClass)
 {
     HasCompoundContext context;
-    for (auto* selector = hasPseudoClass.lastInCompound(); selector; selector = selector->precedingInCompound()) {
-        if (selector != &hasPseudoClass)
-            context.compoundPeers.append(selector);
+    for (auto* selector = hasPseudoClass.leftmostInCompound(); selector; selector = selector->followingInCompound()) {
+        if (selector == &hasPseudoClass)
+            continue;
+        // Skip pseudo-elements (e.g. `.foo:has(...)::before`); the scope is the has-bearer element.
+        if (selector->match() == CSSSelector::Match::PseudoElement)
+            continue;
+        context.compoundPeers.append(selector);
     }
     if (context.compoundPeers.isEmpty())
         return { };
 
-    auto* firstInCompound = hasPseudoClass.firstInCompound();
-    context.compoundRelation = firstInCompound->relation();
-    context.leftStart = firstInCompound->precedingInComplexSelector();
+    auto* rightmostInCompound = hasPseudoClass.rightmostInCompound();
+    context.compoundRelation = rightmostInCompound->relation();
+    context.leftStart = rightmostInCompound->precedingInComplexSelector();
     return context;
 }
 
@@ -1593,12 +1653,47 @@ static CSSSelectorList buildScopeSelector(const HasCompoundContext& context)
     return CSSSelectorList { WTF::move(result) };
 }
 
-CSSSelectorList CSSSelectorParser::makeHasScopeSelector(const CSSSelector& hasPseudoClass)
+// Returns a selector for the :has() scope element. Encodes two cases:
+//   - Specific selectors: strong scope (e.g. `.c1` for `.c1:has(> .trigger)`).
+//   - Universal `*`: weak scope. No compound peer at any level.
+// Scope-breaking is signalled by the caller passing an empty list.
+// `compoundSelectors` lists the compounds contributing to the scope, from outermost
+// (an enclosing :is()/:not()) to innermost (the :has() itself). For `.foo:is(.bar:has(.x))`
+// the outermost contributes `.foo` and the innermost contributes `.bar`, giving scope `.foo.bar`.
+// Only the outermost's left context (combinator + ancestor chain) is relevant; inner compounds
+// live inside :is()/:not() arguments. Inner compounds containing a type selector are skipped
+// to avoid synthesizing an invalid two-type compound.
+CSSSelectorList CSSSelectorParser::makeHasScopeSelector(const Vector<const CSSSelector*>& compoundSelectors)
 {
-    auto context = collectHasCompoundContext(hasPseudoClass);
-    if (!context)
-        return { };
-    return buildScopeSelector(*context);
+    ASSERT(!compoundSelectors.isEmpty());
+
+    auto* outermost = compoundSelectors.first()->rightmostInCompound();
+
+    Vector<const CSSSelector*> mergedPeers;
+    for (size_t i = 0; i < compoundSelectors.size(); ++i) {
+        auto context = collectHasCompoundContext(*compoundSelectors[i]);
+        if (!context)
+            continue;
+
+        if (i > 0) {
+            auto containsTypeSelector = std::ranges::any_of(context->compoundPeers, [](auto* peer) {
+                return peer->match() == CSSSelector::Match::Tag;
+            });
+            if (containsTypeSelector)
+                continue;
+        }
+
+        mergedPeers.appendVector(context->compoundPeers);
+    }
+
+    if (mergedPeers.isEmpty()) {
+        MutableCSSSelectorList result;
+        result.append(makeUnique<MutableCSSSelector>(anyQName()));
+        return CSSSelectorList { WTF::move(result) };
+    }
+
+    HasCompoundContext merged { WTF::move(mergedPeers), outermost->relation(), outermost->precedingInComplexSelector() };
+    return buildScopeSelector(merged);
 }
 
 CSSSelectorList CSSSelectorParser::makeHasArgumentWithScope(const CSSSelector& hasArgument, const CSSSelector& scopeSelector)

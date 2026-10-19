@@ -374,7 +374,7 @@ static void logGLDebugMessage(GLenum source, GLenum type, GLuint identifier, GLe
     if (type == GL_DEBUG_TYPE_ERROR_KHR && LOG_CHANNEL(GLContext).level >= WTFLogLevel::Debug) {
         WTF::StringPrintStream backtraceStream;
         WTFReportBacktraceWithPrefixAndPrintStream(backtraceStream, "#");
-        RELEASE_LOG(GLContext, "Backtrace leading to error:\n%s", backtraceStream.toString().utf8().data());
+        RELEASE_LOG(GLContext, "Backtrace leading to error:\n%s", backtraceStream.toString().utf8());
     }
 }
 
@@ -452,14 +452,16 @@ GLContext::GLContext(GLDisplay& display, EGLContext context, EGLSurface surface,
 GLContext::~GLContext()
 {
     if (auto display = m_display.get()) {
-        EGLDisplay eglDisplay = display->eglDisplay();
-        if (m_context) {
-            eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-            eglDestroyContext(eglDisplay, m_context);
-        }
+        // Thread-local contexts are destroyed when their thread exits, which can happen _while_ the main thread terminates the display.
+        display->runIfNotTerminated([&](EGLDisplay eglDisplay) {
+            if (m_context) {
+                eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+                eglDestroyContext(eglDisplay, m_context);
+            }
 
-        if (m_surface)
-            eglDestroySurface(eglDisplay, m_surface);
+            if (m_surface)
+                eglDestroySurface(eglDisplay, m_surface);
+        });
     }
 
 #if USE(WPE_RENDERER)
@@ -592,12 +594,12 @@ bool GLContext::isExtensionSupported(const char* extensionList, const char* exte
     int extensionLen = strlen(extension);
     WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GLib / Windows ports.
     const char* extensionListPtr = extensionList;
-    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     while ((extensionListPtr = strstr(extensionListPtr, extension))) {
         if (extensionListPtr[extensionLen] == ' ' || extensionListPtr[extensionLen] == '\0')
             return true;
         extensionListPtr += extensionLen;
     }
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     return false;
 }
 IGNORE_CLANG_WARNINGS_END
@@ -642,6 +644,9 @@ const GLContext::GLExtensions& GLContext::glExtensions() const
         m_glExtensions.APPLE_sync = isExtensionSupported(extensionsString, "GL_APPLE_sync");
         m_glExtensions.OES_packed_depth_stencil = isExtensionSupported(extensionsString, "GL_OES_packed_depth_stencil");
         m_glExtensions.EXT_YUV_target = isExtensionSupported(extensionsString, "GL_EXT_YUV_target");
+#if USE(VULKAN)
+        m_glExtensions.EXT_memory_object = isExtensionSupported(extensionsString, "GL_EXT_memory_object");
+#endif
     });
     return m_glExtensions;
 }

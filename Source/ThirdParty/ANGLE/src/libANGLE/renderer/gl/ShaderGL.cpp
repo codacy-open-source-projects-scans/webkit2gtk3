@@ -128,14 +128,14 @@ std::shared_ptr<ShaderTranslateTask> ShaderGL::compile(const gl::Context *contex
 
     options->initGLPosition = true;
 
-    bool isWebGL = context->isWebGL();
-    if (isWebGL || (features.initFragmentOutputVariables.enabled &&
-                    mState.getShaderType() == gl::ShaderType::Fragment))
+    const bool isHardened = context->isHardenedContext();
+    if (isHardened || (features.initFragmentOutputVariables.enabled &&
+                       mState.getShaderType() == gl::ShaderType::Fragment))
     {
         options->initOutputVariables = true;
     }
 
-    if (isWebGL && !context->getState().getEnableFeature(GL_TEXTURE_RECTANGLE_ANGLE))
+    if (isHardened && !context->getState().getEnableFeature(GL_TEXTURE_RECTANGLE_ANGLE))
     {
         options->disableARBTextureRectangle = true;
     }
@@ -201,7 +201,7 @@ std::shared_ptr<ShaderTranslateTask> ShaderGL::compile(const gl::Context *contex
         options->selectViewInNvGLSLVertexShader          = true;
     }
 
-    if (features.clampArrayAccess.enabled || isWebGL)
+    if (features.clampArrayAccess.enabled || isHardened)
     {
         options->clampIndirectArrayBounds = true;
     }
@@ -224,11 +224,6 @@ std::shared_ptr<ShaderTranslateTask> ShaderGL::compile(const gl::Context *contex
     if (features.preAddTexelFetchOffsets.enabled)
     {
         options->rewriteTexelFetchOffsetToTexelFetch = true;
-    }
-
-    if (features.regenerateStructNames.enabled)
-    {
-        options->regenerateStructNames = true;
     }
 
     if (features.rewriteRowMajorMatrices.enabled)
@@ -256,6 +251,11 @@ std::shared_ptr<ShaderTranslateTask> ShaderGL::compile(const gl::Context *contex
         options->scalarizeVecAndMatConstructorArgs = true;
     }
 
+    if (features.avoidComplexExpressionsInStructConstructor.enabled)
+    {
+        options->avoidComplexExpressionsInStructConstructor = true;
+    }
+
     if (features.explicitFragmentLocations.enabled)
     {
         options->explicitFragmentLocations = true;
@@ -269,6 +269,11 @@ std::shared_ptr<ShaderTranslateTask> ShaderGL::compile(const gl::Context *contex
     if (features.validateMaxPerStageUniformBlocksAtCompileTime.enabled)
     {
         options->validatePerStageMaxUniformBlocks = true;
+    }
+
+    if (features.limitOutputVaryingsTo256AtCompileTime.enabled)
+    {
+        options->limitOutputVaryingsTo256 = true;
     }
 
     return std::shared_ptr<ShaderTranslateTask>(

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2024-2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -69,9 +69,9 @@ public:
         std::optional<unsigned> packetlossperc { };
         std::optional<bool> useinbandfec { };
     };
-    static Expected<InternalConfig, String> checkConfiguration(const String&, const Config&);
+    static std::expected<InternalConfig, String> checkConfiguration(const String&, const Config&);
 
-    static Ref<InternalAudioEncoderCocoa> create(const Config& config, InternalConfig&& internalConfig, AudioEncoder::DescriptionCallback&& descriptionCallback, AudioEncoder::OutputCallback&& outputCallback)
+    static Ref<InternalAudioEncoderCocoa> LEGACY_NODELETE create(const Config& config, InternalConfig&& internalConfig, AudioEncoder::DescriptionCallback&& descriptionCallback, AudioEncoder::OutputCallback&& outputCallback)
     {
         return adoptRef(*new InternalAudioEncoderCocoa(config, WTF::move(internalConfig), WTF::move(descriptionCallback), WTF::move(outputCallback)));
     }
@@ -86,8 +86,7 @@ public:
 
 private:
     InternalAudioEncoderCocoa(const AudioEncoder::Config&, InternalConfig&&, AudioEncoder::DescriptionCallback&&, AudioEncoder::OutputCallback&&);
-    static void compressedAudioOutputBufferCallback(void*, CMBufferQueueTriggerToken);
-    Ref<AudioSampleBufferConverter> NODELETE converter() const { return *m_converter; }
+    Ref<AudioSampleBufferConverter> LEGACY_NODELETE converter() const { return *m_converter; }
     void processEncodedOutputs();
     AudioEncoder::ActiveConfiguration activeConfiguration(CMSampleBufferRef) const;
     Vector<uint8_t> generateDecoderDescriptionFromSample(CMSampleBufferRef) const;
@@ -105,7 +104,7 @@ private:
     OSStatus m_lastError WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { noErr };
 };
 
-Expected<InternalAudioEncoderCocoa::InternalConfig, String> InternalAudioEncoderCocoa::checkConfiguration(const String& codecName, const AudioEncoder::Config& config)
+std::expected<InternalAudioEncoderCocoa::InternalConfig, String> InternalAudioEncoderCocoa::checkConfiguration(const String& codecName, const AudioEncoder::Config& config)
 {
     auto result = AudioDecoderCocoa::isCodecSupported(codecName);
     if (!result)
@@ -212,17 +211,6 @@ InternalAudioEncoderCocoa::InternalAudioEncoderCocoa(const Config& config, Inter
 {
 }
 
-void InternalAudioEncoderCocoa::compressedAudioOutputBufferCallback(void* object, CMBufferQueueTriggerToken)
-{
-    // We can only be called from the CoreMedia callback if we are still alive.
-    RefPtr encoder = static_cast<class InternalAudioEncoderCocoa*>(object);
-
-    InternalAudioEncoderCocoa::queueSingleton().dispatch([weakEncoder = ThreadSafeWeakPtr { *encoder }] {
-        if (auto strongEncoder = weakEncoder.get())
-            strongEncoder->processEncodedOutputs();
-    });
-}
-
 Vector<uint8_t> InternalAudioEncoderCocoa::generateDecoderDescriptionFromSample(CMSampleBufferRef sample) const
 {
     RetainPtr formatDescription = PAL::CMSampleBufferGetFormatDescription(sample);
@@ -273,7 +261,8 @@ void InternalAudioEncoderCocoa::processEncodedOutputs()
         ASSERT(rawBuffer);
         // Make sure block buffer is contiguous.
         if (!PAL::CMBlockBufferIsRangeContiguous(rawBuffer.get(), 0, 0)) {
-            CMBlockBufferRef contiguousBuffer;
+            // This is an out-parameter which is immediately adopted below.
+            SUPPRESS_UNRETAINED_LOCAL CMBlockBufferRef contiguousBuffer;
             if (auto error = PAL::CMBlockBufferCreateContiguous(nullptr, rawBuffer.get(), nullptr, nullptr, 0, 0, 0, &contiguousBuffer)) {
                 RELEASE_LOG_ERROR(MediaStream, "Couldn't create buffer with error %d", error);
                 m_lastError = error;
@@ -326,7 +315,7 @@ Ref<AudioEncoder::EncodePromise> InternalAudioEncoderCocoa::encode(AudioEncoder:
 
     if (*asbd != m_inputDescription) {
         if (RefPtr converter = std::exchange(m_converter, { }))
-            converter->finish();
+            converter->finish()->whenSettled(queueSingleton(), [protectedThis = Ref { *this }] { });
         m_inputDescription = *asbd;
 
         AudioSampleBufferConverter::Options options = {
@@ -339,7 +328,12 @@ Ref<AudioEncoder::EncodePromise> InternalAudioEncoderCocoa::encode(AudioEncoder:
             .packetlossperc = m_internalConfig.packetlossperc,
             .useinbandfec = m_internalConfig.useinbandfec
         };
-        m_converter = AudioSampleBufferConverter::create(compressedAudioOutputBufferCallback, this, options);
+        m_converter = AudioSampleBufferConverter::create([weakThis = ThreadSafeWeakPtr { *this }] {
+            queueSingleton().dispatch([weakThis] {
+                if (auto protectedThis = weakThis.get())
+                    protectedThis->processEncodedOutputs();
+            });
+        }, options);
         if (!m_converter) {
             RELEASE_LOG_ERROR(MediaStream, "InternalAudioEncoderCocoa::encode: creation of converter failed");
             return EncodePromise::createAndReject("InternalAudioEncoderCocoa::encode: creation of converter failed"_s);
@@ -383,12 +377,9 @@ void InternalAudioEncoderCocoa::close()
     assertIsCurrent(queueSingleton());
 
     m_isClosed = true;
-    RefPtr converter = std::exchange(m_converter, { });
-    if (!converter)
-        return;
-    // We keep a reference to ourselves until the converter has been marked as finished. This guarantees that no
-    // callback will occur after we are destructed.
-    converter->finish()->whenSettled(queueSingleton(), [protectedThis = Ref { *this }] { });
+
+    if (RefPtr converter = std::exchange(m_converter, { }))
+        converter->finish();
 }
 
 } // namespace WebCore

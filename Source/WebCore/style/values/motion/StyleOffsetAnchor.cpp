@@ -29,7 +29,7 @@
 #include "CSSPositionValue.h"
 #include "StyleBuilderChecking.h"
 #include "StyleComputedStyle+InitialInlines.h"
-#include "StyleLengthWrapper+Blending.h"
+#include "StylePrimitiveNumericOrKeyword+Blending.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include <wtf/text/TextStream.h>
 
@@ -53,7 +53,7 @@ auto CSSValueConversion<OffsetAnchor>::operator()(BuilderState& state, const CSS
 {
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueAuto:
+        case CSSValueID::Auto:
             return CSS::Keyword::Auto { };
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();

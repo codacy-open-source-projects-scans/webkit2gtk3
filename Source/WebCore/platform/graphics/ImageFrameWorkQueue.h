@@ -42,10 +42,16 @@ public:
         SubsamplingLevel subsamplingLevel;
         ImageAnimatingState animatingState;
         DecodingOptions options;
-        friend bool operator==(const Request&, const Request&) = default;
+        bool isCompatibleWith(const Request& other) const
+        {
+            return index == other.index
+                && subsamplingLevel == other.subsamplingLevel
+                && animatingState == other.animatingState
+                && options.isCompatibleWith(other.options);
+        }
     };
 
-    static Ref<ImageFrameWorkQueue> create(BitmapImageSource&);
+    static Ref<ImageFrameWorkQueue> LEGACY_NODELETE create(BitmapImageSource&);
 
     void start();
     void dispatch(const Request&);

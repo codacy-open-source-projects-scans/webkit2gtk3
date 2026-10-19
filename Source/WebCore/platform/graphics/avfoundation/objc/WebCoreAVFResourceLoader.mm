@@ -32,6 +32,7 @@
 #import "CachedResourceLoader.h"
 #import "CachedResourceRequest.h"
 #import "DataURLDecoder.h"
+#import "DeprecatedGlobalSettings.h"
 #import "Logging.h"
 #import "MediaPlayerPrivateAVFoundationObjC.h"
 #import "PlatformMediaResourceLoader.h"
@@ -55,6 +56,15 @@
 @end
 
 namespace WebCore {
+
+static constexpr Seconds defaultResourceLoadTimeout = 10_s;
+
+static Seconds LEGACY_NODELETE resourceLoadTimeout()
+{
+    if (auto milliseconds = DeprecatedGlobalSettings::mediaResourceLoadTimeoutForTesting())
+        return Seconds::fromMilliseconds(milliseconds);
+    return defaultResourceLoadTimeout;
+}
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebCoreAVFResourceLoader);
 
@@ -117,7 +127,7 @@ CachedResourceMediaLoader::CachedResourceMediaLoader(WebCoreAVFResourceLoader& p
     : m_parent(parent)
     , m_resource(WTF::move(resource))
 {
-    m_resource->addClient(*this);
+    protect(*m_resource)->addClient(*this);
 }
 
 void CachedResourceMediaLoader::stop()
@@ -125,7 +135,7 @@ void CachedResourceMediaLoader::stop()
     if (!m_resource)
         return;
 
-    m_resource->removeClient(*this);
+    protect(*m_resource)->removeClient(*this);
     m_resource = nullptr;
 }
 
@@ -207,7 +217,7 @@ void PlatformResourceMediaLoader::stop()
     if (!m_resource)
         return;
 
-    m_resource->shutdown();
+    protect(m_resource)->shutdown();
     m_resource = nullptr;
 }
 
@@ -238,7 +248,7 @@ void PlatformResourceMediaLoader::dataReceived(PlatformMediaResource&, const Sha
     assertIsCurrent(m_targetDispatcher.get());
 
     m_buffer.append(buffer);
-    m_parent.get()->newDataStoredInSharedBuffer(*m_buffer.buffer());
+    m_parent.get()->newDataStoredInSharedBuffer(protect(*m_buffer.buffer()));
 }
 
 class DataURLResourceMediaLoader : public ThreadSafeRefCounted<DataURLResourceMediaLoader> {
@@ -276,7 +286,7 @@ DataURLResourceMediaLoader::DataURLResourceMediaLoader(WebCoreAVFResourceLoader&
     RELEASE_ASSERT(m_request.url().protocolIsData());
     assertIsCurrent(parent.m_targetDispatcher);
 
-    decodeQueue().dispatch([protectedThis = Ref { *this }, targetDispatcher = parent.m_targetDispatcher, url = m_request.url().isolatedCopy()] mutable {
+    protect(decodeQueue())->dispatch([protectedThis = Ref { *this }, targetDispatcher = parent.m_targetDispatcher, url = m_request.url().isolatedCopy()] mutable {
         targetDispatcher->dispatch([protectedThis = WTF::move(protectedThis), result = DataURLDecoder::decode(url)] mutable {
             protectedThis->handleDecodeResult(WTF::move(result));
         });
@@ -361,22 +371,22 @@ void WebCoreAVFResourceLoader::startLoading()
         return;
     }
 
-#if PLATFORM(IOS_FAMILY)
-    m_isBlob = request.url().protocolIsBlob();
-#endif
-
     m_resourceMediaLoader = PlatformResourceMediaLoader::create(*this, m_platformMediaLoader, WTF::move(request));
-    if (m_resourceMediaLoader)
+    if (!m_resourceMediaLoader) {
+        ERROR_LOG(LOGIDENTIFIER, "Failed to start load for media at url ", URL { [nsRequest URL] }.string());
+        [m_avRequest finishLoadingWithError:0];
         return;
+    }
 
-    ERROR_LOG(LOGIDENTIFIER, "Failed to start load for media at url %s", request.url().string());
-    [m_avRequest finishLoadingWithError:0];
+    startLoadingTimer();
 }
 
 // No code accessing `this` should ever be used after calling stopLoading().
 void WebCoreAVFResourceLoader::stopLoading()
 {
     assertIsCurrent(m_targetDispatcher.get());
+
+    stopLoadingTimer();
 
     if (m_loadStartTime)
         ALWAYS_LOG(LOGIDENTIFIER, "duration: ", (MonotonicTime::now() - *m_loadStartTime).millisecondsAs<int>(), "ms");
@@ -386,7 +396,7 @@ void WebCoreAVFResourceLoader::stopLoading()
     m_dataURLMediaLoader = nullptr;
 
     if (m_resourceMediaLoader)
-        m_resourceMediaLoader->stop();
+        protect(m_resourceMediaLoader)->stop();
 
     callOnMainThread([weakParent = WTF::move(m_parent), loader = WTF::move(m_resourceMediaLoader), avRequest = WTF::move(m_avRequest)] {
         if (RefPtr parent = weakParent.get(); parent && avRequest)
@@ -434,6 +444,41 @@ bool WebCoreAVFResourceLoader::responseReceived(const String& mimeType, int stat
     return false;
 }
 
+void WebCoreAVFResourceLoader::startLoadingTimer()
+{
+    assertIsCurrent(m_targetDispatcher.get());
+
+    stopLoadingTimer();
+
+    if (!m_loadingTimerCancellationGroup)
+        m_loadingTimerCancellationGroup.emplace();
+
+    m_targetDispatcher->dispatchAfter(resourceLoadTimeout(), CancellableTask(*m_loadingTimerCancellationGroup, [weakThis = ThreadSafeWeakPtr { *this }] {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->loadTimedOut();
+    }));
+}
+
+void WebCoreAVFResourceLoader::stopLoadingTimer()
+{
+    assertIsCurrent(m_targetDispatcher.get());
+
+    if (m_loadingTimerCancellationGroup)
+        m_loadingTimerCancellationGroup->cancel();
+}
+
+void WebCoreAVFResourceLoader::loadTimedOut()
+{
+    assertIsCurrent(m_targetDispatcher.get());
+
+    ERROR_LOG(LOGIDENTIFIER, "timed out after ", resourceLoadTimeout().seconds());
+
+    RetainPtr error = adoptNS([[NSError alloc] initWithDomain:NSURLErrorDomain code:NSURLErrorTimedOut userInfo:@{
+        NSLocalizedDescriptionKey: @"The media resource loading request was not answered in time."
+    }]);
+    loadFailed(ResourceError { error.get() });
+}
+
 void WebCoreAVFResourceLoader::loadFailed(const ResourceError& error)
 {
     assertIsCurrent(m_targetDispatcher.get());
@@ -445,7 +490,7 @@ void WebCoreAVFResourceLoader::loadFailed(const ResourceError& error)
     if ([m_avRequest contentInformationRequest] && ![[m_avRequest contentInformationRequest] contentType])
         [[m_avRequest contentInformationRequest] setContentType:@""];
 
-    [m_avRequest finishLoadingWithError:error.nsError()];
+    [m_avRequest finishLoadingWithError:protect(error.nsError())];
     stopLoading();
 }
 
@@ -477,7 +522,8 @@ bool WebCoreAVFResourceLoader::newDataStoredInSharedBuffer(const FragmentedShare
 
     auto bytesToSkip = m_currentOffset - m_responseOffset;
     auto array = data.createNSDataArray();
-    for (NSData* segment in array.get()) {
+    // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+    for (SUPPRESS_UNRETAINED_LOCAL NSData* segment in array.get()) {
         if (!remainingLength)
             break;
         NSUInteger usableBytes = segment.length;

@@ -38,6 +38,7 @@ from webkitpy.common.system.executive_mock import MockExecutive2
 from webkitpy.common.system.systemhost_mock import MockSystemHost
 from webkitpy.common.host_mock import MockHost
 from webkitpy.port import Port
+from webkitpy.port.config import Config
 from webkitpy.port.test import add_unit_tests_to_mock_filesystem, TestPort
 from webkitpy.thirdparty.mock import patch
 
@@ -49,6 +50,9 @@ def cmp(a, b):
     return (a > b) - (a < b)
 
 class PortTest(unittest.TestCase):
+    def setUp(self):
+        Config._clear_cache_for_testing()
+
     def make_port(self, executive=None, with_tests=False, port_name=None, **kwargs):
         host = MockHost(create_stub_repository_files=True)
         if executive:
@@ -257,6 +261,7 @@ class PortTest(unittest.TestCase):
         self.assertTrue(port.test_exists('passes/text.html'))
         self.assertFalse(port.test_exists('passes/does_not_exist.html'))
         self.assertTrue(port.test_exists('variant/variant.any.html?1-100'))
+        self.assertTrue(port.test_exists('variant/variant.any.html?val=2.3'))
 
     def test_test_isfile(self):
         port = self.make_port(with_tests=True)
@@ -278,11 +283,40 @@ class PortTest(unittest.TestCase):
         )
         self.assertEqual(port._build_path(), '/my-build-directory/Debug')
 
+        Config._clear_cache_for_testing()
         port = self.make_port(
             executive=MockExecutive2(output='/default-build-path/Debug-embedded-port'),
             options=optparse.Values({'build_directory': '/my-build-directory/'}),
         )
         self.assertEqual(port._build_path(), '/my-build-directory/Debug-embedded-port')
+
+    def test_arguments_for_configuration(self):
+        port = self.make_port(options=optparse.Values({'configuration': 'Release'}))
+        self.assertEqual(port._arguments_for_configuration(), ['--release'])
+
+        port = self.make_port(options=optparse.Values({'configuration': 'Debug', 'use_cmake': True, 'asan': True}))
+        self.assertEqual(port._arguments_for_configuration(), ['--debug', '--cmake', '--asan'])
+
+        port = self.make_port(options=optparse.Values({'configuration': 'Release', 'use_xcode': True}))
+        self.assertEqual(port._arguments_for_configuration(), ['--release', '--xcode'])
+
+    def test_run_browser_forwards_build_selection(self):
+        for run_browser in (Port.run_minibrowser, Port.run_swiftbrowser):
+            commands = []
+
+            def run_command(args, **kwargs):
+                commands.append(args)
+                return 0
+
+            port = self.make_port(options=optparse.Values({'configuration': 'Debug', 'platform': 'mac', 'use_xcode': True}))
+            port._executive.run_command = run_command
+            run_browser(port, ['https://webkit.org'])
+            self.assertEqual(commands[-1][1:], ['https://webkit.org', '--debug', '--xcode', '--mac'])
+
+            port = self.make_port(options=optparse.Values({'configuration': 'Release', 'platform': 'mac', 'use_cmake': True, 'asan': True}))
+            port._executive.run_command = run_command
+            run_browser(port, [])
+            self.assertEqual(commands[-1][1:], ['--release', '--cmake', '--asan', '--mac'])
 
     def test_jhbuild_wrapper(self):
         port = self.make_port(port_name='foo')

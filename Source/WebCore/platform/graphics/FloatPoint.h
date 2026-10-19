@@ -31,7 +31,6 @@
 #include <WebCore/IntPoint.h>
 #include <wtf/Hasher.h>
 #include <wtf/MathExtras.h>
-#include <wtf/Platform.h>
 #include <wtf/TZoneMalloc.h>
 
 #if USE(CG)
@@ -66,7 +65,7 @@ public:
     static constexpr FloatPoint zero() { return FloatPoint(); }
     constexpr bool isZero() const { return !m_x && !m_y; }
 
-    WEBCORE_EXPORT static FloatPoint NODELETE narrowPrecision(double x, double y);
+    WEBCORE_EXPORT static FloatPoint LEGACY_NODELETE narrowPrecision(double x, double y);
 
     constexpr float x() const { return m_x; }
     constexpr float y() const { return m_y; }
@@ -134,11 +133,17 @@ public:
 
     void rotate(double angleInRadians, const FloatPoint& aboutPoint);
 
-    WEBCORE_EXPORT void NODELETE normalize();
+    WEBCORE_EXPORT void LEGACY_NODELETE normalize();
 
     constexpr float dot(const FloatPoint& a) const
     {
         return m_x * a.x() + m_y * a.y();
+    }
+
+    // The z component of the 3D cross product of the two points taken as vectors in the z = 0 plane.
+    constexpr float cross(const FloatPoint& a) const
+    {
+        return m_x * a.y() - m_y * a.x();
     }
 
     float slopeAngleRadians() const;
@@ -153,9 +158,9 @@ public:
         return m_x * m_x + m_y * m_y;
     }
 
-    WEBCORE_EXPORT FloatPoint constrainedBetween(const FloatPoint& min, const FloatPoint& max) const;
+    WEBCORE_EXPORT FloatPoint LEGACY_NODELETE constrainedBetween(const FloatPoint& min, const FloatPoint& max) const;
     
-    WEBCORE_EXPORT FloatPoint constrainedWithin(const FloatRect&) const;
+    WEBCORE_EXPORT FloatPoint LEGACY_NODELETE constrainedWithin(const FloatRect&) const;
 
     constexpr FloatPoint shrunkTo(const FloatPoint& other) const
     {
@@ -179,15 +184,15 @@ public:
 
 #if USE(CG)
     WEBCORE_EXPORT FloatPoint(const CGPoint&);
-    WEBCORE_EXPORT operator CGPoint() const;
+    WEBCORE_EXPORT operator CGPoint LEGACY_NODELETE () const;
 #endif
 
 #if PLATFORM(WIN)
     WEBCORE_EXPORT FloatPoint(const POINT&);
 #endif
 
-    WEBCORE_EXPORT FloatPoint NODELETE matrixTransform(const TransformationMatrix&) const;
-    WEBCORE_EXPORT FloatPoint matrixTransform(const AffineTransform&) const;
+    WEBCORE_EXPORT FloatPoint LEGACY_NODELETE matrixTransform(const TransformationMatrix&) const;
+    WEBCORE_EXPORT FloatPoint LEGACY_NODELETE matrixTransform(const AffineTransform&) const;
 
     static constexpr FloatPoint nanPoint();
     constexpr bool isNaN() const;
@@ -266,29 +271,29 @@ inline void FloatPoint::rotate(double angleInRadians, const FloatPoint& aboutPoi
 
 inline IntSize flooredIntSize(const FloatPoint& p)
 {
-    return IntSize(clampToInteger(floorf(p.x())), clampToInteger(floorf(p.y())));
+    return IntSize(clampTo<int>(floorf(p.x())), clampTo<int>(floorf(p.y())));
 }
 
 #if USE(CG)
 inline IntPoint roundedIntPoint(const CGPoint& p)
 {
-    return IntPoint(clampToInteger(roundf(p.x)), clampToInteger(roundf(p.y)));
+    return IntPoint(clampTo<int>(roundf(p.x)), clampTo<int>(roundf(p.y)));
 }
 #endif
 
 inline IntPoint roundedIntPoint(const FloatPoint& p)
 {
-    return IntPoint(clampToInteger(roundf(p.x())), clampToInteger(roundf(p.y())));
+    return IntPoint(clampTo<int>(roundf(p.x())), clampTo<int>(roundf(p.y())));
 }
 
 inline IntPoint flooredIntPoint(const FloatPoint& p)
 {
-    return IntPoint(clampToInteger(floorf(p.x())), clampToInteger(floorf(p.y())));
+    return IntPoint(clampTo<int>(floorf(p.x())), clampTo<int>(floorf(p.y())));
 }
 
 inline IntPoint ceiledIntPoint(const FloatPoint& p)
 {
-    return IntPoint(clampToInteger(ceilf(p.x())), clampToInteger(ceilf(p.y())));
+    return IntPoint(clampTo<int>(ceilf(p.x())), clampTo<int>(ceilf(p.y())));
 }
 
 inline FloatPoint floorPointToDevicePixels(const FloatPoint& p, float deviceScaleFactor)

@@ -48,7 +48,7 @@ namespace WebCore {
 static ExceptionOr<void> packAndPostMessage(JSDOMGlobalObject& globalObject, MessagePort& port, const String& type, JSC::JSValue value)
 {
     Ref vm = globalObject.vm();
-    Locker locker(vm->apiLock());
+    JSC::JSLockHolder lock(vm);
     auto catchScope = DECLARE_TOP_EXCEPTION_SCOPE(vm);
 
     auto* data = JSC::constructEmptyObject(&globalObject);
@@ -98,7 +98,7 @@ public:
                 return;
 
             auto& vm = globalObject.vm();
-            Locker locker(vm.apiLock());
+            JSC::JSLockHolder lock(vm);
             auto catchScope = DECLARE_TOP_EXCEPTION_SCOPE(vm);
 
             bool didFail = false;
@@ -121,7 +121,7 @@ public:
         return source;
     }
 
-    void NODELETE ref() const final { RefCounted::ref(); }
+    void LEGACY_NODELETE ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }
 
 private:
@@ -178,8 +178,8 @@ private:
     }
 
     // ReadableStreamSource
-    void NODELETE setActive() final { };
-    void NODELETE setInactive() final { };
+    void LEGACY_NODELETE setActive() final { };
+    void LEGACY_NODELETE setInactive() final { };
 
     void doStart() final { startFinished(); }
     void doPull() final
@@ -189,7 +189,7 @@ private:
         if (!globalObject)
             return;
 
-        packAndPostMessage(*uncheckedDowncast<JSDOMGlobalObject>(globalObject), m_port.get(), "pull"_s, JSC::jsUndefined());
+        packAndPostMessage(*downcast<JSDOMGlobalObject>(globalObject), m_port.get(), "pull"_s, JSC::jsUndefined());
         pullFinished();
     }
     void doCancel(JSC::JSValue reason) final
@@ -199,7 +199,7 @@ private:
         if (!globalObject)
             return;
 
-        auto result = packAndPostMessageHandlingError(*uncheckedDowncast<JSDOMGlobalObject>(globalObject), m_port.get(), "error"_s, reason);
+        auto result = packAndPostMessageHandlingError(*downcast<JSDOMGlobalObject>(globalObject), m_port.get(), "error"_s, reason);
         if (result.hasException())
             cancelFinished(result.releaseException());
         else
@@ -227,7 +227,7 @@ public:
                 return;
 
             auto& vm = globalObject.vm();
-            Locker locker(vm.apiLock());
+            JSC::JSLockHolder lock(vm);
             auto catchScope = DECLARE_TOP_EXCEPTION_SCOPE(vm);
 
             bool didFail = false;
@@ -311,7 +311,7 @@ private:
             return;
 
         if (!m_backpressurePromise) {
-            RefPtr backpressurePromise = DeferredPromise::create(*uncheckedDowncast<JSDOMGlobalObject>(globalObject), DeferredPromise::Mode::RetainPromiseOnResolve);
+            RefPtr backpressurePromise = DeferredPromise::create(*downcast<JSDOMGlobalObject>(globalObject), DeferredPromise::Mode::RetainPromiseOnResolve);
             if (!backpressurePromise)
                 return;
             backpressurePromise->resolve();
@@ -325,7 +325,7 @@ private:
                 return;
 
             RefPtr context = protectedThis->m_port->scriptExecutionContext();
-            auto* globalObject = context ? uncheckedDowncast<JSDOMGlobalObject>(context->globalObject()) : nullptr;
+            auto* globalObject = context ? downcast<JSDOMGlobalObject>(context->globalObject()) : nullptr;
             if (!globalObject)
                 return;
 
@@ -342,10 +342,11 @@ private:
             promise.resolve();
         });
     }
-    void close(JSDOMGlobalObject& globalObject) final
+    void close(JSDOMGlobalObject& globalObject, DOMPromiseDeferred<void>&& promise) final
     {
         packAndPostMessage(globalObject, m_port, "close"_s, JSC::jsUndefined());
         m_port->close();
+        promise.resolve();
     }
     void abort(JSDOMGlobalObject& globalObject, JSC::JSValue reason, DOMPromiseDeferred<void>&& promise) final
     {

@@ -25,7 +25,8 @@
 
 #pragma once
 
-#include <JavaScriptCore/JSGlobalObjectInlines.h>
+#include <JavaScriptCore/GetVM.h>
+#include <JavaScriptCore/JSGlobalObject.h>
 #include <JavaScriptCore/PureNaN.h>
 #include <WebCore/IDLTypes.h>
 #include <WebCore/JSDOMConvertBase.h>
@@ -265,7 +266,7 @@ template<> struct JSConverter<IDLDouble> {
     static constexpr bool needsState = false;
     static constexpr bool needsGlobalObject = false;
 
-    WEBCORE_EXPORT static JSC::JSValue convert(Type);
+    WEBCORE_EXPORT static JSC::JSValue LEGACY_NODELETE convert(Type);
 };
 
 template<> struct Converter<IDLUnrestrictedDouble> : DefaultConverter<IDLUnrestrictedDouble> {
@@ -295,10 +296,10 @@ template<> struct JSConverter<IDLUnrestrictedDouble> {
     static constexpr bool needsState = false;
     static constexpr bool needsGlobalObject = false;
 
-    WEBCORE_EXPORT static JSC::JSValue convert(Type);
+    WEBCORE_EXPORT static JSC::JSValue LEGACY_NODELETE convert(Type);
 
     // Add overload for MediaTime.
-    WEBCORE_EXPORT static JSC::JSValue convert(const MediaTime&);
+    WEBCORE_EXPORT static JSC::JSValue LEGACY_NODELETE convert(const MediaTime&);
 };
 
 } // namespace WebCore

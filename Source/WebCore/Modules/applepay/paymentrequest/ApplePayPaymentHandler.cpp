@@ -48,6 +48,7 @@
 #include "ApplePayShippingMethodUpdate.h"
 #include "ContextDestructionObserverInlines.h"
 #include "Document.h"
+#include "DocumentPage.h"
 #include "EventNames.h"
 #include "JSApplePayCouponCodeDetails.h"
 #include "JSApplePayError.h"
@@ -79,7 +80,7 @@
 
 namespace WebCore {
 
-static inline PaymentCoordinator& NODELETE paymentCoordinator(Document& document)
+static inline PaymentCoordinator& LEGACY_NODELETE paymentCoordinator(Document& document)
 {
     ASSERT(document.page());
     return document.page()->paymentCoordinator();
@@ -97,7 +98,7 @@ static ExceptionOr<ApplePayRequest> convertAndValidateApplePayRequest(Document& 
         return Exception { ExceptionCode::ExistingExceptionError };
     auto applePayRequest = applePayRequestConversion.releaseReturnValue();
 
-    auto validatedRequest = convertAndValidate(document, applePayRequest.version, applePayRequest, Ref { paymentCoordinator(document) }.get());
+    auto validatedRequest = convertAndValidate(document, applePayRequest.version, applePayRequest, protect(paymentCoordinator(document)).get());
     if (validatedRequest.hasException())
         return validatedRequest.releaseException();
 
@@ -167,7 +168,6 @@ static ExceptionOr<ApplePayLineItem> convertAndValidate(const PaymentItem& item,
     if (exception.hasException())
         return exception.releaseException();
 
-
     ApplePayLineItem lineItem;
     lineItem.amount = item.amount.value;
     lineItem.type = item.pending ? ApplePayLineItem::Type::Pending : ApplePayLineItem::Type::Final;
@@ -188,7 +188,7 @@ static ExceptionOr<Vector<ApplePayLineItem>> convertAndValidate(const Vector<Pay
     return { WTF::move(result) };
 }
 
-static ApplePaySessionPaymentRequest::ShippingType NODELETE convert(PaymentShippingType type)
+static ApplePaySessionPaymentRequest::ShippingType LEGACY_NODELETE convert(PaymentShippingType type)
 {
     switch (type) {
     case PaymentShippingType::Shipping:
@@ -226,7 +226,7 @@ ExceptionOr<void> ApplePayPaymentHandler::convertData(Document& document, JSC::J
     return { };
 }
 
-static void NODELETE mergePaymentOptions(const PaymentOptions& options, ApplePaySessionPaymentRequest& request)
+static void LEGACY_NODELETE mergePaymentOptions(const PaymentOptions& options, ApplePaySessionPaymentRequest& request)
 {
     auto requiredShippingContactFields = request.requiredShippingContactFields();
     requiredShippingContactFields.email |= options.requestPayerEmail;
@@ -994,7 +994,7 @@ template<typename T>
 static JSC::Strong<JSC::JSObject> toJSDictionary(JSC::JSGlobalObject& lexicalGlobalObject, const T& value)
 {
     JSC::JSLockHolder lock { &lexicalGlobalObject };
-    return { lexicalGlobalObject.vm(), asObject(toJS<IDLDictionary<T>>(lexicalGlobalObject, uncheckedDowncast<JSDOMGlobalObject>(lexicalGlobalObject), value)) };
+    return { lexicalGlobalObject.vm(), asObject(toJS<IDLDictionary<T>>(lexicalGlobalObject, downcast<JSDOMGlobalObject>(lexicalGlobalObject), value)) };
 }
 
 void ApplePayPaymentHandler::didAuthorizePayment(const Payment& payment)

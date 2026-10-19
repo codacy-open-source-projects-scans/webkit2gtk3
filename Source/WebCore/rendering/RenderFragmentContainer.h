@@ -47,13 +47,13 @@ class RenderFragmentContainer : public RenderBlockFlow {
     WTF_MAKE_TZONE_ALLOCATED(RenderFragmentContainer);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderFragmentContainer);
 public:
-    void styleDidChange(Style::Difference, const RenderStyle* oldStyle) override;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle* oldStyle) override;
 
     void setFragmentedFlowPortionRect(const LayoutRect& rect) { m_fragmentedFlowPortionRect = rect; }
     LayoutRect fragmentedFlowPortionRect() const { return m_fragmentedFlowPortionRect; }
     LayoutRect fragmentedFlowPortionOverflowRect() const;
 
-    LayoutPoint fragmentedFlowPortionLocation() const;
+    LayoutPoint LEGACY_NODELETE fragmentedFlowPortionLocation() const;
 
     virtual void attachFragment();
     virtual void detachFragment();
@@ -64,7 +64,7 @@ public:
     bool isValid() const { return m_isValid; }
     void setIsValid(bool valid) { m_isValid = valid; }
 
-    RenderBoxFragmentInfo* NODELETE renderBoxFragmentInfo(const RenderBox&) const;
+    RenderBoxFragmentInfo* LEGACY_NODELETE renderBoxFragmentInfo(const RenderBox&) const;
     RenderBoxFragmentInfo* setRenderBoxFragmentInfo(const RenderBox&, LayoutUnit logicalLeftInset, LayoutUnit logicalRightInset,
         bool containingBlockChainIsInset);
     std::unique_ptr<RenderBoxFragmentInfo> takeRenderBoxFragmentInfo(const RenderBox&);
@@ -74,7 +74,7 @@ public:
 
     bool isFirstFragment() const;
     bool isLastFragment() const;
-    virtual bool NODELETE shouldClipFragmentedFlowContent() const;
+    virtual bool LEGACY_NODELETE shouldClipFragmentedFlowContent() const;
 
     // These methods represent the width and height of a "page" and for a RenderFragmentContainer they are just the
     // content width and content height of a fragment. For RenderFragmentContainerSets, however, they will be the width and
@@ -82,8 +82,8 @@ public:
     virtual LayoutUnit pageLogicalWidth() const;
     virtual LayoutUnit pageLogicalHeight() const;
 
-    LayoutUnit NODELETE logicalTopOfFragmentedFlowContentRect(const LayoutRect&) const;
-    LayoutUnit NODELETE logicalBottomOfFragmentedFlowContentRect(const LayoutRect&) const;
+    LayoutUnit LEGACY_NODELETE logicalTopOfFragmentedFlowContentRect(const LayoutRect&) const;
+    LayoutUnit LEGACY_NODELETE logicalBottomOfFragmentedFlowContentRect(const LayoutRect&) const;
     LayoutUnit logicalTopForFragmentedFlowContent() const { return logicalTopOfFragmentedFlowContentRect(fragmentedFlowPortionRect()); };
     LayoutUnit logicalBottomForFragmentedFlowContent() const { return logicalBottomOfFragmentedFlowContentRect(fragmentedFlowPortionRect()); };
 
@@ -123,19 +123,19 @@ public:
     virtual bool contentRectSpansFragments(const LayoutRect&) const { return false; }
 
 protected:
-    RenderFragmentContainer(Type, Element&, RenderStyle&&, RenderFragmentedFlow*);
-    RenderFragmentContainer(Type, Document&, RenderStyle&&, RenderFragmentedFlow*);
+    RenderFragmentContainer(Type, Element&, Style::ComputedStyle&&, RenderFragmentedFlow*);
+    RenderFragmentContainer(Type, Document&, Style::ComputedStyle&&, RenderFragmentedFlow*);
     virtual ~RenderFragmentContainer();
 
     RenderOverflow* overflowForBox(const RenderBox&) const;
 
-    void computePreferredLogicalWidths() override;
-    void computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const override;
+    void computeIntrinsicLogicalWidthContributions() override;
+    std::pair<LayoutUnit, LayoutUnit> computeIntrinsicLogicalWidths() const override;
 
     LayoutRect overflowRectForFragmentedFlowPortion(const LayoutRect& fragmentedFlowPortionRect, bool isFirstPortion, bool isLastPortion) const;
     void repaintFragmentedFlowContentRectangle(const LayoutRect& repaintRect, const LayoutRect& fragmentedFlowPortionRect, const LayoutPoint& fragmentLocation, const LayoutRect* fragmentedFlowPortionClipRect = 0) const;
 
-    LayoutRect fragmentedFlowContentRectangle(const LayoutRect&, const LayoutRect& fragmentedFlowPortionRect, const LayoutPoint& fragmentLocation, const LayoutRect* fragmentedFlowPortionClipRect = 0) const;
+    LayoutRect LEGACY_NODELETE fragmentedFlowContentRectangle(const LayoutRect&, const LayoutRect& fragmentedFlowPortionRect, const LayoutPoint& fragmentLocation, const LayoutRect* fragmentedFlowPortionClipRect = 0) const;
 
 private:
     ASCIILiteral renderName() const override { return "RenderFragmentContainer"_s; }
@@ -143,9 +143,9 @@ private:
     void insertedIntoTree() override;
     void willBeRemovedFromTree() override;
 
-    virtual void NODELETE installFragmentedFlow();
+    virtual void LEGACY_NODELETE installFragmentedFlow();
 
-    LayoutPoint NODELETE mapFragmentPointIntoFragmentedFlowCoordinates(const LayoutPoint&);
+    LayoutPoint LEGACY_NODELETE mapFragmentPointIntoFragmentedFlowCoordinates(const LayoutPoint&);
     LayoutRect computedVisualOverflowRectForBox(const RenderBox&) const;
     LayoutRect computedLayoutOverflowRectForBox(const RenderBox&) const;
 

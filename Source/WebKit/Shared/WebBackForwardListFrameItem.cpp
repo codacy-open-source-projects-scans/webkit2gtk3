@@ -28,6 +28,8 @@
 
 #include "SessionState.h"
 #include "WebBackForwardListItem.h"
+#include "WebFrameProxy.h"
+#include <wtf/Borrow.h>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringBuilder.h>
@@ -98,6 +100,17 @@ WebBackForwardListFrameItem* WebBackForwardListFrameItem::childItemAtIndex(uint6
     return m_children[index].ptr();
 }
 
+WebBackForwardListFrameItem* WebBackForwardListFrameItem::childItemForFrameName(const String& frameName)
+{
+    if (frameName.isEmpty())
+        return nullptr;
+    for (auto& child : m_children) {
+        if (child->frameState().target == frameName)
+            return child.ptr();
+    }
+    return nullptr;
+}
+
 WebBackForwardListItem* WebBackForwardListFrameItem::backForwardListItem() const
 {
     return m_backForwardListItem.get();
@@ -109,11 +122,29 @@ void WebBackForwardListFrameItem::setChild(Ref<FrameState>&& frameState)
     Ref childItem = WebBackForwardListFrameItem::create(*protect(backForwardListItem()), this, WTF::move(frameState));
     for (size_t i = 0; i < m_children.size(); i++) {
         if (m_children[i]->frameID() == childItem->m_frameState->frameID) {
-            m_children[i] = WTF::move(childItem);
+            borrow(m_children)[i] = WTF::move(childItem);
             return;
         }
     }
-    m_children.append(WTF::move(childItem));
+    m_children.insert(insertionIndexForChild(childItem->frameID()), WTF::move(childItem));
+}
+
+size_t WebBackForwardListFrameItem::insertionIndexForChild(std::optional<WebCore::FrameIdentifier> frameID) const
+{
+    RefPtr frame = WebFrameProxy::webFrame(frameID);
+    RefPtr parentFrame = frame ? frame->parentFrame() : nullptr;
+    auto siblingIndex = frame ? frame->indexInFrameTreeSiblings() : std::nullopt;
+    if (!parentFrame || !siblingIndex)
+        return m_children.size();
+
+    for (size_t i = 0; i < m_children.size(); ++i) {
+        RefPtr siblingFrame = WebFrameProxy::webFrame(m_children[i]->frameID());
+        if (!siblingFrame || siblingFrame->parentFrame() != parentFrame)
+            continue;
+        if (auto index = siblingFrame->indexInFrameTreeSiblings(); index && *index > *siblingIndex)
+            return i;
+    }
+    return m_children.size();
 }
 
 Ref<WebBackForwardListFrameItem> WebBackForwardListFrameItem::rootFrame()
@@ -139,10 +170,9 @@ void WebBackForwardListFrameItem::setWasRestoredFromSession()
         child->setWasRestoredFromSession();
 }
 
-void WebBackForwardListFrameItem::setFrameState(Ref<FrameState>&& frameState)
+void WebBackForwardListFrameItem::updateFrameStatePayload(Ref<FrameState>&& frameState)
 {
-    m_frameState = WTF::move(frameState);
-    m_frameState->children.clear();
+    m_frameState->replacePayloadFrom(WTF::move(frameState));
 }
 
 void WebBackForwardListFrameItem::updateFrameID(FrameIdentifier newFrameID)
@@ -160,7 +190,7 @@ Ref<FrameState> WebBackForwardListFrameItem::copyFrameState()
 Ref<FrameState> WebBackForwardListFrameItem::copyFrameStateWithChildren()
 {
     Ref frameState = copyFrameState();
-    for (auto& child : m_children)
+    for (auto& child : borrow(m_children))
         frameState->children.append(child->copyFrameStateWithChildren());
     return frameState;
 }
@@ -200,6 +230,8 @@ String WebBackForwardListFrameItem::loggingStringAtIndent(size_t indent)
         if (m_frameState->wasCreatedByJSWithoutUserInteraction)
             builder.append(" (no user gesture)"_s);
         builder.append('\n');
+        builder.append(indentString);
+        builder.append("("_s, m_frameState->title, ")\n"_s);
     }
 
     for (size_t i = 0; i < m_children.size(); ++i) {

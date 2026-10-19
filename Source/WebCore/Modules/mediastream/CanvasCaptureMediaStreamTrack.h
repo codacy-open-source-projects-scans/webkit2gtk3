@@ -43,7 +43,6 @@ namespace WebCore {
 
 class Document;
 class HTMLCanvasElement;
-class Image;
 
 class CanvasCaptureMediaStreamTrack final : public MediaStreamTrack {
     WTF_MAKE_TZONE_ALLOCATED(CanvasCaptureMediaStreamTrack);
@@ -51,7 +50,7 @@ public:
     static Ref<CanvasCaptureMediaStreamTrack> create(Document&, Ref<HTMLCanvasElement>&&, std::optional<double>&& frameRequestRate);
 
     HTMLCanvasElement& canvas() { return m_canvas.get(); }
-    void requestFrame() { static_cast<Source&>(source()).requestFrame(); }
+    void LEGACY_NODELETE requestFrame();
 
     RefPtr<VideoFrame> grabFrame();
 
@@ -77,7 +76,7 @@ private:
         Source(HTMLCanvasElement&, std::optional<double>&&);
 
         // CanvasObserver overrides.
-        void canvasChanged(CanvasBase&, const FloatRect&) final;
+        void canvasContentsWillChange(CanvasBase&, const FloatRect&) final;
         void canvasResized(CanvasBase&) final;
         void canvasDestroyed(CanvasBase&) final;
 
@@ -92,7 +91,8 @@ private:
         void settingsDidChange(OptionSet<RealtimeMediaSourceSettings::Flag>) final;
         void scheduleCaptureCanvas();
         void captureCanvas();
-        void NODELETE requestFrameTimerFired();
+        void LEGACY_NODELETE requestFrameTimerFired();
+        CaptureDevice::DeviceType deviceType() const final { return CaptureDevice::DeviceType::Canvas; }
 
         bool m_shouldEmitFrame { true };
         std::optional<double> m_frameRequestRate;
@@ -100,7 +100,6 @@ private:
         Timer m_captureCanvasTimer;
         std::optional<RealtimeMediaSourceSettings> m_currentSettings;
         WeakPtr<HTMLCanvasElement, WeakPtrImplWithEventTargetData> m_canvas;
-        RefPtr<Image> m_currentImage;
 #if USE(GSTREAMER)
         GRefPtr<GstClock> m_clock;
 #endif
@@ -118,6 +117,10 @@ private:
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::CanvasCaptureMediaStreamTrack)
 static bool isType(const WebCore::MediaStreamTrack& track) { return track.isCanvas(); }
+SPECIALIZE_TYPE_TRAITS_END()
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::CanvasCaptureMediaStreamTrack::Source)
+static bool isType(const WebCore::RealtimeMediaSource& source) { return source.deviceType() == WebCore::CaptureDevice::DeviceType::Canvas; }
 SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // ENABLE(MEDIA_STREAM)

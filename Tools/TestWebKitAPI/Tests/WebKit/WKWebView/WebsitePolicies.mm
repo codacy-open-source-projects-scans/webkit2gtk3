@@ -836,6 +836,41 @@ TEST(WebpagePreferences, WebsitePoliciesAutoplayQuirks)
     [webView waitForMessage:@"playing"];
 }
 
+TEST(WebpagePreferences, WebsitePoliciesSynthesizedPauseEventFiresOnce)
+{
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+#if PLATFORM(IOS_FAMILY)
+    configuration.get().allowsInlineMediaPlayback = YES;
+    configuration.get()._inlineMediaPlaybackRequiresPlaysInlineAttribute = NO;
+#endif
+    [configuration preferences].siteSpecificQuirksModeEnabled = YES;
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+
+    RetainPtr delegate = adoptNS([[AutoplayPoliciesDelegate alloc] init]);
+    [webView setNavigationDelegate:delegate.get()];
+
+    [delegate setAllowedAutoplayQuirksForURL:^_WKWebsiteAutoplayQuirk(NSURL *) {
+        return _WKWebsiteAutoplayQuirkSynthesizedPauseEvents;
+    }];
+    [delegate setAutoplayPolicyForURL:^(NSURL *) {
+        return _WKWebsiteAutoplayPolicyDeny;
+    }];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSBundle.test_resourcesBundle URLForResource:@"autoplay-quirk-pause-fires-once" withExtension:@"html"]];
+    [webView loadRequest:request];
+
+    __block bool done = false;
+    __block RetainPtr<NSString> receivedMessage;
+    [webView performAfterReceivingAnyMessage:^(NSString *message) {
+        if ([message hasPrefix:@"pause-count:"]) {
+            receivedMessage = message;
+            done = true;
+        }
+    }];
+    TestWebKitAPI::Util::run(&done);
+    EXPECT_WK_STREQ(@"pause-count:1", receivedMessage.get());
+}
+
 TEST(WebpagePreferences, WebsitePoliciesPerDocumentAutoplayBehaviorQuirks)
 {
     auto* configuration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"WebProcessPlugInWithInternals" configureJSCForTesting:YES];
@@ -905,6 +940,43 @@ TEST(WebpagePreferences, WebsitePoliciesPerDocumentAutoplayBehaviorQuirks)
 
     [webView _evaluateJavaScriptWithoutUserGesture:@"playVideo('video3')" completionHandler:nil];
     [webView waitForMessage:@"did-not-play-video3"];
+}
+
+TEST(WebpagePreferences, WebsitePoliciesAutoplayQuirksDoNotStartAudiblePlaybackWhenHidden)
+{
+    for (_WKWebsiteAutoplayQuirk quirk : { _WKWebsiteAutoplayQuirkPerDocumentAutoplayBehavior, _WKWebsiteAutoplayQuirkInheritedUserGestures }) {
+        auto* configuration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"WebProcessPlugInWithInternals" configureJSCForTesting:YES];
+        configuration.preferences._needsSiteSpecificQuirks = YES;
+        RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration]);
+
+        RetainPtr delegate = adoptNS([[AutoplayPoliciesDelegate alloc] init]);
+        [webView setNavigationDelegate:delegate.get()];
+        [delegate setAllowedAutoplayQuirksForURL:^_WKWebsiteAutoplayQuirk(NSURL *) {
+            return quirk;
+        }];
+        [delegate setAutoplayPolicyForURL:^(NSURL *) {
+            return _WKWebsiteAutoplayPolicyDeny;
+        }];
+
+        [webView loadRequest:[NSURLRequest requestWithURL:[NSBundle.test_resourcesBundle URLForResource:@"autoplaying-multiple-media-elements" withExtension:@"html"]]];
+        [webView waitForMessage:@"loaded"];
+
+        const NSPoint playButtonClickPoint = NSMakePoint(20, 580);
+        [webView mouseDownAtPoint:playButtonClickPoint simulatePressure:NO];
+        [webView mouseUpAtPoint:playButtonClickPoint];
+        [webView waitForMessage:@"did-play-video1"];
+
+        [webView objectByEvaluatingJavaScript:@"for (const id of ['video1', 'video2']) window.internals.setMediaElementGracePeriodForResumingPlaybackInBackground(document.getElementById(id), 0); document.getElementById('video1').pause(); window.internals.consumeTransientActivation();"];
+
+        [webView setVisibility:NO];
+        EXPECT_TRUE([[webView objectByEvaluatingJavaScript:@"document.hidden"] boolValue]);
+
+        [webView _evaluateJavaScriptWithoutUserGesture:@"playVideo('video1')" completionHandler:nil];
+        [webView waitForMessage:@"did-not-play-video1"];
+
+        [webView _evaluateJavaScriptWithoutUserGesture:@"playVideo('video2')" completionHandler:nil];
+        [webView waitForMessage:@"did-not-play-video2"];
+    }
 }
 #endif
 
@@ -1929,7 +2001,7 @@ TEST(WebpagePreferences, HttpPageContentBlockers)
     };
 
     TestWebKitAPI::HTTPServer server({
-        { "/index.html"_s, { 
+        { "/index.html"_s, {
             R"INDEX(<script>
                 window.results = [];
                 window.addEventListener('message', function(event) {
@@ -2246,4 +2318,150 @@ TEST(WebpagePreferences, LoadHTMLString)
     [webView setNavigationDelegate:nil];
     [webView loadHTMLString:html baseURL:nil];
     EXPECT_WK_STREQ([webView _test_waitForAlert], "false");
+}
+
+TEST(WebpagePreferences, GlobalPrivacyControlNavigatorAPI)
+{
+    RetainPtr webView = adoptNS([TestWKWebView new]);
+    RetainPtr navigationDelegate = adoptNS([TestNavigationDelegate new]);
+
+    __block BOOL nextNavigationGPC = YES;
+    navigationDelegate.get().decidePolicyForNavigationActionWithPreferences = ^(WKNavigationAction *action, WKWebpagePreferences *preferences, void (^decisionHandler)(WKNavigationActionPolicy, WKWebpagePreferences *)) {
+        [preferences setGlobalPrivacyControlEnabled:nextNavigationGPC];
+        decisionHandler(WKNavigationActionPolicyAllow, preferences);
+    };
+    [webView setNavigationDelegate:navigationDelegate.get()];
+
+    NSString *html = @"<script>alert(String(navigator.globalPrivacyControl))</script>";
+    [webView loadHTMLString:html baseURL:nil];
+    EXPECT_WK_STREQ([webView _test_waitForAlert], "true");
+
+    nextNavigationGPC = NO;
+    [webView loadHTMLString:html baseURL:nil];
+    EXPECT_WK_STREQ([webView _test_waitForAlert], "false");
+}
+
+TEST(WebpagePreferences, GlobalPrivacyControlNavigatorAPINotSet)
+{
+    RetainPtr webView = adoptNS([TestWKWebView new]);
+    [webView loadHTMLString:@"<script>alert(String(navigator.globalPrivacyControl))</script>" baseURL:nil];
+    EXPECT_WK_STREQ([webView _test_waitForAlert], "undefined");
+}
+
+TEST(WebpagePreferences, GlobalPrivacyControlRequestHeader)
+{
+    using namespace TestWebKitAPI;
+
+    bool sawMainResourceRequest { false };
+    bool sawSubresourceRequest { false };
+    bool sawNoOverrideRequest { false };
+    HTTPServer server(HTTPServer::UseCoroutines::Yes, [&] (Connection connection) -> ConnectionTask { while (true) {
+        auto request = co_await connection.awaitableReceiveHTTPRequest();
+        auto path = HTTPServer::parsePath(request);
+        bool hasGPCHeader = !!strnstr(request.span().data(), "\r\nSec-GPC: 1\r\n", request.size());
+        if (path == "/main"_s) {
+            EXPECT_TRUE(hasGPCHeader);
+            sawMainResourceRequest = true;
+            co_await connection.awaitableSend(HTTPResponse("<script>fetch('/sub').then(() => {});</script>"_s).serialize());
+            continue;
+        }
+        if (path == "/sub"_s) {
+            EXPECT_TRUE(hasGPCHeader);
+            sawSubresourceRequest = true;
+            co_await connection.awaitableSend(HTTPResponse(""_s).serialize());
+            continue;
+        }
+        if (path == "/no-override"_s) {
+            EXPECT_FALSE(hasGPCHeader);
+            sawNoOverrideRequest = true;
+            co_await connection.awaitableSend(HTTPResponse(""_s).serialize());
+            continue;
+        }
+        EXPECT_FALSE(true);
+    } });
+
+    RetainPtr webView = adoptNS([TestWKWebView new]);
+    RetainPtr delegate = adoptNS([TestNavigationDelegate new]);
+    webView.get().navigationDelegate = delegate.get();
+
+    delegate.get().decidePolicyForNavigationActionWithPreferences = ^(WKNavigationAction *, WKWebpagePreferences *preferences, void (^completionHandler)(WKNavigationActionPolicy, WKWebpagePreferences *)) {
+        [preferences setGlobalPrivacyControlEnabled:YES];
+        completionHandler(WKNavigationActionPolicyAllow, preferences);
+    };
+    [webView loadRequest:server.requestWithLocalhost("/main"_s)];
+    Util::run(&sawSubresourceRequest);
+    EXPECT_TRUE(sawMainResourceRequest);
+
+    RetainPtr defaultWebView = adoptNS([TestWKWebView new]);
+    [defaultWebView loadRequest:server.requestWithLocalhost("/no-override"_s)];
+    Util::run(&sawNoOverrideRequest);
+}
+
+TEST(WebpagePreferences, GlobalPrivacyControlNavigatorAPIInSubframe)
+{
+    using namespace TestWebKitAPI;
+
+    HTTPServer server({
+        { "/main.html"_s, { "<iframe src='/sub.html'></iframe>"_s } },
+        { "/sub.html"_s, { "<script>alert(String(navigator.globalPrivacyControl))</script>"_s } },
+    }, HTTPServer::Protocol::Http);
+
+    RetainPtr webView = adoptNS([TestWKWebView new]);
+    RetainPtr delegate = adoptNS([TestNavigationDelegate new]);
+    delegate.get().decidePolicyForNavigationActionWithPreferences = ^(WKNavigationAction *action, WKWebpagePreferences *preferences, void (^completionHandler)(WKNavigationActionPolicy, WKWebpagePreferences *)) {
+        if (action.targetFrame.mainFrame)
+            [preferences setGlobalPrivacyControlEnabled:YES];
+        completionHandler(WKNavigationActionPolicyAllow, preferences);
+    };
+    [webView setNavigationDelegate:delegate.get()];
+
+    [webView loadRequest:server.requestWithLocalhost("/main.html"_s)];
+    EXPECT_WK_STREQ([webView _test_waitForAlert], "true");
+}
+
+TEST(WebpagePreferences, GlobalPrivacyControlRequestHeaderInSubframe)
+{
+    using namespace TestWebKitAPI;
+
+    bool sawMainResourceRequest { false };
+    bool sawSubframeMainResourceRequest { false };
+    bool sawSubframeSubresourceRequest { false };
+    HTTPServer server(HTTPServer::UseCoroutines::Yes, [&] (Connection connection) -> ConnectionTask { while (true) {
+        auto request = co_await connection.awaitableReceiveHTTPRequest();
+        auto path = HTTPServer::parsePath(request);
+        bool hasGPCHeader = !!strnstr(request.span().data(), "\r\nSec-GPC: 1\r\n", request.size());
+        if (path == "/main"_s) {
+            EXPECT_TRUE(hasGPCHeader);
+            sawMainResourceRequest = true;
+            co_await connection.awaitableSend(HTTPResponse("<iframe src='/subframe'></iframe>"_s).serialize());
+            continue;
+        }
+        if (path == "/subframe"_s) {
+            EXPECT_TRUE(hasGPCHeader);
+            sawSubframeMainResourceRequest = true;
+            co_await connection.awaitableSend(HTTPResponse("<script>fetch('/subframe-subresource').then(() => {});</script>"_s).serialize());
+            continue;
+        }
+        if (path == "/subframe-subresource"_s) {
+            EXPECT_TRUE(hasGPCHeader);
+            sawSubframeSubresourceRequest = true;
+            co_await connection.awaitableSend(HTTPResponse(""_s).serialize());
+            continue;
+        }
+        EXPECT_FALSE(true);
+    } });
+
+    RetainPtr webView = adoptNS([TestWKWebView new]);
+    RetainPtr delegate = adoptNS([TestNavigationDelegate new]);
+    webView.get().navigationDelegate = delegate.get();
+
+    delegate.get().decidePolicyForNavigationActionWithPreferences = ^(WKNavigationAction *action, WKWebpagePreferences *preferences, void (^completionHandler)(WKNavigationActionPolicy, WKWebpagePreferences *)) {
+        if (action.targetFrame.mainFrame)
+            [preferences setGlobalPrivacyControlEnabled:YES];
+        completionHandler(WKNavigationActionPolicyAllow, preferences);
+    };
+    [webView loadRequest:server.requestWithLocalhost("/main"_s)];
+    Util::run(&sawSubframeSubresourceRequest);
+    EXPECT_TRUE(sawMainResourceRequest);
+    EXPECT_TRUE(sawSubframeMainResourceRequest);
 }

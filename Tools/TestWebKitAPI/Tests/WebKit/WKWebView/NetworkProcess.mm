@@ -28,18 +28,21 @@
 #import "Helpers/cocoa/HTTPServer.h"
 #import "Helpers/PlatformUtilities.h"
 #import "Helpers/Test.h"
+#import "Helpers/cocoa/TestNavigationDelegate.h"
 #import "Helpers/cocoa/TestProtocol.h"
 #import "Helpers/cocoa/TestUIDelegate.h"
 #import "TestURLSchemeHandler.h"
 #import "Helpers/cocoa/TestWKWebView.h"
 #import "Helpers/Utilities.h"
 #import <WebKit/WKErrorPrivate.h>
+#import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKProcessPoolPrivate.h>
 #import <WebKit/WKScriptMessageHandler.h>
 #import <WebKit/WKWebViewPrivate.h>
 #import <WebKit/WKWebsiteDataStorePrivate.h>
 #import <WebKit/_WKDataTask.h>
 #import <WebKit/_WKDataTaskDelegate.h>
+#import <WebKit/_WKFeature.h>
 #import <WebKit/_WKWebsiteDataStoreConfiguration.h>
 #import <mach/mach_init.h>
 #import <mach/mach_port.h>
@@ -52,6 +55,7 @@
 #import <wtf/StdLibExtras.h>
 #import <wtf/UUID.h>
 #import <wtf/Vector.h>
+#import <wtf/cocoa/TypeCastsCocoa.h>
 #import <wtf/darwin/DispatchExtras.h>
 #import <wtf/text/MakeString.h>
 
@@ -78,7 +82,7 @@ TEST(WebKit, HTTPReferer)
             connection.receiveHTTPRequest([connection, expectedReferer, &done] (Vector<char>&& request) {
                 if (expectedReferer) {
                     auto expectedHeaderField = makeString("Referer: "_s, unsafeSpan(expectedReferer), "\r\n"_s);
-                    EXPECT_TRUE(contains(request.span(), expectedHeaderField.utf8().span()));
+                    EXPECT_TRUE(contains(request.span(), byteCast<uint8_t>(expectedHeaderField.utf8().span())));
                 } else
                     EXPECT_FALSE(contains(request.span(), "Referer:"_span));
                 done = true;
@@ -301,17 +305,17 @@ TEST(NetworkProcess, CORSPreflightCachePartitioned)
 }
 
 
-static Vector<RetainPtr<WKScriptMessage>> receivedMessagesVector;
-static bool receivedMessage = false;
+static Vector<RetainPtr<WKScriptMessage>> networkProcessReceivedMessagesVector;
+static bool networkProcessReceivedMessage = false;
 static RetainPtr<WKScriptMessage> waitAndGetNextMessage()
 {
-    if (receivedMessagesVector.isEmpty()) {
-        receivedMessage = false;
-        TestWebKitAPI::Util::run(&receivedMessage);
+    if (networkProcessReceivedMessagesVector.isEmpty()) {
+        networkProcessReceivedMessage = false;
+        TestWebKitAPI::Util::run(&networkProcessReceivedMessage);
     }
 
-    EXPECT_EQ(receivedMessagesVector.size(), 1U);
-    return receivedMessagesVector.takeLast();
+    EXPECT_EQ(networkProcessReceivedMessagesVector.size(), 1U);
+    return networkProcessReceivedMessagesVector.takeLast();
 }
 
 @interface NetworkProcessTestMessageHandler : NSObject <WKScriptMessageHandler>
@@ -320,8 +324,8 @@ static RetainPtr<WKScriptMessage> waitAndGetNextMessage()
 @implementation NetworkProcessTestMessageHandler
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message
 {
-    receivedMessagesVector.append(message);
-    receivedMessage = true;
+    networkProcessReceivedMessagesVector.append(message);
+    networkProcessReceivedMessage = true;
 }
 @end
 
@@ -355,8 +359,8 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     RetainPtr webView1 = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:webViewConfiguration.get()]);
     RetainPtr webView2 = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:webViewConfiguration.get()]);
 
-    receivedMessage = false;
-    receivedMessagesVector.clear();
+    networkProcessReceivedMessage = false;
+    networkProcessReceivedMessagesVector.clear();
 
     NSString *html = [NSString stringWithFormat:@"<script>let bc = new BroadcastChannel('test'); bc.onmessage = (msg) => { webkit.messageHandlers.test.postMessage(msg.data); };</script>"];
     NSURL *baseURL = [NSURL URLWithString:@"http://example.com/"];
@@ -373,12 +377,12 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     auto networkPID = [[WKWebsiteDataStore defaultDataStore] _networkProcessIdentifier];
     EXPECT_NE(networkPID, 0);
 
-    EXPECT_FALSE(receivedMessage);
-    EXPECT_TRUE(receivedMessagesVector.isEmpty());
+    EXPECT_FALSE(networkProcessReceivedMessage);
+    EXPECT_TRUE(networkProcessReceivedMessagesVector.isEmpty());
 
     // Test that initial communication from webView1 to webView2 works.
-    receivedMessage = false;
-    receivedMessagesVector.clear();
+    networkProcessReceivedMessage = false;
+    networkProcessReceivedMessagesVector.clear();
     bool finishedRunningScript = false;
     [webView1 evaluateJavaScript:@"bc.postMessage('foo')" completionHandler: [&] (id result, NSError *error) {
         EXPECT_TRUE(!error);
@@ -386,16 +390,16 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     }];
     TestWebKitAPI::Util::run(&finishedRunningScript);
 
-    TestWebKitAPI::Util::run(&receivedMessage);
+    TestWebKitAPI::Util::run(&networkProcessReceivedMessage);
     TestWebKitAPI::Util::spinRunLoop(10);
 
-    EXPECT_EQ(receivedMessagesVector.size(), 1U);
-    EXPECT_EQ([receivedMessagesVector[0] webView], webView2);
-    EXPECT_WK_STREQ([receivedMessagesVector[0] body], @"foo");
+    EXPECT_EQ(networkProcessReceivedMessagesVector.size(), 1U);
+    EXPECT_EQ([networkProcessReceivedMessagesVector[0] webView], webView2);
+    EXPECT_WK_STREQ([networkProcessReceivedMessagesVector[0] body], @"foo");
 
     // Test that initial communication from webView2 to webView1 works.
-    receivedMessage = false;
-    receivedMessagesVector.clear();
+    networkProcessReceivedMessage = false;
+    networkProcessReceivedMessagesVector.clear();
     finishedRunningScript = false;
     [webView2 evaluateJavaScript:@"bc.postMessage('bar')" completionHandler: [&] (id result, NSError *error) {
         EXPECT_TRUE(!error);
@@ -403,12 +407,12 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     }];
     TestWebKitAPI::Util::run(&finishedRunningScript);
 
-    TestWebKitAPI::Util::run(&receivedMessage);
+    TestWebKitAPI::Util::run(&networkProcessReceivedMessage);
     TestWebKitAPI::Util::spinRunLoop(10);
 
-    EXPECT_EQ(receivedMessagesVector.size(), 1U);
-    EXPECT_EQ([receivedMessagesVector[0] webView], webView1);
-    EXPECT_WK_STREQ([receivedMessagesVector[0] body], @"bar");
+    EXPECT_EQ(networkProcessReceivedMessagesVector.size(), 1U);
+    EXPECT_EQ([networkProcessReceivedMessagesVector[0] webView], webView1);
+    EXPECT_WK_STREQ([networkProcessReceivedMessagesVector[0] body], @"bar");
 
     // Kill the network process.
     kill(networkPID, 9);
@@ -418,8 +422,8 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     waitUntilNetworkProcessIsResponsive(webView1.get(), webView2.get());
 
     // Test that initial communication from webView1 to webView2 works.
-    receivedMessage = false;
-    receivedMessagesVector.clear();
+    networkProcessReceivedMessage = false;
+    networkProcessReceivedMessagesVector.clear();
     finishedRunningScript = false;
     [webView1 evaluateJavaScript:@"bc.postMessage('foo2')" completionHandler: [&] (id result, NSError *error) {
         EXPECT_TRUE(!error);
@@ -427,16 +431,16 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     }];
     TestWebKitAPI::Util::run(&finishedRunningScript);
 
-    TestWebKitAPI::Util::run(&receivedMessage);
+    TestWebKitAPI::Util::run(&networkProcessReceivedMessage);
     TestWebKitAPI::Util::spinRunLoop(10);
 
-    EXPECT_EQ(receivedMessagesVector.size(), 1U);
-    EXPECT_EQ([receivedMessagesVector[0] webView], webView2);
-    EXPECT_WK_STREQ([receivedMessagesVector[0] body], @"foo2");
+    EXPECT_EQ(networkProcessReceivedMessagesVector.size(), 1U);
+    EXPECT_EQ([networkProcessReceivedMessagesVector[0] webView], webView2);
+    EXPECT_WK_STREQ([networkProcessReceivedMessagesVector[0] body], @"foo2");
 
     // Test that initial communication from webView2 to webView1 works.
-    receivedMessage = false;
-    receivedMessagesVector.clear();
+    networkProcessReceivedMessage = false;
+    networkProcessReceivedMessagesVector.clear();
     finishedRunningScript = false;
     [webView2 evaluateJavaScript:@"bc.postMessage('bar2')" completionHandler: [&] (id result, NSError *error) {
         EXPECT_TRUE(!error);
@@ -444,12 +448,12 @@ TEST(NetworkProcess, BroadcastChannelCrashRecovery)
     }];
     TestWebKitAPI::Util::run(&finishedRunningScript);
 
-    TestWebKitAPI::Util::run(&receivedMessage);
+    TestWebKitAPI::Util::run(&networkProcessReceivedMessage);
     TestWebKitAPI::Util::spinRunLoop(10);
 
-    EXPECT_EQ(receivedMessagesVector.size(), 1U);
-    EXPECT_EQ([receivedMessagesVector[0] webView], webView1);
-    EXPECT_WK_STREQ([receivedMessagesVector[0] body], @"bar2");
+    EXPECT_EQ(networkProcessReceivedMessagesVector.size(), 1U);
+    EXPECT_EQ([networkProcessReceivedMessagesVector[0] webView], webView1);
+    EXPECT_WK_STREQ([networkProcessReceivedMessagesVector[0] body], @"bar2");
 
     auto networkPID2 = [[WKWebsiteDataStore defaultDataStore] _networkProcessIdentifier];
     EXPECT_NE(networkPID2, 0);
@@ -898,7 +902,7 @@ worker.onmessage = (event) => {
 </script>
 )TESTRESOURCE"_s;
 
-static constexpr auto workerBytes = R"TESTRESOURCE(
+static constexpr auto networkProcessWorkerBytes = R"TESTRESOURCE(
 caches.open("test").then(() => {
     self.postMessage('cache is opened');
 }, () => {
@@ -910,7 +914,7 @@ TEST(NetworkProcess, DoNotLaunchForDOMCacheDestruction)
 {
     TestWebKitAPI::HTTPServer server({
         { "/"_s, { mainBytes } },
-        { "/worker.js"_s, { { { "Content-Type"_s, "text/javascript"_s } }, workerBytes } }
+        { "/worker.js"_s, { { { "Content-Type"_s, "text/javascript"_s } }, networkProcessWorkerBytes } }
     });
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     [configuration.get().websiteDataStore _setResourceLoadStatisticsEnabled:NO];
@@ -971,3 +975,155 @@ TEST(NetworkProcess, URLSchemeHandlerWasPrivateRelayed)
 
     EXPECT_EQ(NO, [webView _wasPrivateRelayed]);
 }
+
+#if HAVE(NETWORK_RESOLUTION_FAILURE_REPORT) && USE(APPLE_INTERNAL_SDK)
+
+TEST(NetworkProcess, NavigationErrorIncludesNetworkResolutionReport)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600)]);
+    RetainPtr navigationDelegate = adoptNS([[TestNavigationDelegate alloc] init]);
+    [webView setNavigationDelegate:navigationDelegate];
+
+    // .invalid is guaranteed never to resolve (RFC 6761), so CFNetwork attaches a resolution report to the error.
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://doesnotexist.invalid/"]]];
+    RetainPtr error = [navigationDelegate waitForDidFailProvisionalNavigation];
+
+    EXPECT_WK_STREQ([error domain], NSURLErrorDomain);
+    EXPECT_EQ([error code], NSURLErrorCannotFindHost);
+
+    RetainPtr report = dynamic_objc_cast<NSDictionary>([[error userInfo] objectForKey:@"networkResolutionReport"]);
+    ASSERT_NOT_NULL(report);
+    EXPECT_TRUE([[report objectForKey:@"dnsFailureReason"] isKindOfClass:NSString.class]);
+    EXPECT_TRUE([[report objectForKey:@"provider"] isKindOfClass:NSString.class]);
+    EXPECT_TRUE([[report objectForKey:@"interfaces"] isKindOfClass:NSArray.class]);
+}
+
+#endif // HAVE(NETWORK_RESOLUTION_FAILURE_REPORT) && USE(APPLE_INTERNAL_SDK)
+
+#if ENABLE(IPC_TESTING_API)
+
+static bool attackerReceivedMessage = false;
+static bool attackerReady = false;
+static RetainPtr<NSString> interceptedMessageName;
+
+@interface BroadcastChannelSpoofMessageHandler : NSObject <WKScriptMessageHandler>
+@end
+
+@implementation BroadcastChannelSpoofMessageHandler
+- (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message
+{
+    NSString *body = [message body];
+    if ([body isEqualToString:@"ready"])
+        attackerReady = true;
+    else if ([body hasPrefix:@"INTERCEPTED:"]) {
+        interceptedMessageName = body;
+        attackerReceivedMessage = true;
+    }
+}
+@end
+
+static RetainPtr<WKWebViewConfiguration> createConfigurationWithIPCTestingAPI()
+{
+    auto configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    for (_WKFeature *feature in [WKPreferences _features]) {
+        if ([feature.key isEqualToString:@"IPCTestingAPIEnabled"]) {
+            [[configuration preferences] _setEnabled:YES forFeature:feature];
+            break;
+        }
+    }
+    return configuration;
+}
+
+static constexpr auto attackerHTML = R"IPCRESOURCE(
+<!DOCTYPE html><html><body>
+<script src='/coreipc.js'></script>
+<script>
+if (!window.IPC)
+    webkit.messageHandlers.test.postMessage('ready');
+else {
+    CoreIPC.Networking.NetworkBroadcastChannelRegistry.RegisterChannel(0, {
+        origin: {
+            topOrigin: {
+                data: {
+                    variantType: 'WebCore::SecurityOriginData::Tuple',
+                    variant: { protocol: 'http', host: 'victim.example', port: { } }
+                }
+            },
+            clientOrigin: {
+                data: {
+                    variantType: 'WebCore::SecurityOriginData::Tuple',
+                    variant: { protocol: 'http', host: 'victim.example', port: { } }
+                }
+            }
+        },
+        name: 'secret'
+    });
+
+    IPC.addIncomingMessageListener('Networking', (msg) => {
+        const postMsgName = IPC.messages.WebBroadcastChannelRegistry_PostMessageToRemote?.name;
+        if (postMsgName && msg.name === postMsgName)
+            webkit.messageHandlers.test.postMessage('INTERCEPTED:' + msg.name);
+    });
+
+    webkit.messageHandlers.test.postMessage('ready');
+}
+</script></body></html>"
+)IPCRESOURCE"_s;
+
+TEST(NetworkProcess, BroadcastChannelOriginSpoof)
+{
+    using namespace TestWebKitAPI;
+
+    attackerReceivedMessage = false;
+    attackerReady = false;
+    interceptedMessageName = nil;
+
+    // For the types involved in this attack, we need coreipc.js
+    NSURL *coreIPCURL = [NSBundle.test_resourcesBundle URLForResource:@"coreipc" withExtension:@"js"];
+    if (!coreIPCURL)
+        coreIPCURL = [NSBundle.mainBundle URLForResource:@"coreipc" withExtension:@"js"];
+    ASSERT_TRUE(coreIPCURL);
+    NSString *coreIPCJS = [NSString stringWithContentsOfURL:coreIPCURL encoding:NSUTF8StringEncoding error:nil];
+
+    HTTPServer server({
+        { "/attacker.html"_s, { attackerHTML } },
+        { "/coreipc.js"_s, { { { "Content-Type"_s, "text/javascript"_s } }, String(coreIPCJS) } },
+    });
+
+    auto configuration = createConfigurationWithIPCTestingAPI();
+
+    auto messageHandler = adoptNS([[BroadcastChannelSpoofMessageHandler alloc] init]);
+    [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"test"];
+
+    // The attacking page registers its connection to listen for broadcast channel messages
+    // that it otherwise should not receive.
+    auto attackerView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+    [attackerView loadRequest:server.request("/attacker.html"_s)];
+    Util::run(&attackerReady);
+
+    auto attackerPID = [attackerView _webProcessIdentifier];
+    EXPECT_NE(attackerPID, 0);
+
+    auto victimView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+    NSString *victimHTML = @"<script>let bc = new BroadcastChannel('secret');</script>";
+    [victimView synchronouslyLoadHTMLString:victimHTML baseURL:[NSURL URLWithString:@"http://victim.example/"]];
+
+    auto victimPID = [victimView _webProcessIdentifier];
+    EXPECT_NE(victimPID, 0);
+    EXPECT_NE(attackerPID, victimPID);
+
+    bool finishedRunningScript = false;
+    [victimView evaluateJavaScript:@"bc.postMessage('sensitive-data')" completionHandler:[&](id, NSError *error) {
+        EXPECT_TRUE(!error);
+        finishedRunningScript = true;
+    }];
+    Util::run(&finishedRunningScript);
+
+    // Wait for the attacker to receive the intercepted message.
+    // If it doesn't happen within a second, it probably never will.
+    Util::runFor(&attackerReceivedMessage, 1_s);
+
+    EXPECT_FALSE([interceptedMessageName hasPrefix:@"INTERCEPTED:"]);
+}
+
+#endif // ENABLE(IPC_TESTING_API)

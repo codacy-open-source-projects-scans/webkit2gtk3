@@ -114,8 +114,8 @@ static GstPadProbeReturn webkitMediaThunderParserSinkPadProbe(GstPad*, GstPadPro
         return GST_PAD_PROBE_OK;
 
     auto self = WEBKIT_MEDIA_THUNDER_PARSER(userData);
-    auto parserSinkPad = adoptGRef(gst_element_get_static_pad(self->priv->parser.get(), "sink"));
-    auto caps = adoptGRef(gst_pad_get_current_caps(parserSinkPad.get()));
+    GRefPtr parserSinkPad = adoptGRef(gst_element_get_static_pad(self->priv->parser.get(), "sink"));
+    GRefPtr caps = adoptGRef(gst_pad_get_current_caps(parserSinkPad.get()));
     GstCaps* newCaps;
     gst_event_parse_caps(event, &newCaps);
 
@@ -135,12 +135,27 @@ static GstPadProbeReturn webkitMediaThunderParserSinkPadProbe(GstPad*, GstPadPro
     return GST_PAD_PROBE_OK;
 }
 
+// parsebin sorts autoplug candidates parsers-first (gst_playback_utils_compare_factories_func, private to
+// gst-plugins-base) so a parser is always plugged before a decoder. Sorting by rank alone lets a decoder
+// outrank its parser.
+static gint compareParserAndDecoderFactories(gconstpointer a, gconstpointer b)
+{
+    bool isParserA = gst_element_factory_list_is_type(static_cast<GstElementFactory*>(const_cast<gpointer>(a)), GST_ELEMENT_FACTORY_TYPE_PARSER);
+    bool isParserB = gst_element_factory_list_is_type(static_cast<GstElementFactory*>(const_cast<gpointer>(b)), GST_ELEMENT_FACTORY_TYPE_PARSER);
+    if (isParserA != isParserB)
+        return isParserA ? -1 : 1;
+    return gst_plugin_feature_rank_compare_func(a, b);
+}
+
 static void webkitMediaThunderParserConstructed(GObject* object)
 {
     G_OBJECT_CLASS(webkit_media_thunder_parser_parent_class)->constructed(object);
 
     auto self = WEBKIT_MEDIA_THUNDER_PARSER(object);
-    self->priv->parser = makeGStreamerElement("parsebin"_s, "inner-parser"_s);
+
+    static Atomic<uint32_t> nParsers = 0;
+    auto name = makeString("inner-parser-"_s, nParsers.exchangeAdd(1));
+    self->priv->parser = makeGStreamerElement("parsebin"_s, name);
 
     auto factories = gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_DECRYPTOR, GST_RANK_MARGINAL);
     factories = g_list_sort(factories, gst_plugin_feature_rank_compare_func);
@@ -168,6 +183,7 @@ static void webkitMediaThunderParserConstructed(GObject* object)
         GValueArray* result;
 
         auto factories = gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_DECODABLE, GST_RANK_MARGINAL);
+        factories = g_list_sort(factories, compareParserAndDecoderFactories);
         auto list = gst_element_factory_list_filter(factories, caps, GST_PAD_SINK, gst_caps_is_fixed(caps));
         result = g_value_array_new(g_list_length(list));
         for (GList* tmp = list; tmp; tmp = tmp->next) {
@@ -203,7 +219,7 @@ static void webkitMediaThunderParserConstructed(GObject* object)
             gst_ghost_pad_set_target(GST_GHOST_PAD_CAST(self->priv->srcPad.get()), pad);
     }), self);
 
-    auto decryptorSinkPad = adoptGRef(gst_element_get_static_pad(self->priv->decryptor.get(), "sink"));
+    GRefPtr decryptorSinkPad = adoptGRef(gst_element_get_static_pad(self->priv->decryptor.get(), "sink"));
     auto* ghostSink = gst_ghost_pad_new("sink", decryptorSinkPad.get());
     gst_pad_add_probe(ghostSink, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, webkitMediaThunderParserSinkPadProbe, self, nullptr);
 
@@ -213,19 +229,19 @@ static void webkitMediaThunderParserConstructed(GObject* object)
 
 static void tryInsertCencparser(WebKitMediaThunderParser* self)
 {
-    auto cencparserFactory = adoptGRef(gst_element_factory_find("cencparser"));
+    GRefPtr cencparserFactory = adoptGRef(gst_element_factory_find("cencparser"));
     if (!cencparserFactory)
         return;
 
-    auto sinkPad = adoptGRef(gst_element_get_static_pad(GST_ELEMENT(self), "sink"));
-    auto peerPad = adoptGRef(gst_pad_get_peer(sinkPad.get()));
+    GRefPtr sinkPad = adoptGRef(gst_element_get_static_pad(GST_ELEMENT(self), "sink"));
+    GRefPtr peerPad = adoptGRef(gst_pad_get_peer(sinkPad.get()));
     if (!peerPad) [[unlikely]] {
         GST_WARNING_OBJECT(self, "Couldn't find peer pad.");
         ASSERT_NOT_REACHED();
         return;
     }
 
-    auto peerCaps = adoptGRef(gst_pad_get_current_caps(peerPad.get()));
+    GRefPtr peerCaps = adoptGRef(gst_pad_get_current_caps(peerPad.get()));
     if (!peerCaps) {
         peerCaps = adoptGRef(gst_pad_query_caps(peerPad.get(), nullptr));
         if (!peerCaps) {
@@ -248,8 +264,8 @@ static void tryInsertCencparser(WebKitMediaThunderParser* self)
     }
 
     // Sanity check.
-    auto currentSinkPadTarget = adoptGRef(gst_ghost_pad_get_target(GST_GHOST_PAD(sinkPad.get())));
-    auto currentSinkPadTargetParent = adoptGRef(gst_pad_get_parent_element(currentSinkPadTarget.get()));
+    GRefPtr currentSinkPadTarget = adoptGRef(gst_ghost_pad_get_target(GST_GHOST_PAD(sinkPad.get())));
+    GRefPtr currentSinkPadTargetParent = adoptGRef(gst_pad_get_parent_element(currentSinkPadTarget.get()));
     if (gst_element_get_factory(currentSinkPadTargetParent.get()) == cencparserFactory) {
         GST_DEBUG_OBJECT(self, "Cencparser is already inserted.");
         return;
@@ -272,7 +288,7 @@ static void tryInsertCencparser(WebKitMediaThunderParser* self)
     // This empty result causes capsfilter linking to fail inside cencparser.
     // Workaround: intercept cencparser's caps query and append the media types
     // that cencparser expects.
-    auto decryptorSinkPad = adoptGRef(gst_element_get_static_pad(self->priv->decryptor.get(), "sink"));
+    GRefPtr decryptorSinkPad = adoptGRef(gst_element_get_static_pad(self->priv->decryptor.get(), "sink"));
     gst_pad_add_probe(
         decryptorSinkPad.get(),
         static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_PULL | GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM),

@@ -39,6 +39,7 @@
 #include "ScriptController.h"
 #include "SecurityOrigin.h"
 #include "runtime_root.h"
+#include <JavaScriptCore/JSGlobalObjectInlines.h>
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/StrongInlines.h>
 #include <JavaScriptCore/WeakGCMapInlines.h>
@@ -151,11 +152,11 @@ JSWindowProxy& WindowProxy::createJSWindowProxy(DOMWrapperWorld& world)
     ASSERT(m_frame);
 
     ASSERT(!m_jsWindowProxies.contains(&world));
-    ASSERT(m_frame->window());
+    ASSERT(protect(m_frame)->window());
 
     VM& vm = world.vm();
 
-    Strong<JSWindowProxy> jsWindowProxy(vm, &JSWindowProxy::create(vm, *protect(m_frame->window()).get(), world));
+    Strong<JSWindowProxy> jsWindowProxy(vm, &JSWindowProxy::create(vm, *protect(protect(m_frame)->window()).get(), world));
     m_jsWindowProxies.add(world, jsWindowProxy);
     world.didCreateWindowProxy(this);
 
@@ -233,13 +234,14 @@ void WindowProxy::setDOMWindow(DOMWindow* newDOMWindow)
 
 #if ENABLE(WEBDRIVER_BIDI)
         // Navigations reuse the JSWindowProxy with a new DOMWindow, which means a new realm.
-        if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame.get())) {
-            AutomationInstrumentation::scriptRealmDestroyed(localFrame->frameID(), windowProxy->world());
-            AutomationInstrumentation::scriptRealmCreated(localFrame->frameID(), resolveOriginForRealm(*localFrame), windowProxy->world());
+        if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame)) {
+            Ref world = windowProxy->world();
+            AutomationInstrumentation::scriptRealmDestroyed(localFrame->frameID(), world);
+            AutomationInstrumentation::scriptRealmCreated(localFrame->frameID(), resolveOriginForRealm(*localFrame), world);
         }
 #endif
 
-        if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame.get())) {
+        if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame)) {
             CheckedRef scriptController = localFrame->script();
 
             // ScriptController's m_cacheableBindingRootObject persists between page navigations

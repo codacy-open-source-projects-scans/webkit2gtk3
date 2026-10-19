@@ -35,7 +35,6 @@
 #include "NodeDocument.h"
 #include "NodeList.h"
 #include "NodeRareData.h"
-#include "NodeInlines.h"
 #include "Text.h"
 #include <wtf/TZoneMallocInlines.h>
 
@@ -63,7 +62,7 @@ Ref<HTMLTableRowElement> HTMLTableRowElement::create(const QualifiedName& tagNam
 
 HTMLTableRowElement::~HTMLTableRowElement() = default;
 
-static inline RefPtr<HTMLTableElement> NODELETE findTable(const HTMLTableRowElement& row)
+static inline RefPtr<HTMLTableElement> LEGACY_NODELETE findTable(const HTMLTableRowElement& row)
 {
     auto* parent = row.parentNode();
     if (auto* table = dynamicDowncast<HTMLTableElement>(parent))

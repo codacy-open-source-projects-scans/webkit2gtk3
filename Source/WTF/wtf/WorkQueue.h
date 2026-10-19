@@ -30,7 +30,9 @@
 #include <wtf/Forward.h>
 #include <wtf/FunctionDispatcher.h>
 #include <wtf/Seconds.h>
-#include <wtf/Threading.h>
+#include <wtf/ThreadAssertions.h>
+#include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/ThreadingEnums.h>
 
 #if USE(COCOA_EVENT_LOOP)
 #include <wtf/darwin/DispatchOSObject.h>
@@ -42,7 +44,7 @@ namespace WTF {
 
 class WorkQueueBase : protected ThreadLike {
 public:
-    using QOS = Thread::QOS;
+    using QOS = ThreadQOS;
 
     WTF_EXPORT_PRIVATE virtual ~WorkQueueBase();
 
@@ -78,7 +80,7 @@ protected:
     uint32_t m_threadID { 0 };
 private:
     void platformInitialize(ASCIILiteral name, Type, QOS);
-    void NODELETE platformInvalidate();
+    void LEGACY_NODELETE platformInvalidate();
 };
 
 /**
@@ -91,11 +93,12 @@ private:
 class WTF_CAPABILITY("is current") WTF_EXPORT_PRIVATE WorkQueue : public WorkQueueBase, public GuaranteedSerialFunctionDispatcher {
 public:
     static WorkQueue& mainSingleton();
-    static Ref<WorkQueue> create(ASCIILiteral name, QOS = QOS::Default);
+    static Ref<WorkQueue> LEGACY_NODELETE create(ASCIILiteral name, QOS = QOS::Default);
 
 
     // WorkQueueBase
     void dispatch(Function<void()>&&) override;
+    void dispatchAfter(Seconds, Function<void()>&&) override;
     bool isCurrent() const override;
     void ref() const override { GuaranteedSerialFunctionDispatcher::ref(); }
     void deref() const override { GuaranteedSerialFunctionDispatcher::deref(); }
@@ -119,7 +122,7 @@ private:
  */
 class WTF_EXPORT_PRIVATE ConcurrentWorkQueue final : public WorkQueueBase, public FunctionDispatcher, public ThreadSafeRefCounted<ConcurrentWorkQueue> {
 public:
-    static Ref<ConcurrentWorkQueue> create(ASCIILiteral name, QOS = QOS::Default);
+    static Ref<ConcurrentWorkQueue> LEGACY_NODELETE create(ASCIILiteral name, QOS = QOS::Default);
     static void apply(size_t iterations, WTF::Function<void(size_t index)>&&);
     void dispatch(Function<void()>&&) override;
 

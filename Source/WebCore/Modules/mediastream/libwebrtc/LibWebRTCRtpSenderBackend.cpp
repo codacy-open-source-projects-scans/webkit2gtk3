@@ -111,6 +111,14 @@ bool LibWebRTCRtpSenderBackend::replaceTrack(RTCRtpSender& sender, MediaStreamTr
     }
 
     if (sender.track()) {
+        if (auto rtcTrack = protect(m_rtcSender)->track()) {
+            if (rtcTrack->kind() == webrtc::MediaStreamTrackInterface::kVideoKind) {
+                // This is a cast from a webrtc type, not much we can do to make it safe.
+                SUPPRESS_MEMORY_UNSAFE_CAST webrtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack { static_cast<webrtc::VideoTrackInterface*>(rtcTrack.get()) };
+                videoTrack->set_content_hint(toWebRTCContentHint(track->privateTrack().contentHint()));
+            }
+        }
+
         switchOn(m_source, [&](Ref<RealtimeOutgoingAudioSource>& source) {
             ASSERT(track->source().type() == RealtimeMediaSource::Type::Audio);
             source->stop();
@@ -139,7 +147,7 @@ RTCRtpSendParameters LibWebRTCRtpSenderBackend::getParameters() const
     return toRTCRtpSendParameters(*m_currentParameters, m_rtcSender->media_type() == webrtc::MediaType::AUDIO);
 }
 
-static bool NODELETE validateModifiedParameters(const RTCRtpSendParameters& newParameters, const RTCRtpSendParameters& oldParameters)
+static bool LEGACY_NODELETE validateModifiedParameters(const RTCRtpSendParameters& newParameters, const RTCRtpSendParameters& oldParameters)
 {
     if (oldParameters.transactionId != newParameters.transactionId)
         return false;
@@ -238,7 +246,7 @@ void LibWebRTCRtpSenderBackend::setMediaStreamIds(const FixedVector<String>& str
 {
     std::vector<std::string> ids;
     for (auto& id : streamIds)
-        ids.push_back(id.utf8().data());
+        ids.push_back(id.utf8().toStdString());
     m_rtcSender->SetStreams(ids);
 }
 

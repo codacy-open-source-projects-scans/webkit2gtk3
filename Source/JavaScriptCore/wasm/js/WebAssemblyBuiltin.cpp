@@ -159,17 +159,19 @@ bool WebAssemblyArrayMutI16TypeExpectation::isValid(const Wasm::Type& type) cons
 {
     if (!type.isRefNull())
         return false;
-    Ref<const Wasm::TypeDefinition> referentType = Wasm::TypeInformation::get(type.index);
-    if (!referentType->is<Wasm::ArrayType>())
+    RefPtr referentRTT = Wasm::TypeInformation::tryGetRTT(type.index());
+    if (!referentRTT || referentRTT->kind() != Wasm::RTTKind::Array)
         return false;
-    Wasm::FieldType elementType = referentType->as<Wasm::ArrayType>()->elementType();
+    Wasm::FieldType elementType = referentRTT->elementType();
     return elementType.mutability == Wasm::Mutability::Mutable
         && elementType.type.is<Wasm::PackedType>()
         && elementType.type.as<Wasm::PackedType>() == Wasm::PackedType::I16;
 }
 
-bool WebAssemblyBuiltinSignature::isValid(const Wasm::FunctionSignature& sig) const
+bool WebAssemblyBuiltinSignature::isValid(const Wasm::RTT& sig) const
 {
+    if (sig.kind() != Wasm::RTTKind::Function)
+        return false;
     if (sig.returnCount() != m_results.size() || sig.argumentCount() != m_params.size())
         return false;
     for (unsigned i = 0; i < sig.returnCount(); ++i) {
@@ -562,15 +564,10 @@ DEFINE_BUILTIN_IMPLEMENTATION_I32(jsstring, intoCharCodeArray, JSGlobalObject* g
 
     auto data = array->span<char16_t>();
     auto dest = data.subspan(start, stringLength);
-    auto stringValue = string->value(globalObject);
+    auto view = string->view(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
 
-    if (stringValue.data.is8Bit()) {
-        for (size_t i = 0; i < stringLength; ++i)
-            dest[i] = stringValue.data[i];
-    } else {
-        auto source = stringValue.data.span<char16_t>();
-        memcpySpan(dest, source);
-    }
+    view->getCharacters(dest);
 
     return toUCPUStrictInt32(stringLength);
 }

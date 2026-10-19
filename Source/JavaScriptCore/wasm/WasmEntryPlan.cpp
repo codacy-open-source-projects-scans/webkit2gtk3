@@ -122,10 +122,6 @@ void EntryPlan::prepare()
         return;
     if (!tryReserveCapacity(m_wasmToJSExitStubs, importFunctionCount, " WebAssembly to JavaScript stubs"_s))
         return;
-    if (!tryReserveCapacity(m_unlinkedWasmToWasmCalls, functions.size(), " unlinked WebAssembly to WebAssembly calls"_s))
-        return;
-
-    m_unlinkedWasmToWasmCalls.resize(functions.size());
 
     for (const auto& exp : m_moduleInformation->exports) {
         if (exp.kindIndex >= importFunctionCount)
@@ -229,10 +225,10 @@ void EntryPlan::compileFunctions()
     for (uint32_t index = functionIndex; index < functionIndexEnd; ++index)
         compileFunction(FunctionCodeIndex(index));
 
-    if (m_moduleInformation->m_usesModernExceptions.loadRelaxed() && m_moduleInformation->m_usesLegacyExceptions.loadRelaxed()) {
+    {
         Locker locker { m_lock };
-        fail(makeString("Module uses both legacy exceptions and try_table"_s));
-        return;
+        if (failIfMixedExceptionHandlingProposals())
+            return;
     }
 
     if (!areWasmToWasmStubsCompiled) {
@@ -265,6 +261,24 @@ void EntryPlan::complete()
         moveToState(State::Completed);
         runCompletionTasks();
     }
+}
+
+bool EntryPlan::failIfMixedExceptionHandlingProposals()
+{
+    if (m_moduleInformation->m_usesModernExceptions.loadRelaxed()
+        && m_moduleInformation->m_usesLegacyExceptions.loadRelaxed()) {
+        fail(makeString("Module uses both legacy exceptions and try_table"_s));
+        return true;
+    }
+    return false;
+}
+
+void EntryPlan::failFunctionCompilation(FunctionCodeIndex functionIndex, String&& errorMessage, CompilationError error)
+{
+    failAtFunction(functionIndex, WTF::move(errorMessage), error);
+    m_currentIndex = m_numberOfFunctions;
+    if (hasWork())
+        moveToState(State::Compiled);
 }
 
 bool EntryPlan::completeSyncIfPossible()

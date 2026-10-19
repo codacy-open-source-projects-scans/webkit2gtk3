@@ -136,7 +136,7 @@ ExceptionOr<Ref<ReadableStream>> ReadableStream::create(JSDOMGlobalObject& globa
 
 ExceptionOr<Ref<ReadableStream>> ReadableStream::createFromJSValues(JSC::JSGlobalObject& globalObject, JSC::JSValue underlyingSource, JSC::JSValue strategy, std::optional<double> highWaterMark)
 {
-    auto& jsDOMGlobalObject = uncheckedDowncast<JSDOMGlobalObject>(globalObject);
+    auto& jsDOMGlobalObject = downcast<JSDOMGlobalObject>(globalObject);
     RefPtr protectedContext { jsDOMGlobalObject.scriptExecutionContext() };
     auto result = InternalReadableStream::createFromUnderlyingSource(jsDOMGlobalObject, underlyingSource, strategy, highWaterMark);
     if (result.hasException())
@@ -160,11 +160,6 @@ ExceptionOr<Ref<ReadableStream>> ReadableStream::createFromByteUnderlyingSource(
     return { WTF::move(readableStream) };
 }
 
-ExceptionOr<Ref<InternalReadableStream>> ReadableStream::createInternalReadableStream(JSDOMGlobalObject& globalObject, Ref<ReadableStreamSource>&& source)
-{
-    return InternalReadableStream::createFromUnderlyingSource(globalObject, toJSNewlyCreated(&globalObject, &globalObject, WTF::move(source)), JSC::jsUndefined(), { });
-}
-
 ExceptionOr<Ref<ReadableStream>> ReadableStream::create(JSDOMGlobalObject& globalObject, Ref<ReadableStreamSource>&& source, std::optional<double> highWaterMark)
 {
     return createFromJSValues(globalObject, toJSNewlyCreated(&globalObject, &globalObject, WTF::move(source)), JSC::jsUndefined(), highWaterMark);
@@ -181,9 +176,9 @@ Ref<ReadableStream> ReadableStream::create(Ref<InternalReadableStream>&& interna
 
 class AsyncIteratorSource : public ReadableStreamSource, public RefCountedAndCanMakeWeakPtr<AsyncIteratorSource> {
 public:
-    static Ref<AsyncIteratorSource> create(Ref<DOMAsyncIterator>&& iterator) { return adoptRef(*new AsyncIteratorSource(WTF::move(iterator))); }
+    static Ref<AsyncIteratorSource> LEGACY_NODELETE create(Ref<DOMAsyncIterator>&& iterator) { return adoptRef(*new AsyncIteratorSource(WTF::move(iterator))); }
 
-    void NODELETE ref() const { return RefCounted::ref(); }
+    void LEGACY_NODELETE ref() const { return RefCounted::ref(); }
     void deref() const { return RefCounted::deref(); }
 
 private:
@@ -192,8 +187,8 @@ private:
     {
     }
 
-    void NODELETE setActive() final { }
-    void NODELETE setInactive() final { }
+    void LEGACY_NODELETE setActive() final { }
+    void LEGACY_NODELETE setInactive() final { }
 
     void doStart() final { startFinished(); }
 
@@ -201,7 +196,7 @@ private:
     {
         m_iterator->callNext([weakThis = WeakPtr { *this }](auto* globalObject, bool isOK, auto value) {
             RefPtr protectedThis = weakThis.get();
-            if (!protectedThis || !globalObject)
+            if (!protectedThis || !globalObject || protectedThis->m_isCancelled)
                 return;
 
             if (!isOK) {
@@ -225,6 +220,7 @@ private:
 
     void doCancel(JSC::JSValue reason) final
     {
+        m_isCancelled = true;
         m_iterator->callReturn(reason, [weakThis = WeakPtr { *this }](auto* globalObject, bool isOK, auto value) {
             RefPtr protectedThis = weakThis.get();
             if (!protectedThis || !globalObject)
@@ -242,6 +238,7 @@ private:
     }
 
     const Ref<DOMAsyncIterator> m_iterator;
+    bool m_isCancelled { false };
 };
 
 ExceptionOr<Ref<ReadableStream>> ReadableStream::from(JSDOMGlobalObject& globalObject, JSC::JSValue iterable)
@@ -358,7 +355,7 @@ void ReadableStream::cancel(Exception&& exception)
     }
 
     RefPtr context = scriptExecutionContext();
-    auto* globalObject = context ? uncheckedDowncast<JSDOMGlobalObject>(context->globalObject()): nullptr;
+    auto* globalObject = context ? downcast<JSDOMGlobalObject>(context->globalObject()): nullptr;
     if (!globalObject)
         return;
 
@@ -529,12 +526,12 @@ Ref<DOMPromise> ReadableStream::cancel(JSDOMGlobalObject& globalObject, JSC::JSV
 
     if (RefPtr internalStream = m_internalReadableStream) {
         auto result = internalStream->cancel(globalObject, reason);
-        if (!result) {
-            deferred->reject(Exception { ExceptionCode::ExistingExceptionError });
+        if (result.hasException()) {
+            deferred->reject(result.releaseException());
             return promise;
         }
 
-        auto* jsPromise = uncheckedDowncast<JSC::JSPromise>(result);
+        auto* jsPromise = dynamicDowncast<JSC::JSPromise>(result.releaseReturnValue());
         if (!jsPromise)
             return promise;
 
@@ -693,7 +690,7 @@ void ReadableStream::teedBranchIsDestroyed(ReadableStream& teedBranch)
 JSDOMGlobalObject* ReadableStream::globalObject()
 {
     RefPtr context = scriptExecutionContext();
-    return context ? uncheckedDowncast<JSDOMGlobalObject>(context->globalObject()) : nullptr;
+    return context ? downcast<JSDOMGlobalObject>(context->globalObject()) : nullptr;
 }
 
 bool ReadableStream::isPulling() const
@@ -721,7 +718,7 @@ ReadableStream::Iterator::~Iterator() = default;
 
 class ReadableStreamIteratorReadRequest : public ReadableStreamReadRequest {
 public:
-    static Ref<ReadableStreamIteratorReadRequest> create(ReadableStreamDefaultReader& reader, Ref<DeferredPromise>&& promise) { return adoptRef(*new ReadableStreamIteratorReadRequest(reader,  WTF::move(promise))); }
+    static Ref<ReadableStreamIteratorReadRequest> LEGACY_NODELETE create(ReadableStreamDefaultReader& reader, Ref<DeferredPromise>&& promise) { return adoptRef(*new ReadableStreamIteratorReadRequest(reader,  WTF::move(promise))); }
 
     ~ReadableStreamIteratorReadRequest() = default;
 
@@ -782,7 +779,7 @@ Ref<DOMPromise> ReadableStream::Iterator::next(JSDOMGlobalObject& globalObject)
     return promise;
 }
 
-bool ReadableStream::Iterator::isFinished() const
+SUPPRESS_NODELETE bool ReadableStream::Iterator::isFinished() const
 {
     return !m_reader->stream();
 }
@@ -809,8 +806,11 @@ Ref<DOMPromise> ReadableStream::Iterator::returnSteps(JSDOMGlobalObject& globalO
 // https://streams.spec.whatwg.org/#rs-asynciterator
 ExceptionOr<Ref<ReadableStream::Iterator>> ReadableStream::createIterator(ScriptExecutionContext* context, std::optional<IteratorOptions>&& options)
 {
-    auto& globalObject = *uncheckedDowncast<JSDOMGlobalObject>(context->globalObject());
-    auto readerOrException = ReadableStreamDefaultReader::create(globalObject, *this);
+    auto* globalObject = context ? downcast<JSDOMGlobalObject>(context->globalObject()) : nullptr;
+    if (!globalObject)
+        return Exception { ExceptionCode::InvalidStateError, "Context is detached"_s };
+
+    auto readerOrException = ReadableStreamDefaultReader::create(*globalObject, *this);
     if (readerOrException.hasException())
         return readerOrException.releaseException();
 

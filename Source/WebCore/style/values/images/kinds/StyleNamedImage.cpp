@@ -29,13 +29,21 @@
 #include "StyleNamedImage.h"
 
 #include "CSSNamedImageValue.h"
-#include "NamedImageGeneratedImage.h"
+#include "DeprecatedCSSOMValue.h"
+#include "GraphicsContext.h"
+#include "ImageBuffer.h"
+#include "RenderElement.h"
+#include "Theme.h"
+
+#if ENABLE(AX_CUSTOM_COLOR_MODE)
+#include <WebKitAdditions/AXCustomColorModeController.h>
+#endif
 
 namespace WebCore {
 namespace Style {
 
 NamedImage::NamedImage(CustomIdent&& name)
-    : GeneratedImage { Type::NamedImage, NamedImage::isFixedSize }
+    : GeneratedImage { Type::NamedImage }
     , m_name { WTF::move(name) }
 {
 }
@@ -53,9 +61,14 @@ bool NamedImage::equals(const NamedImage& other) const
     return m_name == other.m_name;
 }
 
-Ref<CSSValue> NamedImage::computedStyleValue(const RenderStyle& style) const
+Ref<CSSValue> NamedImage::computedStyleValue(const Style::ComputedStyle& style) const
 {
     return CSSNamedImageValue::create(toCSS(m_name, style));
+}
+
+Ref<DeprecatedCSSOMValue> NamedImage::computedStyleDeprecatedCSSOMValue(CSSValuePool&, const Style::ComputedStyle& style, CSSStyleDeclaration& owner) const
+{
+    return computedStyleValue(style)->createDeprecatedCSSOMWrapper(owner);
 }
 
 bool NamedImage::isPending() const
@@ -67,25 +80,47 @@ void NamedImage::load(CachedResourceLoader&, const ResourceLoaderOptions&)
 {
 }
 
-RefPtr<WebCore::Image> NamedImage::image(const RenderElement* renderer, const FloatSize& size, const GraphicsContext&, bool) const
+static WTF::String LEGACY_NODELETE adjustNamedImage(const RenderElement& renderer, const AtomString& name)
 {
-    if (!renderer)
-        return &WebCore::Image::nullImage();
+#if ENABLE(AX_CUSTOM_COLOR_MODE)
+    return AXCustomColorModeController::adjustNamedImage(renderer, name);
+#else
+    UNUSED_PARAM(renderer);
+    return name;
+#endif
+}
 
+ImageDrawResult NamedImage::draw(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const FloatRect& destination, const FloatRect& source, ImagePaintingOptions options, bool) const
+{
+    auto size = concreteObjectSize.size() * concreteObjectSize.zoom();
     if (size.isEmpty())
-        return nullptr;
+        return ImageDrawResult::DidNothing;
 
-    return NamedImageGeneratedImage::create(m_name.value, size);
+    return drawIntoDestination(context, destination, source, options, [&](GraphicsContext& context) {
+        Theme::singleton().drawNamedImage(adjustNamedImage(renderer, m_name.value), context, destination.size());
+        return ImageDrawResult::DidDraw;
+    });
+}
+
+ImageDrawResult NamedImage::drawAsPattern(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const FloatRect& destination, const FloatRect& tile, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options, bool) const
+{
+    auto size = concreteObjectSize.size() * concreteObjectSize.zoom();
+    if (size.isEmpty() || context.paintingDisabled())
+        return ImageDrawResult::DidNothing;
+
+    RefPtr imageBuffer = context.createAlignedImageBuffer(size);
+    if (!imageBuffer)
+        return ImageDrawResult::DidNothing;
+
+    Theme::singleton().drawNamedImage(adjustNamedImage(renderer, m_name.value), imageBuffer->context(), size);
+    context.drawPattern(*imageBuffer, destination, tile, patternTransform, phase, spacing, options);
+
+    return ImageDrawResult::DidDraw;
 }
 
 bool NamedImage::knownToBeOpaque(const RenderElement&) const
 {
     return false;
-}
-
-FloatSize NamedImage::fixedSize(const RenderElement&) const
-{
-    return { };
 }
 
 } // namespace Style

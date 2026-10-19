@@ -62,7 +62,7 @@ static ALWAYS_INLINE bool coerceComparatorResultToBoolean(JSGlobalObject* global
 }
 
 template<typename ElementType, typename Functor>
-static ALWAYS_INLINE void arrayInsertionSort(VM& vm, std::span<ElementType> span, const Functor& comparator, size_t sortedHeader = 0)
+static ALWAYS_INLINE void arrayInsertionSort(VM& vm, std::span<ElementType> span, NOESCAPE const Functor& comparator, size_t sortedHeader = 0)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -95,7 +95,7 @@ static ALWAYS_INLINE void arrayInsertionSort(VM& vm, std::span<ElementType> span
 // If descending, reverse in-place to make ascending (stable: uses strict < for descending).
 // Returns end index (inclusive) of the normalized ascending run.
 template<typename ElementType, typename Functor>
-static ALWAYS_INLINE size_t extendAndNormalizeRun(VM& vm, std::span<ElementType> span, size_t begin, const Functor& comparator)
+static ALWAYS_INLINE size_t extendAndNormalizeRun(VM& vm, std::span<ElementType> span, size_t begin, NOESCAPE const Functor& comparator)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -138,7 +138,7 @@ static ALWAYS_INLINE size_t extendAndNormalizeRun(VM& vm, std::span<ElementType>
 // Returns k in [0, length] such that base[k-1] < key <= base[k].
 // hint is a starting index for the exponential search.
 template<typename ElementType, typename Functor>
-static ALWAYS_INLINE size_t gallopLeft(VM& vm, const ElementType& key, const ElementType* base, size_t length, size_t hint, const Functor& comparator)
+static ALWAYS_INLINE size_t gallopLeft(VM& vm, const ElementType& key, const ElementType* base, size_t length, size_t hint, NOESCAPE const Functor& comparator)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -200,7 +200,7 @@ static ALWAYS_INLINE size_t gallopLeft(VM& vm, const ElementType& key, const Ele
 // gallopRight: Find the rightmost position where key should be inserted (after equal elements).
 // Returns k in [0, length] such that base[k-1] <= key < base[k].
 template<typename ElementType, typename Functor>
-static ALWAYS_INLINE size_t gallopRight(VM& vm, const ElementType& key, const ElementType* base, size_t length, size_t hint, const Functor& comparator)
+static ALWAYS_INLINE size_t gallopRight(VM& vm, const ElementType& key, const ElementType* base, size_t length, size_t hint, NOESCAPE const Functor& comparator)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -261,10 +261,54 @@ static ALWAYS_INLINE size_t gallopRight(VM& vm, const ElementType& key, const El
     return offset;
 }
 
+// Gallop and Simple are code size-time tradeoffs. Gallop is faster and is more code, while Simple is
+// slower and is less code. Currently galloping is used for Array sorting, while Simple is used for
+// TypedArray sorting. Array sorting is expected to be fast, while TypedArray sorting is relatively
+// rare and would incur a significant number of template instantiations across all the TypedArray
+// kinds.
+enum class MergeStrategy { Galloping, Simple };
+
+template<typename ElementType, typename Functor>
+static ALWAYS_INLINE void mergeRunsSimple(VM& vm, std::span<ElementType> dst, std::span<const ElementType> src, size_t srcIndex1, size_t srcEnd1, size_t srcIndex2, size_t srcEnd2, NOESCAPE const Functor& comparator)
+{
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    size_t left = srcIndex1;
+    size_t leftEnd = srcEnd1;
+    size_t right = srcIndex2;
+    size_t rightEnd = srcEnd2;
+
+    ASSERT(leftEnd <= right);
+    ASSERT(rightEnd <= src.size());
+
+    for (size_t dstIndex = left; dstIndex < rightEnd; ++dstIndex) {
+        if (right < rightEnd) {
+            if (left >= leftEnd) {
+                dst[dstIndex] = src[right++];
+                continue;
+            }
+            bool result = comparator(src[right], src[left]);
+            RETURN_IF_EXCEPTION_WITH_TRAPS_DEFERRED(scope, void());
+            if (result) {
+                dst[dstIndex] = src[right++];
+                continue;
+            }
+        }
+        dst[dstIndex] = src[left++];
+    }
+}
+
+// webkit.org/b/313694 : Workaround GCC 13 slowness building this.
+#if COMPILER(GCC) && GCC_VERSION < 140000
+#define MAYBE_ALWAYS_INLINE inline
+#else
+#define MAYBE_ALWAYS_INLINE ALWAYS_INLINE
+#endif
+
 static constexpr size_t minGallopThreshold = 7;
 
 template<typename ElementType, typename Functor>
-static ALWAYS_INLINE void mergePowersortRuns(VM& vm, std::span<ElementType> dst, std::span<const ElementType> src, size_t srcIndex1, size_t srcEnd1, size_t srcIndex2, size_t srcEnd2, const Functor& comparator, size_t& minGallop)
+static MAYBE_ALWAYS_INLINE void mergePowersortRuns(VM& vm, std::span<ElementType> dst, std::span<const ElementType> src, size_t srcIndex1, size_t srcEnd1, size_t srcIndex2, size_t srcEnd2, NOESCAPE const Functor& comparator, size_t& minGallop)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -423,8 +467,8 @@ struct SortedRun {
     size_t m_end;
 };
 
-template<typename ElementType, typename Functor, size_t forceRunLength = 64>
-static ALWAYS_INLINE std::span<ElementType> arrayStableSort(VM& vm, std::span<ElementType> src, std::span<ElementType> workingSet, const Functor& comparator)
+template<MergeStrategy mergeStrategy, typename ElementType, typename Functor, size_t forceRunLength = 64>
+static ALWAYS_INLINE std::span<ElementType> arrayStableSort(VM& vm, std::span<ElementType> src, std::span<ElementType> workingSet, NOESCAPE const Functor& comparator)
 {
     constexpr size_t extendRunCutoff = 8;
 
@@ -469,7 +513,7 @@ static ALWAYS_INLINE std::span<ElementType> arrayStableSort(VM& vm, std::span<El
     // floor(lg(n)) + 1
     powerstack.reserveCapacity(8 * sizeof(numElements) - WTF::clz(numElements));
 
-    size_t minGallop = minGallopThreshold;
+    [[maybe_unused]] size_t minGallop = minGallopThreshold;
 
     SortedRun run1 { 0, 0 };
 
@@ -523,7 +567,10 @@ static ALWAYS_INLINE std::span<ElementType> arrayStableSort(VM& vm, std::span<El
             auto rangeToMerge = powerstack.takeLast().run;
             ASSERT(rangeToMerge.m_end == run1.m_begin - 1);
 
-            mergePowersortRuns(vm, workingSet, spanConstCast<const ElementType>(src), rangeToMerge.m_begin, rangeToMerge.m_end + 1, run1.m_begin, run1.m_end + 1, comparator, minGallop);
+            if constexpr (mergeStrategy == MergeStrategy::Galloping)
+                mergePowersortRuns(vm, workingSet, spanConstCast<const ElementType>(src), rangeToMerge.m_begin, rangeToMerge.m_end + 1, run1.m_begin, run1.m_end + 1, comparator, minGallop);
+            else
+                mergeRunsSimple(vm, workingSet, spanConstCast<const ElementType>(src), rangeToMerge.m_begin, rangeToMerge.m_end + 1, run1.m_begin, run1.m_end + 1, comparator);
             RETURN_IF_EXCEPTION_WITH_TRAPS_DEFERRED(scope, src);
             WTF::copyElements(src.subspan(rangeToMerge.m_begin, run1.m_end + 1 - rangeToMerge.m_begin), spanConstCast<const ElementType>(workingSet).subspan(rangeToMerge.m_begin, run1.m_end + 1 - rangeToMerge.m_begin));
             run1.m_begin = rangeToMerge.m_begin;
@@ -537,7 +584,10 @@ static ALWAYS_INLINE std::span<ElementType> arrayStableSort(VM& vm, std::span<El
         auto rangeToMerge = powerstack.takeLast().run;
         ASSERT(rangeToMerge.m_end == run1.m_begin - 1);
 
-        mergePowersortRuns(vm, workingSet, spanConstCast<const ElementType>(src), rangeToMerge.m_begin, rangeToMerge.m_end + 1, run1.m_begin, run1.m_end + 1, comparator, minGallop);
+        if constexpr (mergeStrategy == MergeStrategy::Galloping)
+            mergePowersortRuns(vm, workingSet, spanConstCast<const ElementType>(src), rangeToMerge.m_begin, rangeToMerge.m_end + 1, run1.m_begin, run1.m_end + 1, comparator, minGallop);
+        else
+            mergeRunsSimple(vm, workingSet, spanConstCast<const ElementType>(src), rangeToMerge.m_begin, rangeToMerge.m_end + 1, run1.m_begin, run1.m_end + 1, comparator);
         RETURN_IF_EXCEPTION_WITH_TRAPS_DEFERRED(scope, src);
         WTF::copyElements(src.subspan(rangeToMerge.m_begin, run1.m_end + 1 - rangeToMerge.m_begin), spanConstCast<const ElementType>(workingSet).subspan(rangeToMerge.m_begin, run1.m_end + 1 - rangeToMerge.m_begin));
         run1.m_begin = rangeToMerge.m_begin;

@@ -61,17 +61,28 @@ PageNetworkAgent::PageNetworkAgent(PageAgentContext& context, InspectorBackendCl
 
 PageNetworkAgent::~PageNetworkAgent() = default;
 
+Inspector::Protocol::ErrorStringOr<void> PageNetworkAgent::enable()
+{
+    // Under Site Isolation, ProxyingNetworkAgent in the UIProcess handles Network
+    // events for all processes. PageNetworkAgent should not be enabled to avoid
+    // duplicate events for same-process frames.
+    if (protect(m_inspectedPage)->settings().siteIsolationEnabled())
+        return { };
+
+    return InspectorNetworkAgent::enable();
+}
+
 Inspector::Protocol::Network::LoaderId PageNetworkAgent::loaderIdentifier(DocumentLoader* loader)
 {
     if (loader)
-        return m_inspectedPage->inspectorController().identifierRegistry().loaderId(loader);
+        return protect(m_inspectedPage->inspectorController().identifierRegistry())->loaderId(loader);
     return { };
 }
 
 Inspector::Protocol::Network::FrameId PageNetworkAgent::frameIdentifier(DocumentLoader* loader)
 {
     if (loader)
-        return m_inspectedPage->inspectorController().identifierRegistry().frameId(loader->frame());
+        return protect(m_inspectedPage->inspectorController().identifierRegistry())->frameId(protect(loader->frame()));
     return { };
 }
 
@@ -108,16 +119,16 @@ void PageNetworkAgent::setResourceCachingDisabledInternal(bool disabled)
 
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)
 
-bool PageNetworkAgent::setEmulatedConditionsInternal(std::optional<int>&& bytesPerSecondLimit)
+bool PageNetworkAgent::setEmulatedConditionsInternal(std::optional<uint64_t> bandwidthBytesPerSecond, Seconds latency)
 {
-    return m_client && m_client->setEmulatedConditions(WTF::move(bytesPerSecondLimit));
+    return m_client && m_client->setEmulatedConditions(bandwidthBytesPerSecond, latency);
 }
 
 #endif // ENABLE(INSPECTOR_NETWORK_THROTTLING)
 
 ScriptExecutionContext* PageNetworkAgent::scriptExecutionContext(Inspector::Protocol::ErrorString& errorString, const Inspector::Protocol::Network::FrameId& frameId)
 {
-    auto* frame = m_inspectedPage->inspectorController().identifierRegistry().assertFrame(errorString, frameId);
+    RefPtr frame = protect(m_inspectedPage->inspectorController().identifierRegistry())->assertFrame(errorString, frameId);
     if (!frame)
         return nullptr;
 

@@ -26,6 +26,7 @@
 #include <gio/gio.h>
 #include <wtf/SortedArrayMap.h>
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/glib/GLibExtras.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/MakeString.h>
 
@@ -39,7 +40,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaSessionGLib);
 
 static std::optional<PlatformMediaSession::RemoteControlCommandType> getCommand(const char* name)
 {
-    static const SortedArrayMap map { std::to_array<std::pair<ComparableASCIILiteral, PlatformMediaSession::RemoteControlCommandType>>({
+    static const SortedArrayMap map { WTF::toArray<std::pair<ComparableASCIILiteral, PlatformMediaSession::RemoteControlCommandType>>({
         { "Next"_s, PlatformMediaSession::RemoteControlCommandType::NextTrackCommand },
         { "Pause"_s, PlatformMediaSession::RemoteControlCommandType::PauseCommand },
         { "Play"_s, PlatformMediaSession::RemoteControlCommandType::PlayCommand },
@@ -96,7 +97,7 @@ enum class MprisProperty : uint8_t {
 
 static std::optional<MprisProperty> getMprisProperty(const char* propertyName)
 {
-    static constexpr SortedArrayMap map { std::to_array<std::pair<ComparableASCIILiteral, MprisProperty>>({
+    static constexpr SortedArrayMap map { WTF::toArray<std::pair<ComparableASCIILiteral, MprisProperty>>({
         { "CanControl"_s, MprisProperty::CanControl },
         { "CanGoNext"_s, MprisProperty::CanGoNext },
         { "CanGoPrevious"_s, MprisProperty::CanGoPrevious },
@@ -191,7 +192,7 @@ std::unique_ptr<MediaSessionGLib> MediaSessionGLib::create(MediaSessionManagerGL
         m_dBusAddressFailed = true;
         return nullptr;
     }
-    auto connection = adoptGRef(reinterpret_cast<GDBusConnection*>(g_object_new(G_TYPE_DBUS_CONNECTION,
+    GRefPtr connection = adoptGRef(reinterpret_cast<GDBusConnection*>(g_object_new(G_TYPE_DBUS_CONNECTION,
         "address", address.get(),
         "flags", G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT | G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
         "exit-on-close", TRUE, nullptr)));
@@ -313,14 +314,14 @@ GVariant* MediaSessionGLib::getMetadataAsGVariant(std::optional<NowPlayingInfo> 
 
     g_variant_builder_add(&builder, "{sv}", "mpris:trackid", g_variant_new("o", DBUS_MPRIS_TRACK_PATH));
     g_variant_builder_add(&builder, "{sv}", "mpris:length", g_variant_new_int64(info->duration * 1000000));
-    g_variant_builder_add(&builder, "{sv}", "xesam:title", g_variant_new_string(info->metadata.title.utf8().data()));
-    g_variant_builder_add(&builder, "{sv}", "xesam:album", g_variant_new_string(info->metadata.album.utf8().data()));
+    g_variant_builder_add(&builder, "{sv}", "xesam:title", gVariantNewString(info->metadata.title.utf8()));
+    g_variant_builder_add(&builder, "{sv}", "xesam:album", gVariantNewString(info->metadata.album.utf8()));
     if (info->metadata.artwork)
-        g_variant_builder_add(&builder, "{sv}", "mpris:artUrl", g_variant_new_string(info->metadata.artwork->src.utf8().data()));
+        g_variant_builder_add(&builder, "{sv}", "mpris:artUrl", gVariantNewString(info->metadata.artwork->src.utf8()));
 
     GVariantBuilder artistBuilder;
     g_variant_builder_init(&artistBuilder, G_VARIANT_TYPE("as"));
-    g_variant_builder_add(&artistBuilder, "s", info->metadata.artist.utf8().data());
+    gVariantBuilderAdd(&artistBuilder, "s", info->metadata.artist.utf8());
     g_variant_builder_add(&builder, "{sv}", "xesam:artist", g_variant_builder_end(&artistBuilder));
 
     return g_variant_builder_end(&builder);

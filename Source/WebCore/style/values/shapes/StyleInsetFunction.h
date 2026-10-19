@@ -33,19 +33,18 @@ namespace WebCore {
 
 class Path;
 struct AcceleratedEffectInsetFunction;
-struct TransformOperationData;
 
 namespace Style {
 
 struct Inset {
-    using Insets = MinimallySerializingSpaceSeparatedRectEdges<LengthPercentage<CSS::AllUnzoomed>>;
+    using Insets = MinimallySerializingSpaceSeparatedRectEdges<LengthPercentage<>>;
 
     Insets insets;
     BorderRadius radii;
 
     bool operator==(const Inset&) const = default;
 };
-using InsetFunction = FunctionNotation<CSSValueInset, Inset>;
+using InsetFunction = FunctionNotation<CSSValueID::Inset, Inset>;
 
 template<size_t I> const auto& get(const Inset& value)
 {
@@ -63,7 +62,7 @@ template<> struct PathComputation<Inset> { WebCore::Path operator()(const Inset&
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-template<> struct Evaluation<InsetFunction, AcceleratedEffectInsetFunction> { AcceleratedEffectInsetFunction operator()(const InsetFunction&, const TransformOperationData&, ZoomFactor); };
+template<> struct Evaluation<InsetFunction, AcceleratedEffectInsetFunction> { AcceleratedEffectInsetFunction operator()(const InsetFunction&, const FloatSize&, ZoomFactor); };
 
 #endif
 

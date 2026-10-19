@@ -246,12 +246,9 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(WebMParser::AudioTrackData);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebMParser::TrackData);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebMParser::VideoTrackData);
 
-// FIXME: Remove this once kCMVideoCodecType_VP9 is added to CMFormatDescription.h
-constexpr CMVideoCodecType kCMVideoCodecType_VP9 { 'vp09' };
-
 constexpr uint32_t k_us_in_seconds = 1000000000;
 
-static bool NODELETE isWebmParserAvailable()
+static bool LEGACY_NODELETE isWebmParserAvailable()
 {
     return !!webm::swap;
 }
@@ -383,7 +380,7 @@ public:
         m_currentSegment = m_data.end();
     }
 
-    bool NODELETE rewindTo(uint64_t rewindToPosition)
+    bool LEGACY_NODELETE rewindTo(uint64_t rewindToPosition)
     {
         ASSERT(rewindToPosition <= m_position);
         if (rewindToPosition > m_position)
@@ -412,7 +409,7 @@ public:
     }
 
 private:
-    void NODELETE advanceToNextSegment()
+    void LEGACY_NODELETE advanceToNextSegment()
     {
         ASSERT(m_currentSegment != m_data.end());
         if (m_currentSegment == m_data.end())
@@ -449,7 +446,7 @@ public:
     bool isAudio() const final { return m_track.track_type.is_present() && m_track.track_type.value() == TrackType::kAudio; }
     bool isText() const final { return m_track.track_type.is_present() && m_track.track_type.value() == TrackType::kSubtitle; }
 
-    const webm::TrackEntry& NODELETE track() { return m_track; }
+    const webm::TrackEntry& LEGACY_NODELETE track() { return m_track; }
 
 private:
     String extractCodec(const webm::TrackEntry& track) const
@@ -564,6 +561,9 @@ ExceptionOr<int> WebMParser::parse(Ref<const SharedBuffer>&& segment)
         m_state = State::None;
         continue;
     }
+
+    // The append is rejected: drop the samples queued by the partially parsed media segment.
+    discardPendingVideoSamples();
 
     return m_status.code;
 }
@@ -754,6 +754,11 @@ Status WebMParser::OnClusterBegin(const ElementMetadata&, const Cluster& cluster
     if (cluster.timecode.is_present())
         m_currentTimecode = cluster.timecode.value();
 
+    // A WebM media segment is a single cluster, and media segments may be appended in any order,
+    // so timecodes are only required to increase within a cluster.
+    for (auto& track : m_tracks)
+        track->resetLastAbsoluteTimecode();
+
     *action = Action::kRead;
 
     return Status(Status::kOkCompleted);
@@ -767,7 +772,7 @@ Status WebMParser::OnTrackEntry(const ElementMetadata&, const TrackEntry& trackE
         return Status(Status::kOkCompleted);
 
     auto trackType = trackEntry.track_type.value();
-    String codecId = std::span { trackEntry.codec_id.value() };
+    String codecId = String::fromLatin1(std::span { trackEntry.codec_id.value() });
 
     ALWAYS_LOG_IF_POSSIBLE(LOGIDENTIFIER, trackType, ", codec ", codecId);
 
@@ -862,6 +867,7 @@ webm::Status WebMParser::OnBlockBegin(const ElementMetadata&, const Block& block
     *action = Action::kRead;
 
     m_currentBlock = std::make_optional<BlockVariant>(Block(block));
+    m_currentDuration = MediaTime::zeroTime();
 
     return Status(Status::kOkCompleted);
 }
@@ -869,6 +875,7 @@ webm::Status WebMParser::OnBlockBegin(const ElementMetadata&, const Block& block
 webm::Status WebMParser::OnBlockEnd(const ElementMetadata&, const Block&)
 {
     m_currentBlock = std::nullopt;
+    m_currentDuration = MediaTime::zeroTime();
 
     return Status(Status::kOkCompleted);
 }
@@ -980,7 +987,19 @@ webm::Status WebMParser::OnFrame(const FrameMetadata& metadata, Reader* reader, 
         return Skip(reader, bytesRemaining);
     }
 
-    auto result = trackData->consumeFrameData(*reader, metadata, bytesRemaining, MediaTime(block->timecode + m_currentTimecode, m_timescale) + m_currentDuration, isKey);
+    auto presentationTime = MediaTime(static_cast<int64_t>(m_currentTimecode + block->timecode), m_timescale) + m_currentDuration;
+
+    // https://w3c.github.io/mse-byte-stream-format-webm/
+    // The append error algorithm must run unless "Block & SimpleBlock elements are in time
+    // increasing order consistent with [WEBM]". The timecodes are compared per track within the
+    // current cluster: a cluster interleaves the blocks of all of its tracks, and audio blocks
+    // sharing a video block's timecode are written before it.
+    if (!trackData->updateLastAbsoluteTimecode(presentationTime)) {
+        ERROR_LOG_IF_POSSIBLE(LOGIDENTIFIER, "Timecode ", presentationTime, " on track ", trackNumber, " is not monotonically increasing");
+        return Status(Status::Code(ErrorCode::NonMonotonicTimecode));
+    }
+
+    auto result = trackData->consumeFrameData(*reader, metadata, bytesRemaining, presentationTime, isKey);
     if (std::holds_alternative<webm::Status>(result))
         return std::get<webm::Status>(result);
     m_currentDuration += std::get<MediaTime>(result);
@@ -1038,6 +1057,14 @@ void WebMParser::flushPendingVideoSamples()
     for (auto& track : m_tracks) {
         if (auto* videoTrack = dynamicDowncast<WebMParser::VideoTrackData>(track.get()))
             videoTrack->flushPendingSamples();
+    }
+}
+
+void WebMParser::discardPendingVideoSamples()
+{
+    for (auto& track : m_tracks) {
+        if (auto* videoTrack = dynamicDowncast<WebMParser::VideoTrackData>(track.get()))
+            videoTrack->discardPendingSamples();
     }
 }
 
@@ -1110,6 +1137,12 @@ WebMParser::ConsumeFrameDataResult WebMParser::VideoTrackData::consumeFrameData(
     }
 #endif
 
+    // A frame's duration is the start time of the frame that follows it. The queued sample may come
+    // from an earlier cluster, which need not precede this one in time; a frame starting before it
+    // can't close it, so give it the same fallback duration it would get at the end of an append.
+    if (m_pendingMediaSamples.size() && presentationTime < m_pendingMediaSamples.last().presentationTime)
+        flushPendingSamples();
+
     processPendingMediaSamples(presentationTime);
 
     if (formatDescription() && (!m_trackInfo || *formatDescription() != *m_trackInfo)) {
@@ -1169,6 +1202,11 @@ void WebMParser::VideoTrackData::processPendingMediaSamples(const MediaTime& pre
     if (!m_pendingMediaSamples.size())
         return;
     auto& lastSample = m_pendingMediaSamples.last();
+    // The queued sample may come from an earlier cluster, which need not precede this one in time;
+    // a frame starting before it can't close it, so leave it queued, as is done for frames sharing
+    // a presentation time.
+    if (presentationTime < lastSample.presentationTime)
+        return;
     lastSample.duration = presentationTime - lastSample.presentationTime;
     if (presentationTime == lastSample.presentationTime)
         return;
@@ -1216,6 +1254,15 @@ void WebMParser::VideoTrackData::flushPendingSamples()
     else if (m_lastDuration)
         duration = *m_lastDuration;
     processPendingMediaSamples(presentationTime + duration);
+    m_lastPresentationTime.reset();
+}
+
+void WebMParser::VideoTrackData::discardPendingSamples()
+{
+    // The media segment those samples belong to was rejected; they must not be emitted, and the
+    // duration of the next segment's first sample must not be derived from them.
+    m_pendingMediaSamples.clear();
+    m_lastDuration.reset();
     m_lastPresentationTime.reset();
 }
 
@@ -1596,7 +1643,7 @@ void SourceBufferParserWebM::returnSamples(MediaSamplesBlock&& block, CMFormatDe
 
     auto expectedBuffer = toCMSampleBuffer(block, description);
     if (!expectedBuffer) {
-        ERROR_LOG_IF_POSSIBLE(LOGIDENTIFIER, "toCMSampleBuffer error:", expectedBuffer.error().data());
+        ERROR_LOG_IF_POSSIBLE(LOGIDENTIFIER, "toCMSampleBuffer error:", expectedBuffer.error());
         return;
     }
 
@@ -1646,7 +1693,7 @@ void SourceBufferParserWebM::flushPendingAudioSamples()
     m_queuedAudioDuration = { };
 }
 
-Expected<void, PlatformMediaError> SourceBufferParserWebM::appendData(Ref<const SharedBuffer>&& segment, AppendFlags appendFlags)
+std::expected<void, PlatformMediaError> SourceBufferParserWebM::appendData(Ref<const SharedBuffer>&& segment, AppendFlags appendFlags)
 {
     INFO_LOG_IF_POSSIBLE(LOGIDENTIFIER, "flags(", appendFlags == AppendFlags::Discontinuity ? "Discontinuity" : "", "), size(", segment->size(), ")");
 

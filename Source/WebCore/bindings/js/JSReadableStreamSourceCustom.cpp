@@ -30,6 +30,7 @@
 #include "JSReadableStreamSource.h"
 
 #include "JSDOMPromiseDeferred.h"
+#include <JavaScriptCore/CallFrameInlines.h>
 #include <JavaScriptCore/HeapInlines.h>
 #include <JavaScriptCore/WriteBarrierInlines.h>
 
@@ -58,7 +59,7 @@ JSValue JSReadableStreamSource::pull(JSGlobalObject&, CallFrame&, Ref<DeferredPr
     return jsUndefined();
 }
 
-JSValue NODELETE JSReadableStreamSource::controller(JSGlobalObject&) const
+JSValue LEGACY_NODELETE JSReadableStreamSource::controller(JSGlobalObject&) const
 {
     ASSERT_NOT_REACHED();
     return jsUndefined();

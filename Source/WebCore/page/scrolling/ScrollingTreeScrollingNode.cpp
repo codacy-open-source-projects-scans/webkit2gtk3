@@ -76,8 +76,25 @@ bool ScrollingTreeScrollingNode::commitStateBeforeChildren(const ScrollingStateN
 
     if (state->hasChangedProperty(ScrollingStateNode::Property::ScrollPosition)) {
         m_lastCommittedScrollPosition = state->scrollPosition();
-        if (m_isFirstCommit && !state->hasScrollPositionRequest())
-            m_currentScrollPosition = m_lastCommittedScrollPosition;
+        if (m_isFirstCommit) {
+            // If the first commit contains a scroll delta, prime m_currentScrollPosition so we apply
+            // the delta relative to it later (otherwise we'll apply the delta relative to (0,0) and
+            // end up with the wrong scroll position). For an absolute position request, leave
+            // m_currentScrollPosition untouched so that handleScrollPositionRequests() actually scrolls;
+            // scrollTo() early-returns when the destination equals m_currentScrollPosition, which would
+            // skip the layer/viewport update for the initial programmatic scroll.
+            std::optional<FloatSize> deltaForFirstCommit;
+            for (auto& request : state->requestedScrollData()) {
+                if (auto* delta = std::get_if<FloatSize>(&request.scrollPositionOrDelta)) {
+                    deltaForFirstCommit = *delta;
+                    break;
+                }
+            }
+            if (deltaForFirstCommit)
+                m_currentScrollPosition = m_lastCommittedScrollPosition - *deltaForFirstCommit;
+            else if (!state->hasScrollPositionRequest())
+                m_currentScrollPosition = m_lastCommittedScrollPosition;
+        }
     }
 
     if (state->hasChangedProperty(ScrollingStateNode::Property::ScrollOrigin))
@@ -247,7 +264,8 @@ FloatPoint ScrollingTreeScrollingNode::minimumScrollPosition() const
 FloatPoint ScrollingTreeScrollingNode::maximumScrollPosition() const
 {
     FloatPoint contentSizePoint(totalContentsSize());
-    auto maximumScrollOffset = FloatPoint(contentSizePoint - scrollableAreaSize()).expandedTo(FloatPoint());
+    // FIXME: Remove suppression once rdar://189998444 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST auto maximumScrollOffset = FloatPoint(contentSizePoint - scrollableAreaSize()).expandedTo(FloatPoint());
     return ScrollableArea::scrollPositionFromOffset(maximumScrollOffset, toFloatSize(scrollOrigin()));
 }
 
@@ -328,6 +346,13 @@ std::optional<RubberbandingState> ScrollingTreeScrollingNode::captureRubberbandi
     return std::nullopt;
 }
 #endif
+
+Vector<PlatformLayerContainer, 2> ScrollingTreeScrollingNode::hitTestableScrollbarLayers() const
+{
+    if (m_delegate)
+        return m_delegate->hitTestableScrollbarLayers();
+    return { };
+}
 
 void ScrollingTreeScrollingNode::willStartAnimatedScroll()
 {
@@ -510,6 +535,11 @@ void ScrollingTreeScrollingNode::wasScrolledByDelegatedScrolling(const FloatPoin
 
     scrollingTree()->notifyRelatedNodesAfterScrollPositionChange(*this);
     scrollingTree()->scrollingTreeNodeDidScroll(*this, scrollingLayerPositionAction);
+}
+
+float ScrollingTreeScrollingNode::rubberbandHyperbolicCoefficientForTesting() const
+{
+    return m_delegate ? m_delegate->rubberbandHyperbolicCoefficientForTesting() : 0;
 }
 
 void ScrollingTreeScrollingNode::dumpProperties(TextStream& ts, OptionSet<ScrollingStateTreeAsTextBehavior> behavior) const

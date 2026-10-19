@@ -22,7 +22,7 @@
 #include "SVGPathBlender.h"
 
 #include "AnimationUtilities.h"
-#include "SVGPathSeg.h"
+#include "SVGPathSegType.h"
 #include "SVGPathSource.h"
 #include <functional>
 #include <wtf/SetForScope.h>
@@ -58,7 +58,7 @@ SVGPathBlender::SVGPathBlender(SVGPathSource& fromSource, SVGPathSource& toSourc
 }
 
 // Helper functions
-static inline FloatPoint NODELETE blendFloatPoint(const FloatPoint& a, const FloatPoint& b, float progress)
+static inline FloatPoint LEGACY_NODELETE blendFloatPoint(const FloatPoint& a, const FloatPoint& b, float progress)
 {
     BlendingContext context { progress };
     return FloatPoint(blend(a.x(), b.x(), context), blend(a.y(), b.y(), context));
@@ -123,7 +123,7 @@ FloatPoint SVGPathBlender::blendAnimatedFloatPoint(const FloatPoint& fromPoint, 
 
 template<typename Function> using InvokeResult = typename std::invoke_result_t<Function, SVGPathSource, FloatPoint>::value_type;
 template<typename Function> using ResultPair = std::pair<InvokeResult<Function>, InvokeResult<Function>>;
-template<typename Function> static std::optional<ResultPair<Function>> pullFromSources(SVGPathSource& fromSource, SVGPathSource& toSource, Function&& function, FloatPoint currentPoint)
+template<typename Function> static std::optional<ResultPair<Function>> pullFromSources(SVGPathSource& fromSource, SVGPathSource& toSource, NOESCAPE const Function& function, FloatPoint currentPoint)
 {
     InvokeResult<Function> fromResult;
     if (fromSource.hasMoreData()) {
@@ -133,7 +133,7 @@ template<typename Function> static std::optional<ResultPair<Function>> pullFromS
         fromResult = WTF::move(*parsedFrom);
     }
 
-    auto parsedTo = std::invoke(std::forward<Function>(function), toSource, currentPoint);
+    auto parsedTo = std::invoke(function, toSource, currentPoint);
     if (!parsedTo)
         return std::nullopt;
 
@@ -311,11 +311,17 @@ bool SVGPathBlender::blendArcToSegment(float progress)
             m_fromMode);
     } else {
         BlendingContext context { progress };
+        // Per spec, the arc flags interpolate as numbers (with progress clamped to
+        // [0, 1]) and any non-zero result is treated as a set flag, matching <path>.
+        // https://w3c.github.io/svgwg/specs/paths/#PathElement
+        BlendingContext flagContext { clampTo<float>(progress, 0.0f, 1.0f) };
+        bool largeArc = blend(from.largeArc ? 1.0f : 0.0f, to.largeArc ? 1.0f : 0.0f, flagContext);
+        bool sweep = blend(from.sweep ? 1.0f : 0.0f, to.sweep ? 1.0f : 0.0f, flagContext);
         m_consumer->arcTo(blend(from.rx, to.rx, context),
             blend(from.ry, to.ry, context),
             blend(from.angle, to.angle, context),
-            m_isInFirstHalfOfAnimation ? from.largeArc : to.largeArc,
-            m_isInFirstHalfOfAnimation ? from.sweep : to.sweep,
+            largeArc,
+            sweep,
             blendAnimatedFloatPoint(from.targetPoint, to.targetPoint, progress),
             m_isInFirstHalfOfAnimation ? m_fromMode : m_toMode);
     }
@@ -324,7 +330,7 @@ bool SVGPathBlender::blendArcToSegment(float progress)
     return true;
 }
 
-static inline PathCoordinateMode NODELETE coordinateModeOfCommand(const SVGPathSegType& type)
+static inline PathCoordinateMode LEGACY_NODELETE coordinateModeOfCommand(const SVGPathSegType& type)
 {
     if (type < SVGPathSegType::MoveToAbs)
         return AbsoluteCoordinates;
@@ -336,7 +342,7 @@ static inline PathCoordinateMode NODELETE coordinateModeOfCommand(const SVGPathS
     return AbsoluteCoordinates;
 }
 
-static inline bool NODELETE isSegmentEqual(const SVGPathSegType& fromType, const SVGPathSegType& toType, const PathCoordinateMode& fromMode, const PathCoordinateMode& toMode)
+static inline bool LEGACY_NODELETE isSegmentEqual(const SVGPathSegType& fromType, const SVGPathSegType& toType, const PathCoordinateMode& fromMode, const PathCoordinateMode& toMode)
 {
     if (fromType == toType && (fromType == SVGPathSegType::Unknown || fromType == SVGPathSegType::ClosePath))
         return true;

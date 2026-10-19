@@ -121,6 +121,12 @@ static bool handleOptionAccessibilityIsolatedTreeMode(Options& options, const ch
 }
 #endif
 
+static bool handleOptionIPAddressSpaceOverrides(Options& options, const char*, const char* overrides)
+{
+    options.ipAddressSpaceOverrides = overrides;
+    return true;
+}
+
 static bool handleOptionAllowedHost(Options& options, const char*, const char* host)
 {
     options.allowedHosts.insert(host);
@@ -190,6 +196,12 @@ static bool handleOptionLockdownMode(Options& options, const char*, const char*)
     return true;
 }
 
+static bool handleOptionSiteIsolationEnabledByDefault(Options& options, const char*, const char*)
+{
+    options.siteIsolationEnabledByDefault = true;
+    return true;
+}
+
 #if PLATFORM(WPE)
 static bool handleOptionWPELegacyAPI(Options& options, const char*, const char*)
 {
@@ -210,6 +222,7 @@ OptionsHandler::OptionsHandler(Options& o)
     : options(o)
 {
     optionList.append(Option("--no-timeout", "Disables all timeouts.", handleOptionNoTimeout));
+    optionList.append(Option("--ip-address-space-overrides", "Maps <host>:<port> to an IP address space for Local Network Access tests, e.g. 127.0.0.1:8802=local. Comma-separated.", handleOptionIPAddressSpaceOverrides, true));
     optionList.append(Option("--verbose", "Turns on messages.", handleOptionVerbose));
     optionList.append(Option("--gc-between-tests", "Garbage collection between tests.", handleOptionGcBetweenTests));
     optionList.append(Option("--pixel-tests", "Check pixels.", handleOptionPixelTests));
@@ -236,6 +249,7 @@ OptionsHandler::OptionsHandler(Options& o)
     optionList.append(Option("--webcore-logging", "Enable WebCore log channels", handleOptionWebCoreLogging, true));
     optionList.append(Option("--webkit-logging", "Enable WebKit log channels", handleOptionWebKitLogging, true));
     optionList.append(Option("--lockdown-mode", "Enable Lockdown Mode", handleOptionLockdownMode));
+    optionList.append(Option("--site-isolation-enabled-by-default", "Enable site isolation by default for all tests; individual tests can still disable it with SiteIsolationEnabled=false", handleOptionSiteIsolationEnabledByDefault));
 #if PLATFORM(WPE)
     optionList.append(Option("--wpe-legacy-api", "Use the WPE legacy API (libwpe)", handleOptionWPELegacyAPI));
 #endif

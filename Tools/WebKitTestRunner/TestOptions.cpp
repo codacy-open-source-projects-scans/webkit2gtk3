@@ -91,6 +91,7 @@ const TestFeatures& TestOptions::defaults()
             { "CaptureAudioInGPUProcessEnabled", captureAudioInGPUProcessEnabledValue },
             { "CaptureVideoInGPUProcessEnabled", captureVideoInGPUProcessEnabledValue },
             { "ContentChangeObserverEnabled", false },
+            { "ContentSecurityPolicyExtensionModeAppliesToAllSchemesForTesting", true },
             { "CustomPasteboardDataEnabled", true },
             { "DOMPasteAllowed", true },
             { "DOMTestingAPIsEnabled", true },
@@ -178,8 +179,12 @@ const TestFeatures& TestOptions::defaults()
         features.boolTestRunnerFeatures = {
             { "allowsLinkPreview", true },
             { "allowTestOnlyIPC", false },
+            { "allowTestOnlyMockContentFilterIPC", true },
+            { "allowTestOnlyOriginAccessAllowListIPC", true },
             { "appHighlightsEnabled", false },
+            { "blockThirdPartyStorage", false },
             { "dumpJSConsoleLogInStdErr", false },
+            { "dumpResourceLoadCallbacks", false },
             { "editable", false },
             { "enableInAppBrowserPrivacy", false },
             { "enableProcessSwapOnNavigation", true },
@@ -219,6 +224,7 @@ const TestFeatures& TestOptions::defaults()
             { "enableMetalShaderValidation", false },
             { "pageTopColorSamplingEnabled", false },
             { "enhancedSecurityEnabled", false },
+            { "globalPrivacyControl", false },
         };
         features.doubleTestRunnerFeatures = {
             { "contentInset.top", 0 },
@@ -235,15 +241,18 @@ const TestFeatures& TestOptions::defaults()
         };
         features.stringTestRunnerFeatures = {
             { "additionalSupportedImageTypes", { } },
+            { "announcementTranslationMode", { } },
             { "applicationBundleIdentifier", { } },
             { "applicationManifest", { } },
             { "contentMode", { } },
             { "contentSecurityPolicyExtensionMode", { } },
+            { "displayedTranslationLocale", { } },
             { "dragInteractionPolicy", { } },
             { "focusStartsInputSessionPolicy", { } },
             { "jscOptions", { } },
             { "captionDisplayMode", { } },
             { "standaloneWebApplicationURL", { } },
+            { "dumpResourceResponseMIMETypes", { } },
         };
         features.stringVectorTestRunnerFeatures = {
             { "language", { "en-US" } },
@@ -261,7 +270,12 @@ const std::unordered_map<std::string, TestHeaderKeyType>& TestOptions::keyTypeMa
         { "allowsLinkPreview", TestHeaderKeyType::BoolTestRunner },
         { "appHighlightsEnabled", TestHeaderKeyType::BoolTestRunner },
         { "allowTestOnlyIPC", TestHeaderKeyType::BoolTestRunner },
+        { "allowTestOnlyMockContentFilterIPC", TestHeaderKeyType::BoolTestRunner },
+        { "allowTestOnlyOriginAccessAllowListIPC", TestHeaderKeyType::BoolTestRunner },
+        { "blockThirdPartyStorage", TestHeaderKeyType::BoolTestRunner },
         { "dumpJSConsoleLogInStdErr", TestHeaderKeyType::BoolTestRunner },
+        { "dumpResourceLoadCallbacks", TestHeaderKeyType::BoolTestRunner },
+        { "dumpResourceResponseMIMETypes", TestHeaderKeyType::StringTestRunner },
         { "editable", TestHeaderKeyType::BoolTestRunner },
         { "enableInAppBrowserPrivacy", TestHeaderKeyType::BoolTestRunner },
         { "enableProcessSwapOnNavigation", TestHeaderKeyType::BoolTestRunner },
@@ -313,10 +327,12 @@ const std::unordered_map<std::string, TestHeaderKeyType>& TestOptions::keyTypeMa
         { "secureUpgradePort", TestHeaderKeyType::UInt16TestRunner },
 
         { "additionalSupportedImageTypes", TestHeaderKeyType::StringTestRunner },
+        { "announcementTranslationMode", TestHeaderKeyType::StringTestRunner },
         { "applicationBundleIdentifier", TestHeaderKeyType::StringTestRunner },
         { "applicationManifest", TestHeaderKeyType::StringRelativePathTestRunner },
         { "contentMode", TestHeaderKeyType::StringTestRunner },
         { "contentSecurityPolicyExtensionMode", TestHeaderKeyType::StringTestRunner },
+        { "displayedTranslationLocale", TestHeaderKeyType::StringTestRunner },
         { "dragInteractionPolicy", TestHeaderKeyType::StringTestRunner },
         { "focusStartsInputSessionPolicy", TestHeaderKeyType::StringTestRunner },
         { "jscOptions", TestHeaderKeyType::StringTestRunner },

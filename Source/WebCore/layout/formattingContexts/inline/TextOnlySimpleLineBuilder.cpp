@@ -28,7 +28,8 @@
 
 #include "InlineContentCache.h"
 #include "InlineFormattingContext.h"
-#include "RenderStyle+GettersInlines.h"
+#include "LayoutIntegrationUtils.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleComputedStyle+InitialInlines.h"
 
 namespace WebCore {
@@ -43,7 +44,7 @@ struct TextOnlyLineBreakResult {
 };
 
 struct CandidateTextContent {
-    void NODELETE append(InlineLayoutUnit contentWidth)
+    void LEGACY_NODELETE append(InlineLayoutUnit contentWidth)
     {
         logicalWidth += contentWidth;
         ++endIndex;
@@ -54,7 +55,7 @@ struct CandidateTextContent {
     InlineLayoutUnit logicalWidth { 0.f };
 };
 
-static inline InlineLayoutUnit measuredInlineTextItem(const InlineTextItem& inlineTextItem, const RenderStyle& style, InlineLayoutUnit contentLogicalLeft)
+InlineLayoutUnit TextOnlySimpleLineBuilder::measuredInlineTextItem(const InlineTextItem& inlineTextItem, const Style::ComputedStyle& style, InlineLayoutUnit contentLogicalLeft)
 {
     ASSERT(!inlineTextItem.width());
     if (!inlineTextItem.isWhitespace() || InlineTextItem::shouldPreserveSpacesAndTabs(inlineTextItem))
@@ -62,7 +63,7 @@ static inline InlineLayoutUnit measuredInlineTextItem(const InlineTextItem& inli
     return TextUtil::width(inlineTextItem, style.fontCascade(), inlineTextItem.start(), inlineTextItem.start() + 1, contentLogicalLeft);
 }
 
-static inline InlineItemPosition NODELETE placedInlineItemEnd(size_t layoutRangeStartIndex, size_t placedInlineItemCount, size_t overflowingContentLength, std::span<const InlineItem> inlineItemList)
+static inline InlineItemPosition LEGACY_NODELETE placedInlineItemEnd(size_t layoutRangeStartIndex, size_t placedInlineItemCount, size_t overflowingContentLength, std::span<const InlineItem> inlineItemList)
 {
     if (!overflowingContentLength)
         return { layoutRangeStartIndex + placedInlineItemCount };
@@ -72,7 +73,7 @@ static inline InlineItemPosition NODELETE placedInlineItemEnd(size_t layoutRange
     return { trailingInlineItemIndex, overflowingInlineTextItemLength - overflowingContentLength };
 }
 
-static inline bool NODELETE isLastLineWithInlineContent(InlineItemPosition placedContentEnd, size_t layoutRangeEndIndex)
+static inline bool LEGACY_NODELETE isLastLineWithInlineContent(InlineItemPosition placedContentEnd, size_t layoutRangeEndIndex)
 {
     return placedContentEnd.index == layoutRangeEndIndex && !placedContentEnd.offset;
 }
@@ -195,26 +196,31 @@ std::optional<LineLayoutResult> TextOnlySimpleLineBuilder::placeSingleCharacterC
     };
 }
 
-InlineItemPosition TextOnlySimpleLineBuilder::placeInlineTextContent(const RenderStyle& rootStyle, const InlineItemRange& layoutRange)
+bool TextOnlySimpleLineBuilder::isAtContentEnd(std::span<const InlineItem> inlineItemList, size_t nextItemIndex, const InlineItemRange& layoutRange)
 {
-    auto hasWrapOpportunityBeforeWhitespace = rootStyle.whiteSpaceCollapse() != WhiteSpaceCollapse::BreakSpaces && rootStyle.lineBreak() != LineBreak::AfterWhiteSpace;
+    return nextItemIndex >= layoutRange.endIndex() || inlineItemList[nextItemIndex].isLineBreak();
+}
+
+bool TextOnlySimpleLineBuilder::isAtSoftWrapOpportunityOrContentEnd(const InlineTextItem& inlineTextItem, std::span<const InlineItem> inlineItemList, size_t nextItemIndex, const InlineItemRange& layoutRange, const Style::ComputedStyle& rootStyle)
+{
+    if (inlineTextItem.isWhitespace())
+        return true;
+    if (isAtContentEnd(inlineItemList, nextItemIndex, layoutRange))
+        return true;
+    auto& nextInlineTextItem = downcast<InlineTextItem>(inlineItemList[nextItemIndex]);
+    if (nextInlineTextItem.isWhitespace())
+        return rootStyle.whiteSpaceCollapse() != WhiteSpaceCollapse::BreakSpaces && rootStyle.lineBreak() != LineBreak::AfterWhiteSpace;
+    return &inlineTextItem.inlineTextBox() == &nextInlineTextItem.inlineTextBox() || TextUtil::mayBreakInBetween(inlineTextItem, nextInlineTextItem);
+}
+
+InlineItemPosition TextOnlySimpleLineBuilder::placeInlineTextContent(const Style::ComputedStyle& rootStyle, const InlineItemRange& layoutRange)
+{
     size_t placedInlineItemCount = 0;
 
     auto result = TextOnlyLineBreakResult { };
     auto candidateContent = CandidateTextContent { layoutRange.startIndex(), layoutRange.startIndex(), { } };
 
     auto nextItemIndex = layoutRange.startIndex();
-    auto isAtSoftWrapOpportunityOrContentEnd = [&](auto& inlineTextItem) {
-        if (inlineTextItem.isWhitespace())
-            return true;
-        if (nextItemIndex >= layoutRange.endIndex() || m_inlineItemList[nextItemIndex].isLineBreak())
-            return true;
-        auto& nextInlineTextItem = downcast<InlineTextItem>(m_inlineItemList[nextItemIndex]);
-        if (nextInlineTextItem.isWhitespace())
-            return hasWrapOpportunityBeforeWhitespace;
-        return &inlineTextItem.inlineTextBox() == &nextInlineTextItem.inlineTextBox() || TextUtil::mayBreakInBetween(inlineTextItem, nextInlineTextItem);
-    };
-
     auto processCandidateContent = [&] {
         result = commitCandidateContent(rootStyle, candidateContent, layoutRange);
         placedInlineItemCount = !result.isRevert ? placedInlineItemCount + result.committedCount : result.committedCount;
@@ -227,7 +233,7 @@ InlineItemPosition TextOnlySimpleLineBuilder::placeInlineTextContent(const Rende
     if (m_partialLeadingTextItem) {
         candidateContent.append({ });
         ++nextItemIndex;
-        if (isAtSoftWrapOpportunityOrContentEnd(*m_partialLeadingTextItem))
+        if (isAtSoftWrapOpportunityOrContentEnd(*m_partialLeadingTextItem, m_inlineItemList, nextItemIndex, layoutRange, rootStyle))
             isEndOfLine = processCandidateContent();
     }
 
@@ -242,7 +248,7 @@ InlineItemPosition TextOnlySimpleLineBuilder::placeInlineTextContent(const Rende
                 return measuredInlineTextItem(*inlineTextItem, rootStyle, m_line.contentLogicalRight() + candidateContent.logicalWidth);
             };
             candidateContent.append(contentWidth());
-            if (isAtSoftWrapOpportunityOrContentEnd(*inlineTextItem))
+            if (isAtSoftWrapOpportunityOrContentEnd(*inlineTextItem, m_inlineItemList, nextItemIndex, layoutRange, rootStyle))
                 isEndOfLine = processCandidateContent();
             continue;
         }
@@ -261,7 +267,7 @@ InlineItemPosition TextOnlySimpleLineBuilder::placeInlineTextContent(const Rende
     return placedContentEnd;
 }
 
-InlineItemPosition TextOnlySimpleLineBuilder::placeNonWrappingInlineTextContent(const RenderStyle& rootStyle, const InlineItemRange& layoutRange)
+InlineItemPosition TextOnlySimpleLineBuilder::placeNonWrappingInlineTextContent(const Style::ComputedStyle& rootStyle, const InlineItemRange& layoutRange)
 {
     ASSERT(!TextUtil::isWrappingAllowed(rootStyle));
     ASSERT(!m_partialLeadingTextItem);
@@ -306,7 +312,7 @@ InlineItemPosition TextOnlySimpleLineBuilder::placeNonWrappingInlineTextContent(
     return placedContentEnd;
 }
 
-TextOnlyLineBreakResult TextOnlySimpleLineBuilder::commitCandidateContent(const RenderStyle& rootStyle, const CandidateTextContent& candidateContent, const InlineItemRange& layoutRange)
+TextOnlyLineBreakResult TextOnlySimpleLineBuilder::commitCandidateContent(const Style::ComputedStyle& rootStyle, const CandidateTextContent& candidateContent, const InlineItemRange& layoutRange)
 {
     auto hasLeadingPartiaContent = m_partialLeadingTextItem && candidateContent.startIndex == layoutRange.startIndex();
     auto contentWidth = [&] (auto& inlineTextItem, InlineLayoutUnit contentOffset) {
@@ -340,7 +346,7 @@ TextOnlyLineBreakResult TextOnlySimpleLineBuilder::commitCandidateContent(const 
     return handleOverflowingTextContent(rootStyle, candidateContentForLineBreaking, layoutRange);
 }
 
-TextOnlyLineBreakResult TextOnlySimpleLineBuilder::handleOverflowingTextContent(const RenderStyle& rootStyle, const InlineContentBreaker::ContinuousContent& candidateContent, const InlineItemRange& layoutRange)
+TextOnlyLineBreakResult TextOnlySimpleLineBuilder::handleOverflowingTextContent(const Style::ComputedStyle& rootStyle, const InlineContentBreaker::ContinuousContent& candidateContent, const InlineItemRange& layoutRange)
 {
     ASSERT(!candidateContent.runs().isEmpty());
 
@@ -420,7 +426,7 @@ TextOnlyLineBreakResult TextOnlySimpleLineBuilder::handleOverflowingTextContent(
     return { InlineContentBreaker::IsEndOfLine::Yes };
 }
 
-void TextOnlySimpleLineBuilder::handleLineEnding(const RenderStyle& rootStyle, InlineItemPosition placedContentEnd, size_t layoutRangeEndIndex)
+void TextOnlySimpleLineBuilder::handleLineEnding(const Style::ComputedStyle& rootStyle, InlineItemPosition placedContentEnd, size_t layoutRangeEndIndex)
 {
     auto horizontalAvailableSpace = m_lineLogicalRect.width();
     auto isLastInlineContent = isLastLineWithInlineContent(placedContentEnd, layoutRangeEndIndex);
@@ -434,7 +440,7 @@ void TextOnlySimpleLineBuilder::handleLineEnding(const RenderStyle& rootStyle, I
     m_line.handleTrailingHangingContent(intrinsicWidthMode(), horizontalAvailableSpace, isLastInlineContent);
 }
 
-size_t TextOnlySimpleLineBuilder::revertToTrailingItem(const RenderStyle& rootStyle, const InlineItemRange& layoutRange, const InlineTextItem& trailingInlineItem)
+size_t TextOnlySimpleLineBuilder::revertToTrailingItem(const Style::ComputedStyle& rootStyle, const InlineItemRange& layoutRange, const InlineTextItem& trailingInlineItem)
 {
     m_line.initialize({ }, isFirstFormattedLineCandidate());
     size_t numberOfInlineItemsOnLine = 0;
@@ -456,7 +462,7 @@ size_t TextOnlySimpleLineBuilder::revertToTrailingItem(const RenderStyle& rootSt
     return { };
 }
 
-size_t TextOnlySimpleLineBuilder::revertToLastNonOverflowingItem(const RenderStyle& rootStyle, const InlineItemRange& layoutRange)
+size_t TextOnlySimpleLineBuilder::revertToLastNonOverflowingItem(const Style::ComputedStyle& rootStyle, const InlineItemRange& layoutRange)
 {
     // Revert all the way back to a wrap opportunity when either a soft hyphen fits or no hyphen is required.
     for (auto i = m_wrapOpportunityList.size(); i--;) {
@@ -485,13 +491,15 @@ InlineLayoutUnit TextOnlySimpleLineBuilder::availableWidth() const
     return (m_lineLogicalRect.width() + epsilon) - (!std::isnan(contentLogicalRight) ? contentLogicalRight : 0.f);
 }
 
-bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayoutByContent(const InlineContentCache::InlineItems& inlineItems, const PlacedFloats& placedFloats)
+bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayoutByContent(const InlineContentCache::InlineItems& inlineItems, const InlineLayoutState& inlineLayoutState)
 {
     if (inlineItems.isEmpty())
         return false;
     if (!inlineItems.hasTextAndLineBreakOnlyContent() || inlineItems.hasInlineBoxes() || inlineItems.requiresVisualReordering() || inlineItems.hasTextAutospace())
         return false;
-    if (!placedFloats.isEmpty())
+    if (!inlineLayoutState.placedFloats().isEmpty())
+        return false;
+    if (auto lineClamp = inlineLayoutState.parentBlockLayoutState().lineClamp(); lineClamp && !lineClamp->isLegacy)
         return false;
     return true;
 }
@@ -500,6 +508,10 @@ bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(const
 {
     auto isEligibleByStyle = [](auto& style) {
         if (style.fontCascade().wordSpacing())
+            return false;
+        // 'white-space-trim' discards inline items adjacent to box edges; the text-only fast paths
+        // (used for both layout and intrinsic sizing) don't account for that, so fall back to the line builder.
+        if (!style.whiteSpaceTrim().isNone())
             return false;
         if (style.writingMode().isBidiRTL())
             return false;
@@ -536,7 +548,8 @@ bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedDisplayBuild(const Elemen
         return false;
 
     auto& rootStyle = rootBlockContainer.style();
-    if (rootStyle.textOverflow() != Style::ComputedStyle::initialTextOverflow())
+    CheckedRef styleForTruncation = rootBlockContainer.isAnonymous() ? IntegrationUtils::firstNonAnonymousAncestorStyle(rootBlockContainer) : rootStyle;
+    if (styleForTruncation->textOverflow() != Style::ComputedStyle::initialTextOverflow())
         return false;
     if (!rootStyle.writingMode().isHorizontal())
         return false;

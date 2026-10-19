@@ -47,7 +47,7 @@ public:
     int descent() const;
     String fontFamily() const;
 
-    SVGFontElement* NODELETE associatedFontElement() const;
+    SVGFontElement* LEGACY_NODELETE associatedFontElement() const;
     void rebuildFontFace();
 
     StyleRuleFontFace& fontFaceRule() const { return m_fontFaceRule.get(); }
@@ -62,7 +62,7 @@ private:
     NeedsPostConnectionSteps insertionSteps(InsertionType, ContainerNode&) final;
     void removingSteps(RemovalType, ContainerNode&) final;
 
-    bool rendererIsNeeded(const RenderStyle&) final { return false; }
+    bool rendererIsNeeded(const Style::ComputedStyle&) final { return false; }
 
     const Ref<StyleRuleFontFace> m_fontFaceRule;
     WeakPtr<SVGFontElement, WeakPtrImplWithEventTargetData> m_fontElement;

@@ -26,7 +26,7 @@
 #pragma once
 
 #include <WebCore/GPUIntegralTypes.h>
-#include <WebCore/WebGPUTextureUsage.h>
+#include <WebCore/WebGPUCppAPI.h>
 #include <cstdint>
 #include <wtf/RefCounted.h>
 
@@ -35,26 +35,33 @@ namespace WebCore {
 using GPUTextureUsageFlags = uint32_t;
 class GPUTextureUsage : public RefCounted<GPUTextureUsage> {
 public:
-    static constexpr GPUFlagsConstant COPY_SRC          = 0x01;
-    static constexpr GPUFlagsConstant COPY_DST          = 0x02;
-    static constexpr GPUFlagsConstant TEXTURE_BINDING   = 0x04;
-    static constexpr GPUFlagsConstant STORAGE_BINDING   = 0x08;
-    static constexpr GPUFlagsConstant RENDER_ATTACHMENT = 0x10;
+    static constexpr GPUFlagsConstant COPY_SRC             = 0x01;
+    static constexpr GPUFlagsConstant COPY_DST             = 0x02;
+    static constexpr GPUFlagsConstant TEXTURE_BINDING      = 0x04;
+    static constexpr GPUFlagsConstant STORAGE_BINDING      = 0x08;
+    static constexpr GPUFlagsConstant RENDER_ATTACHMENT    = 0x10;
+    static constexpr GPUFlagsConstant TRANSIENT_ATTACHMENT = 0x20;
 };
 
-inline WebGPU::TextureUsageFlags convertTextureUsageFlagsToBacking(GPUTextureUsageFlags textureUsageFlags)
+inline OptionSet<::WebGPU::TextureUsage> convertTextureUsageFlagsToBacking(GPUTextureUsageFlags textureUsageFlags)
 {
-    WebGPU::TextureUsageFlags result;
+    constexpr GPUTextureUsageFlags allKnownUsages = GPUTextureUsage::COPY_SRC | GPUTextureUsage::COPY_DST | GPUTextureUsage::TEXTURE_BINDING | GPUTextureUsage::STORAGE_BINDING | GPUTextureUsage::RENDER_ATTACHMENT | GPUTextureUsage::TRANSIENT_ATTACHMENT;
+
+    OptionSet<::WebGPU::TextureUsage> result;
+    if (textureUsageFlags & ~allKnownUsages)
+        result.add(::WebGPU::TextureUsage::Invalid);
     if (textureUsageFlags & GPUTextureUsage::COPY_SRC)
-        result.add(WebGPU::TextureUsage::CopySource);
+        result.add(::WebGPU::TextureUsage::CopySource);
     if (textureUsageFlags & GPUTextureUsage::COPY_DST)
-        result.add(WebGPU::TextureUsage::CopyDestination);
+        result.add(::WebGPU::TextureUsage::CopyDestination);
     if (textureUsageFlags & GPUTextureUsage::TEXTURE_BINDING)
-        result.add(WebGPU::TextureUsage::TextureBinding);
+        result.add(::WebGPU::TextureUsage::TextureBinding);
     if (textureUsageFlags & GPUTextureUsage::STORAGE_BINDING)
-        result.add(WebGPU::TextureUsage::StorageBinding);
+        result.add(::WebGPU::TextureUsage::StorageBinding);
     if (textureUsageFlags & GPUTextureUsage::RENDER_ATTACHMENT)
-        result.add(WebGPU::TextureUsage::RenderAttachment);
+        result.add(::WebGPU::TextureUsage::RenderAttachment);
+    if (textureUsageFlags & GPUTextureUsage::TRANSIENT_ATTACHMENT)
+        result.add(::WebGPU::TextureUsage::Transient);
     return result;
 }
 

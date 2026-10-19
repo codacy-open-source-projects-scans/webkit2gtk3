@@ -41,6 +41,9 @@ bool InteractionInformationRequest::isValidForRequest(const InteractionInformati
     if (other.includeCursorContext && !includeCursorContext)
         return false;
 
+    if (other.includeHasDoubleClickHandler && !includeHasDoubleClickHandler)
+        return false;
+
     if (other.includeImageData && !includeImageData)
         return false;
 
@@ -48,6 +51,9 @@ bool InteractionInformationRequest::isValidForRequest(const InteractionInformati
         return false;
 
     if (other.linkIndicatorShouldHaveLegacyMargins != linkIndicatorShouldHaveLegacyMargins)
+        return false;
+
+    if (other.inputSource != inputSource)
         return false;
 
     return (other.point - point).diagonalLengthSquared() <= radius * radius;

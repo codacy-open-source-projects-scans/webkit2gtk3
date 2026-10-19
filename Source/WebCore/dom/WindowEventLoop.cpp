@@ -27,12 +27,15 @@
 #include "WindowEventLoop.h"
 
 #include "CommonVM.h"
+#include "ContextDestructionObserverInlines.h"
 #include "CustomElementReactionQueue.h"
 #include "DocumentPage.h"
 #include "HTMLSlotElement.h"
 #include "IdleCallbackController.h"
 #include "Microtasks.h"
+#include "MutationCallback.h"
 #include "MutationObserver.h"
+#include "NodeDocument.h"
 #include "OpportunisticTaskScheduler.h"
 #include "SecurityOrigin.h"
 #include "ThreadGlobalData.h"
@@ -46,7 +49,7 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WindowEventLoop);
 
-static MemoryCompactRobinHoodHashMap<String, CheckedPtr<WindowEventLoop>>& NODELETE windowEventLoopMap()
+static MemoryCompactRobinHoodHashMap<String, CheckedPtr<WindowEventLoop>>& LEGACY_NODELETE windowEventLoopMap()
 {
     RELEASE_ASSERT(isMainThread());
     static NeverDestroyed<MemoryCompactRobinHoodHashMap<String, CheckedPtr<WindowEventLoop>>> map;
@@ -119,7 +122,7 @@ bool WindowEventLoop::isContextThread() const
 MicrotaskQueue& WindowEventLoop::microtaskQueue()
 {
     if (!m_microtaskQueue)
-        m_microtaskQueue = MicrotaskQueue::create(commonVM(), *this);
+        lazyInitialize(m_microtaskQueue, MicrotaskQueue::create(commonVM(), *this));
     return *m_microtaskQueue;
 }
 
@@ -211,7 +214,8 @@ std::optional<MonotonicTime> WindowEventLoop::nextScheduledWorkTime() const
 std::optional<MonotonicTime> WindowEventLoop::nextRenderingTime() const
 {
     std::optional<MonotonicTime> nextRenderingTime;
-    const_cast<WindowEventLoop*>(this)->forEachAssociatedContext([&](ScriptExecutionContext& context) {
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST const_cast<WindowEventLoop*>(this)->forEachAssociatedContext([&](ScriptExecutionContext& context) {
         RefPtr document = dynamicDowncast<Document>(context);
         if (!document)
             return;
@@ -232,7 +236,7 @@ void WindowEventLoop::didReachTimeToRun()
     Ref protectedThis { *this }; // Executing tasks may remove the last reference to this WindowEventLoop.
     auto deadline = ApproximateTime::now() + ThreadTimers::maxDurationOfFiringTimers;
     run(commonVM(), deadline);
-    opportunisticallyRunIdleCallbacks(deadline.approximateMonotonicTime());
+    opportunisticallyRunIdleCallbacks(deadline.approximate<MonotonicTime>());
 }
 
 void WindowEventLoop::didFireIdleTimer()
@@ -263,6 +267,31 @@ void WindowEventLoop::queueMutationObserverCompoundMicrotask()
     });
 }
 
+void WindowEventLoop::removeMutationObserversForContext(ScriptExecutionContext& context)
+{
+    if (m_activeObservers.isEmpty() && m_suspendedObservers.isEmpty() && m_signalSlotList.isEmpty())
+        return;
+
+    auto disconnectMatching = [&](HashSet<Ref<MutationObserver>>& observers) {
+        observers.removeIf([&](auto& observer) {
+            RefPtr observerContext = observer->callback().scriptExecutionContext();
+            if (observerContext && observerContext != &context)
+                return false;
+            observer->disconnect();
+            return true;
+        });
+    };
+    disconnectMatching(m_activeObservers);
+    disconnectMatching(m_suspendedObservers);
+
+    m_signalSlotList.removeAllMatching([&](auto& slot) {
+        if (&slot->document() != &context)
+            return false;
+        slot->didRemoveFromSignalSlotList();
+        return true;
+    });
+}
+
 CustomElementQueue& WindowEventLoop::backupElementQueue()
 {
     if (!m_processingBackupElementQueue) {
@@ -279,7 +308,7 @@ CustomElementQueue& WindowEventLoop::backupElementQueue()
         });
     }
     if (!m_customElementQueue)
-        m_customElementQueue = makeUnique<CustomElementQueue>();
+        lazyInitialize(m_customElementQueue, makeUnique<CustomElementQueue>());
     return *m_customElementQueue;
 }
 

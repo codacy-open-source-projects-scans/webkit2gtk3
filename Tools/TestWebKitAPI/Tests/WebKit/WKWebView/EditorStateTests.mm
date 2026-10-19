@@ -25,6 +25,7 @@
 
 #import "config.h"
 
+#import "ClassMethodSwizzler.h"
 #import "Helpers/cocoa/EditingTestHarness.h"
 #import "InstanceMethodSwizzler.h"
 #import "Helpers/PlatformUtilities.h"
@@ -32,6 +33,7 @@
 #import "TestInputDelegate.h"
 #import "Helpers/cocoa/TestWKWebView.h"
 #import "Helpers/ios/UserInterfaceSwizzler.h"
+#import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKWebViewPrivate.h>
 #import <WebKit/WKWebViewPrivateForTesting.h>
 #import <WebKit/_WKFeature.h>
@@ -43,6 +45,7 @@
 
 #if PLATFORM(MAC)
 #import "Helpers/mac/AppKitSPI.h"
+#import <pal/cocoa/WritingToolsUISoftLink.h>
 #endif
 
 static void* const SelectionAttributesObservationContext = (void*)&SelectionAttributesObservationContext;
@@ -90,6 +93,47 @@ static void* const SelectionAttributesObservationContext = (void*)&SelectionAttr
 }
 
 @end
+
+#if HAVE(APPKIT_SIRI_AFFORDANCE)
+
+@interface TestSiriAffordanceController : NSObject
+@property (nonatomic) BOOL affordanceVisible;
+@property (nonatomic) unsigned dismissCount;
+- (void)setRealController:(id)realController;
+@end
+
+@implementation TestSiriAffordanceController {
+    RetainPtr<id> _realController;
+}
+
+- (BOOL)isVisible
+{
+    return _affordanceVisible;
+}
+
+- (void)dismiss
+{
+    _dismissCount++;
+}
+
+- (void)setRealController:(id)realController
+{
+    _realController = realController;
+}
+
+- (id)forwardingTargetForSelector:(SEL)selector
+{
+    return _realController.get();
+}
+
+- (BOOL)respondsToSelector:(SEL)selector
+{
+    return [super respondsToSelector:selector] || [_realController respondsToSelector:selector];
+}
+
+@end
+
+#endif // HAVE(APPKIT_SIRI_AFFORDANCE)
 
 namespace TestWebKitAPI {
 
@@ -577,7 +621,7 @@ TEST(EditorStateTests, MarkedTextRange_VerticalRangeSelection)
 
 #endif // PLATFORM(IOS_FAMILY)
 
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) && HAVE(APPKIT_SIRI_AFFORDANCE) && ENABLE(WRITING_TOOLS)
 
 static RetainPtr<WKWebViewConfiguration> configurationWithTextInputClientSelectionUpdatesEnabled()
 {
@@ -590,6 +634,11 @@ static RetainPtr<WKWebViewConfiguration> configurationWithTextInputClientSelecti
     }
     return configuration;
 }
+
+#define FORCE_ENHANCED_SIRI_AVAILABLE() \
+ClassMethodSwizzler enhancedSiriAvailabilitySwizzler(PAL::getWTWritingToolsViewControllerClassSingleton(), @selector(isEnhancedSiriAvailable), imp_implementationWithBlock(^{ \
+    return YES; \
+}));
 
 TEST(EditorStateTests, UnionRectInVisibleSelectedRangeAndDocumentVisibleRect)
 {
@@ -621,6 +670,7 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeAndDocumentVisibleRect)
         })
     };
 
+    FORCE_ENHANCED_SIRI_AVAILABLE()
     RetainPtr configuration = configurationWithTextInputClientSelectionUpdatesEnabled();
 
     RetainPtr webView = adoptNS([[TestWKWebView<NSTextInputClient> alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration.get()]);
@@ -680,6 +730,7 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeForEditableCaretSelection)
         })
     };
 
+    FORCE_ENHANCED_SIRI_AVAILABLE()
     RetainPtr configuration = configurationWithTextInputClientSelectionUpdatesEnabled();
 
     RetainPtr webView = adoptNS([[TestWKWebView<NSTextInputClient> alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration.get()]);
@@ -722,6 +773,7 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeForNonEditableRangeSelecti
         })
     };
 
+    FORCE_ENHANCED_SIRI_AVAILABLE()
     RetainPtr configuration = configurationWithTextInputClientSelectionUpdatesEnabled();
 
     RetainPtr webView = adoptNS([[TestWKWebView<NSTextInputClient> alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration.get()]);
@@ -758,6 +810,108 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeForNonEditableRangeSelecti
     EXPECT_TRUE(NSIsEmptyRect([webView unionRectInVisibleSelectedRange]));
 }
 
-#endif // PLATFORM(MAC)
+TEST(EditorStateTests, NotifyTextInputClientAfterMagnificationChange)
+{
+    __block unsigned didUpdateSelectionCount = 0;
+
+    InstanceMethodSwizzler didUpdateSelectionSwizzler {
+        NSTextInputContext.class,
+        @selector(textInputClientDidUpdateSelection),
+        imp_implementationWithBlock(^{
+            didUpdateSelectionCount++;
+        })
+    };
+
+    FORCE_ENHANCED_SIRI_AVAILABLE()
+    RetainPtr configuration = configurationWithTextInputClientSelectionUpdatesEnabled();
+    RetainPtr webView = adoptNS([[TestWKWebView<NSTextInputClient> alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration]);
+    [webView setAllowsMagnification:YES];
+    [webView _setEditable:YES];
+    [webView synchronouslyLoadHTMLString:@"<body>Hello world.</body>"];
+    [webView waitForNextPresentationUpdate];
+
+    [webView mouseDownAtPoint:NSMakePoint(50, 390) simulatePressure:NO];
+    [webView mouseUpAtPoint:NSMakePoint(50, 390)];
+    [webView waitForPendingMouseEvents];
+    [webView waitForNextPresentationUpdate];
+
+    auto countBeforeFirstMagnification = didUpdateSelectionCount;
+    [webView setMagnification:2.0];
+    [webView waitForNextPresentationUpdate];
+
+    Util::waitForConditionWithLogging(^{
+        return didUpdateSelectionCount > countBeforeFirstMagnification;
+    }, 3, @"Timed out waiting for first call to -textInputClientDidUpdateSelection");
+
+    auto countBeforeSecondMagnification = didUpdateSelectionCount;
+    [webView setMagnification:1.0];
+    [webView waitForNextPresentationUpdate];
+
+    Util::waitForConditionWithLogging(^{
+        return didUpdateSelectionCount > countBeforeSecondMagnification;
+    }, 3, @"Timed out waiting for second call to -textInputClientDidUpdateSelection");
+}
+
+TEST(EditorStateTests, DismissSiriAffordanceWhenSelectionScrollsAwayFromCursor)
+{
+    RetainPtr affordanceController = adoptNS([TestSiriAffordanceController new]);
+    [affordanceController setAffordanceVisible:YES];
+    [affordanceController setRealController:[NSCampoLightweightUIController sharedInstance]];
+
+    ClassMethodSwizzler sharedInstanceSwizzler {
+        NSCampoLightweightUIController.class,
+        @selector(sharedInstance),
+        imp_implementationWithBlock(^{ return affordanceController.get(); })
+    };
+
+    __block bool didEndScrollingOrZooming = false;
+    InstanceMethodSwizzler didEndScrollingSwizzler {
+        NSTextInputContext.class,
+        @selector(textInputClientDidEndScrollingOrZooming),
+        imp_implementationWithBlock(^{ didEndScrollingOrZooming = true; })
+    };
+
+    __block NSPoint cursorLocationInWindow = NSZeroPoint;
+    InstanceMethodSwizzler mouseLocationSwizzler {
+        NSWindow.class,
+        @selector(mouseLocationOutsideOfEventStream),
+        imp_implementationWithBlock(^NSPoint(id) { return cursorLocationInWindow; })
+    };
+
+    FORCE_ENHANCED_SIRI_AVAILABLE()
+    RetainPtr configuration = configurationWithTextInputClientSelectionUpdatesEnabled();
+    RetainPtr webView = adoptNS([[TestWKWebView<NSTextInputClient> alloc] initWithFrame:NSMakeRect(0, 0, 400, 400) configuration:configuration]);
+    [webView _setEditable:YES];
+    [webView synchronouslyLoadHTMLString:@"<body style='margin: 0; font: 40px/60px monospace;'><div>AAAA<br>BBBB<br>CCCC<br>DDDD<br>EEEE<br>FFFF<br>GGGG<br>HHHH</div><div style='height: 500vh;'></div></body>"];
+    [webView waitForNextPresentationUpdate];
+
+    [webView mouseDownAtPoint:NSMakePoint(50, 390) simulatePressure:NO];
+    [webView mouseUpAtPoint:NSMakePoint(50, 390)];
+    [webView waitForPendingMouseEvents];
+
+    [webView stringByEvaluatingJavaScript:@"document.execCommand('selectAll', true)"];
+    [webView waitForNextPresentationUpdate];
+
+    RetainPtr window = [webView window];
+    auto selectionRectInWindow = [window convertRectFromScreen:[webView unionRectInVisibleSelectedRange]];
+    cursorLocationInWindow = NSMakePoint(NSMidX(selectionRectInWindow), NSMidY(selectionRectInWindow));
+
+    auto scrollByFortyAndWaitForScrollingToEnd = ^{
+        didEndScrollingOrZooming = false;
+        [webView stringByEvaluatingJavaScript:@"scrollBy(0, 40)"];
+        [webView waitForNextPresentationUpdate];
+        Util::run(&didEndScrollingOrZooming);
+    };
+
+    scrollByFortyAndWaitForScrollingToEnd();
+    EXPECT_EQ([affordanceController dismissCount], 0u);
+
+    for (int i = 0; i < 10 && ![affordanceController dismissCount]; ++i)
+        scrollByFortyAndWaitForScrollingToEnd();
+
+    EXPECT_EQ([affordanceController dismissCount], 1u);
+}
+
+#endif // PLATFORM(MAC) && HAVE(APPKIT_SIRI_AFFORDANCE) && ENABLE(WRITING_TOOLS)
 
 } // namespace TestWebKitAPI

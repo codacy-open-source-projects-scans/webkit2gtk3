@@ -11,6 +11,8 @@
 #    pragma allow_unsafe_buffers
 #endif
 
+#include <array>
+
 #include "test_utils/ANGLETest.h"
 #include "test_utils/gl_raii.h"
 
@@ -361,7 +363,7 @@ TEST_P(ShaderStorageBufferTest31, ShaderStorageBufferReadWrite)
     glFinish();
 
     // Read back shader storage buffer
-    constexpr unsigned int kExpectedValues[2] = {3u, 4u};
+    static constexpr std::array<unsigned int, 2> kExpectedValues = {3u, 4u};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer);
     void *ptr = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, kElementCount * kArrayStride,
                                  GL_MAP_READ_BIT);
@@ -472,7 +474,7 @@ TEST_P(ShaderStorageBufferTest31, ShaderStorageBufferReadWriteAndBufferSubData)
                         kMiddlePaddingValues.data());
 
         // Read back shader storage buffer
-        constexpr unsigned int kExpectedValues[2] = {3u, 4u};
+        static constexpr std::array<unsigned int, 2> kExpectedValues = {3u, 4u};
         const GLbyte *ptr0                        = reinterpret_cast<const GLbyte *>(
             glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, kBufferSize, GL_MAP_READ_BIT));
         for (unsigned int idx = 0; idx < kElementCount; idx++)
@@ -651,7 +653,7 @@ void main()
     glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 
     // Read back shader storage buffer
-    constexpr unsigned int kExpectedValues[2] = {3u, 4u};
+    static constexpr std::array<unsigned int, 2> kExpectedValues = {3u, 4u};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer);
     void *ptr = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, kBufferSize, GL_MAP_READ_BIT);
     for (unsigned int idx = 0; idx < kElementCount; idx++)
@@ -1341,11 +1343,12 @@ void main()
     constexpr unsigned int kBytesPerComponent = sizeof(unsigned int);
     constexpr unsigned int kArrayStride       = 8;
     constexpr unsigned int kComponentCount    = kArrayStride / kBytesPerComponent;
-    constexpr unsigned int kExpectedValues[kElementCount][kComponentCount] = {{1u, 2u}, {3u, 4u}};
+    constexpr std::array<std::array<unsigned int, kComponentCount>, kElementCount> kExpectedValues =
+        {{{1u, 2u}, {3u, 4u}}};
     // Create shader storage buffer
     GLBuffer shaderStorageBuffer[2];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[0]);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, kElementCount * kArrayStride, kExpectedValues,
+    glBufferData(GL_SHADER_STORAGE_BUFFER, kElementCount * kArrayStride, kExpectedValues.data(),
                  GL_STATIC_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[1]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, kElementCount * kArrayStride, nullptr, GL_STATIC_DRAW);
@@ -1613,7 +1616,7 @@ void main()
     glFinish();
 
     // Read back shader storage buffer
-    constexpr unsigned int kExpectedValues[2] = {5u, 7u};
+    static constexpr std::array<unsigned int, 2> kExpectedValues = {5u, 7u};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer);
     void *ptr = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, kElementCount * kArrayStride,
                                  GL_MAP_READ_BIT);
@@ -2074,7 +2077,8 @@ void main()
 
     // Read back shader storage buffer
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[1]);
-    constexpr GLuint kExpectedADatas[kAElementCount] = {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u};
+    static constexpr std::array<GLuint, kAElementCount> kExpectedADatas = {1u, 2u, 3u, 4u,
+                                                                           5u, 6u, 7u, 8u};
     const GLuint *ptr                                = reinterpret_cast<const GLuint *>(
         glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, kTotalSize, GL_MAP_READ_BIT));
     for (unsigned i = 0u; i < kDimension0; i++)
@@ -2131,7 +2135,8 @@ void main()
     constexpr unsigned int kLoadBlockElementCount                   = 5;
     constexpr unsigned int kStoreBlockElementCount                  = 6;
     constexpr unsigned int kInputValues[kLoadBlockElementCount]     = {1u, 2u, 3u, 4u, 5u};
-    constexpr unsigned int kExpectedValues[kStoreBlockElementCount] = {3u, 1u, 2u, 3u, 4u, 5u};
+    static constexpr std::array<unsigned int, kStoreBlockElementCount> kExpectedValues = {
+        3u, 1u, 2u, 3u, 4u, 5u};
     GLBuffer shaderStorageBuffer[2];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[0]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, kLoadBlockElementCount * kBytesPerComponent,
@@ -2197,7 +2202,8 @@ void main()
     constexpr unsigned int kLoadBlockElementCount                   = 5;
     constexpr unsigned int kStoreBlockElementCount                  = 6;
     constexpr unsigned int kInputValues[kLoadBlockElementCount]     = {1u, 2u, 3u, 4u, 5u};
-    constexpr unsigned int kExpectedValues[kStoreBlockElementCount] = {3u, 1u, 2u, 3u, 4u, 5u};
+    static constexpr std::array<unsigned int, kStoreBlockElementCount> kExpectedValues = {
+        3u, 1u, 2u, 3u, 4u, 5u};
     GLBuffer shaderStorageBuffer[2];
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[0]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, kLoadBlockElementCount * kBytesPerComponent,
@@ -2228,8 +2234,8 @@ void main()
     constexpr unsigned int kSmallerLoadBlockElementCount                          = 3;
     constexpr unsigned int kSmallerStoreBlockElementCount                         = 4;
     constexpr unsigned int kSmallerInputValues[kSmallerLoadBlockElementCount]     = {1u, 2u, 3u};
-    constexpr unsigned int kSmallerExpectedValues[kSmallerStoreBlockElementCount] = {1u, 1u, 2u,
-                                                                                     3u};
+    static constexpr std::array<unsigned int, kSmallerStoreBlockElementCount>
+        kSmallerExpectedValues = {1u, 1u, 2u, 3u};
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[0]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, kSmallerLoadBlockElementCount * kBytesPerComponent,
@@ -2420,7 +2426,7 @@ TEST_P(ShaderStorageBufferTest31, ReadonlyBinaryOperator)
     glFinish();
 
     // Read back shader storage buffer
-    constexpr unsigned int kExpectedValues[kComponentCount] = {9u, 12u};
+    static constexpr std::array<unsigned int, kComponentCount> kExpectedValues = {9u, 12u};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[3]);
     const GLuint *ptr = reinterpret_cast<const GLuint *>(glMapBufferRange(
         GL_SHADER_STORAGE_BUFFER, 0, kComponentCount * kBytesPerComponent, GL_MAP_READ_BIT));
@@ -3434,6 +3440,108 @@ void main()
                 << component << " " << index << " " << increment;
         }
     }
+}
+
+// Test glMemoryBarrier works properly between compute shader write and graphics shader write
+TEST_P(ShaderStorageBufferTest31, ComputeShaderWriteThenGraphicsShaderWrite)
+{
+    constexpr char kComputeShaderSource[] = R"(#version 310 es
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+uniform uint myUniformInt;
+layout(binding=0, std140) buffer Storage1
+{
+    uint data[];
+} sb_store;
+
+void main()
+{
+    uint t = 0u;
+    for(uint i=0u; i<1024u; i++)
+    {
+        t += sb_store.data[i];
+    }
+    sb_store.data[gl_LocalInvocationIndex] = myUniformInt;
+    sb_store.data[gl_LocalInvocationIndex+1u] = t;
+}
+)";
+    ANGLE_GL_COMPUTE_PROGRAM(computeProgram, kComputeShaderSource);
+
+    constexpr char kFS[] = R"(#version 310 es
+precision mediump float;
+
+uniform uint myUniformInt;
+layout(binding=0, std140) buffer Storage1
+{
+    uint data[];
+} sb_store;
+
+void main() {
+    sb_store.data[0] = myUniformInt;
+})";
+    ANGLE_GL_PROGRAM(graphicsProgram, essl31_shaders::vs::Simple(), kFS);
+
+    // Create buffers
+    constexpr GLsizei kBufferSize = sizeof(GLuint) * 1024;
+    std::array<GLuint, 1024> kBufferInitData;
+    kBufferInitData.fill(0x0u);
+    std::array<GLBuffer, 10> shaderStorageBuffer;
+    for (int i = 0; i < 10; i++)
+    {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[i]);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, kBufferSize, kBufferInitData.data(), GL_STATIC_DRAW);
+    }
+    GLBuffer unusedBuffer;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, unusedBuffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, kBufferSize, nullptr, GL_STATIC_DRAW);
+
+    // Use compute program write to buffers
+    glUseProgram(computeProgram);
+    GLint uniformLoc = glGetUniformLocation(computeProgram, "myUniformInt");
+    EXPECT_NE(-1, uniformLoc);
+    for (int i = 0; i < 10; i++)
+    {
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, shaderStorageBuffer[i]);
+        GLuint uniformValue = static_cast<GLuint>(i);
+        glUniform1ui(uniformLoc, uniformValue);
+        glDispatchCompute(1, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    }
+
+    // Issue a last dispatch call write to an irrelevant buffer whose content we don't care about,
+    // so there is intentionally no memoryBarrier call. But it should not affect other SSBOs.
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, unusedBuffer);
+    glUniform1ui(uniformLoc, 0x123456u);
+    glDispatchCompute(1, 1, 1);
+
+    // Use graphics program to write to buffer. These buffers also written by compute shader and
+    // followed by glMemoryBarrier.
+    glUseProgram(graphicsProgram);
+    uniformLoc = glGetUniformLocation(graphicsProgram, "myUniformInt");
+    EXPECT_NE(-1, uniformLoc);
+    constexpr GLuint kGraphicsUniformValue = 100;
+    for (int i = 9; i >= 0; i--)
+    {
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, shaderStorageBuffer[i]);
+        GLuint uniformValue = kGraphicsUniformValue + static_cast<GLuint>(i);
+        glUniform1ui(uniformLoc, uniformValue);
+        drawQuad(graphicsProgram, essl31_shaders::PositionAttrib(), 0.5f);
+    }
+
+    // Read back shader storage buffer
+    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+    for (int i = 0; i < 10; i++)
+    {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, shaderStorageBuffer[i]);
+        const GLuint *ptr = reinterpret_cast<const GLuint *>(
+            glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, kBufferSize, GL_MAP_READ_BIT));
+        ASSERT(ptr != nullptr);
+        EXPECT_EQ(kGraphicsUniformValue + i, *(ptr));
+        EXPECT_EQ(0u, *(ptr + 1));
+        EXPECT_EQ(0u, *(ptr + 2));
+        EXPECT_EQ(0u, *(ptr + 3));
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    }
+    EXPECT_GL_NO_ERROR();
 }
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ShaderStorageBufferTest31);

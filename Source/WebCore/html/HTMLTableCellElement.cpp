@@ -32,7 +32,6 @@
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLTableElement.h"
-#include "NodeInlines.h"
 #include "NodeName.h"
 #include "RenderElementInlines.h"
 #include "RenderTableCell.h"
@@ -96,14 +95,14 @@ void HTMLTableCellElement::collectPresentationalHintsForAttribute(const Qualifie
 {
     switch (name.nodeName()) {
     case AttributeNames::nowrapAttr:
-        addPropertyToPresentationalHintStyle(style, CSSPropertyWhiteSpaceCollapse, CSSValueCollapse);
-        addPropertyToPresentationalHintStyle(style, CSSPropertyTextWrapMode, CSSValueNowrap);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyID::WhiteSpaceCollapse, CSSValueID::Collapse);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyID::TextWrapMode, CSSValueID::Nowrap);
         break;
     case AttributeNames::widthAttr:
-        addHTMLLengthToStyle(style, CSSPropertyWidth, value, AllowZeroValue::No);
+        addHTMLLengthToStyle(style, CSSPropertyID::Width, value, AllowZeroValue::No);
         break;
     case AttributeNames::heightAttr:
-        addHTMLLengthToStyle(style, CSSPropertyHeight, value, AllowZeroValue::No);
+        addHTMLLengthToStyle(style, CSSPropertyID::Height, value, AllowZeroValue::No);
         break;
     default:
         HTMLTablePartElement::collectPresentationalHintsForAttribute(name, value, style);
@@ -179,11 +178,11 @@ const AtomString& HTMLTableCellElement::scope() const
     return emptyAtom();
 }
 
-void HTMLTableCellElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) const
+void HTMLTableCellElement::addSubresourceAttributeURLs(OrderedHashSet<URL>& urls) const
 {
     HTMLTablePartElement::addSubresourceAttributeURLs(urls);
 
-    addSubresourceURL(urls, protect(document())->completeURL(attributeWithoutSynchronization(backgroundAttr)));
+    addSubresourceURL(urls, protect(document())->encodingParseURL(attributeWithoutSynchronization(backgroundAttr)));
 }
 
 HTMLTableCellElement* HTMLTableCellElement::cellAbove() const

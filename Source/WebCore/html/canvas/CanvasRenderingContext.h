@@ -25,11 +25,13 @@
 
 #pragma once
 
+#include "AnimationFrameRate.h"
 #include "CanvasBase.h"
 #include "GraphicsLayerContentsDisplayDelegate.h"
 #include "ImageBuffer.h"
 #include "ScriptWrappable.h"
 #include <wtf/CheckedRef.h>
+#include <wtf/CurrentThread.h>
 #include <wtf/Forward.h>
 #include <wtf/Lock.h>
 #include <wtf/Noncopyable.h>
@@ -41,12 +43,14 @@ namespace WebCore {
 class CSSStyleImageValue;
 class CachedImage;
 class CanvasPattern;
-class DestinationColorSpace;
+class ColorSpace;
 class GraphicsLayer;
 class HTMLCanvasElement;
 class HTMLImageElement;
 class HTMLVideoElement;
 class ImageBitmap;
+class NativeImage;
+class PlaceholderRenderingContextSource;
 class SVGImageElement;
 class WebGLObject;
 enum class PixelFormat : uint8_t;
@@ -57,10 +61,10 @@ class CanvasRenderingContext : public ScriptWrappable, public CanMakeWeakPtr<Can
 public:
     virtual ~CanvasRenderingContext();
 
-    static HashSet<CanvasRenderingContext*>& NODELETE instances() WTF_REQUIRES_LOCK(instancesLock());
-    static Lock& NODELETE instancesLock() WTF_RETURNS_LOCK(s_instancesLock);
+    static HashSet<CanvasRenderingContext*>& LEGACY_NODELETE instances() WTF_REQUIRES_LOCK(instancesLock());
+    static Lock& LEGACY_NODELETE instancesLock() WTF_RETURNS_LOCK(s_instancesLock);
 
-    WEBCORE_EXPORT void NODELETE ref() const;
+    WEBCORE_EXPORT void LEGACY_NODELETE ref() const;
     WEBCORE_EXPORT void deref() const;
 
     CanvasBase& canvasBase() const { return m_canvas; }
@@ -90,18 +94,28 @@ public:
     // Web Inspector and similar reads from the engine reads both.
     enum class SurfaceBuffer : uint8_t {
         DrawingBuffer,
-        DisplayBuffer
+        DisplayBuffer,
+        DisplayBufferForInspector,
     };
 
     // Draws the source buffer to the canvasBase().buffer().
     virtual RefPtr<ImageBuffer> surfaceBufferToImageBuffer(SurfaceBuffer) = 0;
+    // Returns the contents of the source buffer as an image. The image is immutable, so it stays
+    // valid after the context is drawn to again. Returns nullptr only if no image can be produced,
+    // for example because the canvas has no contents or an allocation failed.
+    virtual RefPtr<NativeImage> surfaceBufferToNativeImage(SurfaceBuffer) = 0;
     virtual bool isSurfaceBufferTransparentBlack(SurfaceBuffer) const = 0;
-    bool NODELETE delegatesDisplay() const;
+    virtual bool delegatesDisplay() const { return false; }
     virtual RefPtr<GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate();
     virtual void setContentsToLayer(GraphicsLayer&);
+    virtual void clearContentsFromLayer() { }
 
     // Returns the drawing buffer and runs the compositing steps of transferToImageBitmap.
     virtual RefPtr<ImageBuffer> transferToImageBuffer();
+
+#if ENABLE(OFFSCREEN_CANVAS)
+    virtual bool commitToPlaceholder(PlaceholderRenderingContextSource&) { return false; }
+#endif
 
     bool hasActiveInspectorCanvasCallTracer() const { return m_hasActiveInspectorCanvasCallTracer; }
     void setHasActiveInspectorCanvasCallTracer(bool hasActiveInspectorCanvasCallTracer) { m_hasActiveInspectorCanvasCallTracer = hasActiveInspectorCanvasCallTracer; }
@@ -117,15 +131,18 @@ public:
     // Swaps the current drawing buffer to display buffer.
     virtual void prepareForDisplay() { }
 
+    virtual std::optional<FramesPerSecond> preferredRenderingUpdateFramesPerSecond() const { return std::nullopt; }
+
     virtual PixelFormat pixelFormat() const;
-    virtual DestinationColorSpace colorSpace() const;
+    virtual ColorSpace colorSpace() const;
     virtual bool isOpaque() const;
-    virtual bool NODELETE willReadFrequently() const;
+    virtual bool LEGACY_NODELETE willReadFrequently() const;
     virtual std::optional<RenderingMode> renderingModeForTesting() const { return std::nullopt; }
 
 #if ENABLE(PIXEL_FORMAT_RGBA16F)
     bool isHDR() const { return pixelFormat() == PixelFormat::RGBA16F; }
     virtual void setDynamicRangeLimit(PlatformDynamicRangeLimit) { };
+    virtual ImagePaintingOptions paintingOptionsForDisplay() const { return { }; }
 #endif
     virtual std::optional<double> getEffectiveDynamicRangeLimitValue() const { return std::nullopt; };
 
@@ -133,10 +150,12 @@ public:
     bool isInPreparationForDisplayOrFlush() const { return m_isInPreparationForDisplayOrFlush; }
 
     void updateMemoryCost(size_t newMemoryCost) const;
-    size_t NODELETE memoryCost() const;
+    size_t LEGACY_NODELETE memoryCost() const;
 #if ENABLE(RESOURCE_USAGE)
-    size_t NODELETE externalMemoryCost() const;
+    size_t LEGACY_NODELETE externalMemoryCost() const;
 #endif
+    uint32_t owningThreadUID() const { return m_owningThreadUID; }
+    bool isContextThread() const { return m_owningThreadUID == currentThreadID(); }
 
 protected:
     enum class Type : uint8_t {
@@ -151,13 +170,12 @@ protected:
     };
 
     explicit CanvasRenderingContext(CanvasBase&, Type);
-    bool NODELETE taintsOrigin(const CanvasPattern*);
-    bool NODELETE taintsOrigin(const CanvasBase*);
-    bool taintsOrigin(const CachedImage*);
+    bool LEGACY_NODELETE taintsOrigin(const CanvasPattern*);
+    bool taintsOrigin(const CanvasBase*);
     bool taintsOrigin(const HTMLImageElement*);
     bool taintsOrigin(const SVGImageElement*);
     bool taintsOrigin(const HTMLVideoElement*);
-    bool NODELETE taintsOrigin(const ImageBitmap*);
+    bool taintsOrigin(const ImageBitmap*);
     bool taintsOrigin(const URL&);
 
     template<class T> void checkOrigin(const T* arg)
@@ -166,7 +184,7 @@ protected:
             m_canvas->setOriginTainted();
     }
     void checkOrigin(const URL&);
-    void NODELETE checkOrigin(const CSSStyleImageValue&);
+    void LEGACY_NODELETE checkOrigin(const CSSStyleImageValue&);
 
     mutable std::atomic<size_t> m_memoryCost { 0 };
 
@@ -178,7 +196,7 @@ private:
 
     WeakRef<CanvasBase> m_canvas;
     const Type m_type;
-
+    const uint32_t m_owningThreadUID;
 };
 
 } // namespace WebCore

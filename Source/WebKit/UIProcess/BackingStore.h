@@ -37,9 +37,9 @@
 #include <WebCore/RefPtrCairo.h>
 #elif USE(SKIA)
 class SkCanvas;
-IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkSurface.h>
-IGNORE_CLANG_WARNINGS_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
 namespace WebCore {
@@ -75,7 +75,7 @@ private:
     WebCore::IntSize m_size;
     float m_deviceScaleFactor { 1 };
 #if USE(CAIRO)
-    RefPtr<cairo_surface_t> m_surface;
+    const RefPtr<cairo_surface_t> m_surface;
     RefPtr<cairo_surface_t> m_scrollSurface;
     PAL::HysteresisActivity m_scrolledHysteresis;
 #elif USE(SKIA)

@@ -61,7 +61,7 @@ public:
     WEBCORE_EXPORT void setFocusedFrame(Frame*, BroadcastFocusedFrame = BroadcastFocusedFrame::Yes);
     Frame* focusedFrame() const { return m_focusedFrame.get(); }
     LocalFrame* localFocusedFrame() const { return dynamicDowncast<LocalFrame>(m_focusedFrame.get()); }
-    WEBCORE_EXPORT LocalFrame* NODELETE focusedOrMainFrame() const;
+    WEBCORE_EXPORT LocalFrame* LEGACY_NODELETE focusedOrMainFrame() const;
 
     WEBCORE_EXPORT bool setInitialFocus(FocusDirection, KeyboardEvent*);
     bool advanceFocus(FocusDirection, KeyboardEvent*, bool initialFocus = false);
@@ -91,8 +91,8 @@ public:
     WEBCORE_EXPORT FocusableElementSearchResult findFocusableElementContinuingFromFrame(FocusDirection, WebCore::FrameIdentifier, const FocusEventData&, LocalFrame&, ShouldFocusElement);
 
 private:
-    void setActiveInternal(bool);
-    void setFocusedInternal(bool);
+    void setActiveInternal();
+    void setFocusedInternal();
     void setIsVisibleAndActiveInternal(bool);
 
     enum class InitialFocus : bool { No, Yes };

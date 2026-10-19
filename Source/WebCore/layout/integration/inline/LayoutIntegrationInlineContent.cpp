@@ -28,8 +28,8 @@
 
 #include "InlineIteratorBox.h"
 #include "LayoutIntegrationLineLayout.h"
-#include "RenderStyle+GettersInlines.h"
 #include "SVGTextFragment.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "TextPainter.h"
 
 namespace WebCore {
@@ -186,7 +186,7 @@ const Vector<size_t>& InlineContent::nonRootInlineBoxIndexesForLayoutBox(const L
                 return Vector<size_t> { };
             }).iterator->value.append(i);
         }
-        for (auto entry : *m_inlineBoxIndexCache)
+        for (auto& entry : *m_inlineBoxIndexCache)
             entry.value.shrinkToFit();
     }
 

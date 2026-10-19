@@ -114,6 +114,7 @@ private:
     void resume() override;
     void sizeDidChange() override;
     void backgroundColorDidChange() override;
+    void releaseMemory(WTF::Critical) override;
     bool ensureDrawing() override;
     void fillGLInformation(RenderProcessInfo&&, CompletionHandler<void(RenderProcessInfo&&)>&&) override;
     WebCore::GraphicsLayerFactory* graphicsLayerFactory() override;
@@ -124,7 +125,7 @@ private:
 #endif
 #if ENABLE(DAMAGE_TRACKING)
     void resetDamageHistoryForTesting() override;
-    void foreachRegionInDamageHistoryForTesting(Function<void(const WebCore::Region&)>&&) const override;
+    void foreachRegionInDamageHistoryForTesting(NOESCAPE const Function<void(const WebCore::Region&)>&) const override;
 #endif
 #if PLATFORM(GTK)
     void adjustTransientZoom(double, WebCore::FloatPoint, WebCore::FloatPoint) override;
@@ -149,7 +150,7 @@ private:
 #if ENABLE(SCROLLING_THREAD)
     bool m_compositionRequiredInScrollingThread { false };
 #endif
-    RefPtr<ThreadedCompositor> m_compositor;
+    const RefPtr<ThreadedCompositor> m_compositor;
     std::unique_ptr<WebCore::SkiaPaintingEngine> m_skiaPaintingEngine;
     HashMap<uint64_t, Ref<WebCore::CoordinatedImageBackingStore>> m_imageBackingStores;
 

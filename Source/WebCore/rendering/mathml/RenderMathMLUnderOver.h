@@ -38,24 +38,24 @@ class RenderMathMLUnderOver final : public RenderMathMLScripts {
     WTF_MAKE_TZONE_ALLOCATED(RenderMathMLUnderOver);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderMathMLUnderOver);
 public:
-    RenderMathMLUnderOver(MathMLUnderOverElement&, RenderStyle&&);
+    RenderMathMLUnderOver(MathMLUnderOverElement&, Style::ComputedStyle&&);
     virtual ~RenderMathMLUnderOver();
 
 private:
     bool isRenderMathMLScripts() const final { return false; }
     bool isMathContentCentered() const final { return !shouldMoveLimits(); }
     ASCIILiteral renderName() const final { return "RenderMathMLUnderOver"_s; }
-    MathMLUnderOverElement& NODELETE element() const;
+    MathMLUnderOverElement& LEGACY_NODELETE element() const;
 
-    void computePreferredLogicalWidths() final;
+    void computeIntrinsicLogicalWidthContributions() final;
     void layoutBlock(RelayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) final;
 
     void stretchHorizontalOperatorsAndLayoutChildren();
-    bool isValid() const;
+    bool LEGACY_NODELETE isValid() const;
     bool shouldMoveLimits() const;
-    RenderBox& base() const;
-    RenderBox& under() const;
-    RenderBox& over() const;
+    RenderBox& LEGACY_NODELETE base() const;
+    RenderBox& LEGACY_NODELETE under() const;
+    RenderBox& LEGACY_NODELETE over() const;
     LayoutUnit horizontalOffset(const RenderBox&) const;
     bool hasAccent(bool accentUnder = false) const;
     bool hasAccentUnder() const { return hasAccent(true); };

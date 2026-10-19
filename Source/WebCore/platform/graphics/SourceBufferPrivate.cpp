@@ -46,17 +46,10 @@
 #include <wtf/MainThread.h>
 #include <wtf/MediaTime.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/Threading.h>
 
 namespace WebCore {
 
-// Do not enqueue samples spanning a significant unbuffered gap.
-// NOTE: one second is somewhat arbitrary. MediaSource::monitorSourceBuffers() is run
-// on the playbackTimer, which is effectively every 350ms. Allowing > 350ms gap between
-// enqueued samples allows for situations where we overrun the end of a buffered range
-// but don't notice for 350ms of playback time, and the client can enqueue data for the
-// new current time without triggering this early return.
-// FIXME(135867): Make this gap detection logic less arbitrary.
-static const MediaTime discontinuityTolerance = MediaTime(1, 1);
 static const unsigned evictionAlgorithmInitialTimeChunk = 30000;
 static const unsigned evictionAlgorithmTimeChunkLowThreshold = 3000;
 
@@ -226,6 +219,53 @@ Vector<PlatformTimeRanges> SourceBufferPrivate::trackBuffersRanges() const
     });
 }
 
+PlatformTimeRanges SourceBufferPrivate::computeBufferedRanges(const Vector<PlatformTimeRanges>& trackBufferedRanges, bool mediaSourceEnded)
+{
+    // 5.1 Attributes - buffered
+    // https://w3c.github.io/media-source/#dom-sourcebuffer-buffered
+    // When the attribute is read the following steps MUST occur:
+
+    // 2. Let highest end time be the largest track buffer ranges end time across
+    //    all the track buffers managed by this SourceBuffer object.
+    MediaTime highestEndTime = MediaTime::negativeInfiniteTime();
+    for (auto& trackRanges : trackBufferedRanges) {
+        if (!trackRanges.length())
+            continue;
+        highestEndTime = std::max(highestEndTime, trackRanges.maximumBufferedTime());
+    }
+
+    // NOTE: Short circuit the following if none of the TrackBuffers have buffered
+    // ranges to avoid generating a single range of {0, 0}.
+    if (highestEndTime.isNegativeInfinite())
+        return { };
+
+    // 3. Let intersection ranges equal a TimeRange object containing a single
+    //    range from 0 to highest end time.
+    PlatformTimeRanges intersectionRanges { MediaTime::zeroTime(), highestEndTime };
+
+    // 4. For each audio and video track buffer managed by this SourceBuffer,
+    //    run the following steps:
+    for (auto& trackRanges : trackBufferedRanges) {
+        if (!trackRanges.length())
+            continue;
+
+        // 4.1 Let track ranges equal the track buffer ranges for the current track buffer.
+        // 4.2 If readyState is "ended", then set the end time on the last range
+        //     in track ranges to highest end time.
+        // 4.3 Let new intersection ranges equal the intersection between the
+        //     intersection ranges and the track ranges.
+        // 4.4 Replace the ranges in intersection ranges with the new intersection ranges.
+        if (mediaSourceEnded) {
+            auto adjusted = trackRanges;
+            adjusted.add(adjusted.maximumBufferedTime(), highestEndTime);
+            intersectionRanges.intersectWith(adjusted);
+        } else
+            intersectionRanges.intersectWith(trackRanges);
+    }
+
+    return intersectionRanges;
+}
+
 bool SourceBufferPrivate::hasReceivedFirstInitializationSegment() const
 {
     assertIsCurrent(m_dispatcher.get());
@@ -248,39 +288,28 @@ void SourceBufferPrivate::reenqueSamples(TrackID trackID, NeedsFlush needsFlush)
     reenqueueMediaForTime(trackBuffer->second, trackID, currentTime(), needsFlush);
 }
 
-Ref<SourceBufferPrivate::ComputeSeekPromise> SourceBufferPrivate::computeSeekTime(const SeekTarget& target)
+MediaTime SourceBufferPrivate::computeSeekTime(const SeekTarget& target)
 {
-    // Called on SourceBuffer's thread
-    ASSERT(isOnCreationThread());
-    return invokeAsync(m_dispatcher, [weakThis = ThreadSafeWeakPtr { *this }, target] {
-        RefPtr protectedThis = weakThis.get();
-        if (!protectedThis)
-            return ComputeSeekPromise::createAndReject(PlatformMediaError::BufferRemoved);
-        RefPtr client = protectedThis->client();
-        if (!client)
-            return ComputeSeekPromise::createAndReject(PlatformMediaError::BufferRemoved);
+    assertIsCurrent(m_dispatcher.get());
 
-        auto seekTime = target.time;
+    auto seekTime = target.time;
 
-        if (target.negativeThreshold || target.positiveThreshold) {
-            protectedThis->iterateTrackBuffers([&](auto& trackBuffer) {
-                // Find the sample which contains the target time.
-                auto trackSeekTime = trackBuffer.findSeekTimeForTargetTime(target.time, target.negativeThreshold, target.positiveThreshold);
+    if (target.negativeThreshold || target.positiveThreshold) {
+        iterateTrackBuffers([&](auto& trackBuffer) {
+            // Find the sample which contains the target time.
+            auto trackSeekTime = trackBuffer.findSeekTimeForTargetTime(target.time, target.negativeThreshold, target.positiveThreshold);
 
-                if (trackSeekTime.isValid() && abs(target.time - trackSeekTime) > abs(target.time - seekTime))
-                    seekTime = trackSeekTime;
-            });
-        }
-        // When converting from a double-precision float to a MediaTime, a certain amount of precision is lost. If that
-        // results in a round-trip between `float in -> MediaTime -> float out` where in != out, we will wait forever for
-        // the time jump observer to fire.
-        if (seekTime.hasDoubleValue())
-            seekTime = MediaTime::createWithDouble(seekTime.toDouble(), MediaTime::DefaultTimeScale);
+            if (trackSeekTime.isValid() && abs(target.time - trackSeekTime) > abs(target.time - seekTime))
+                seekTime = trackSeekTime;
+        });
+    }
+    // When converting from a double-precision float to a MediaTime, a certain amount of precision is lost. If that
+    // results in a round-trip between `float in -> MediaTime -> float out` where in != out, we will wait forever for
+    // the time jump observer to fire.
+    if (seekTime.hasDoubleValue())
+        seekTime = MediaTime::createWithDouble(seekTime.toDouble(), MediaTime::DefaultTimeScale);
 
-        protectedThis->computeEvictionData();
-
-        return ComputeSeekPromise::createAndResolve(seekTime);
-    });
+    return seekTime;
 }
 
 void SourceBufferPrivate::reenqueueMediaForTime(const MediaTime& time)
@@ -459,7 +488,7 @@ void SourceBufferPrivate::reenqueueMediaForTime(TrackBuffer& trackBuffer, TrackI
     bool isEnded = false;
     if (RefPtr mediaSource = m_mediaSource.get())
         isEnded = mediaSource->isEnded();
-    if (trackBuffer.reenqueueMediaForTime(time, timeFudgeFactor(), isEnded))
+    if (trackBuffer.reenqueueMediaForTime(time, isEnded))
         provideMediaData(trackBuffer, trackID);
 }
 
@@ -602,7 +631,7 @@ void SourceBufferPrivate::computeEvictionData(ComputeEvictionDataRule rule)
                 });
             }
 
-            PlatformTimeRanges buffered { MediaTime::zeroTime(), MediaTime::positiveInfiniteTime() };
+            PlatformTimeRanges buffered { currentTime, MediaTime::positiveInfiniteTime() };
             iterateTrackBuffers([&](const TrackBuffer& trackBuffer) {
                 buffered.intersectWith(trackBuffer.buffered());
             });
@@ -610,25 +639,20 @@ void SourceBufferPrivate::computeEvictionData(ComputeEvictionDataRule rule)
             if (!buffered.length())
                 return evictableSize;
 
-            // We can evict everything from currentTime+timeChunk (3s) to the end of the buffer, not contiguous in current range.
-            auto rangeStartAfterCurrentTime = currentTime + timeChunk;
+            // Playback bridges gaps within the media source gap policy, so only
+            // data located after the current playable segment is evictable. That
+            // segment ends at the next real stall (nextStallTime evaluated against
+            // this SourceBuffer's ranges).
+            // When currentTime is not buffered here there is no playable segment,
+            // so keep currentTime + timeChunk of look-ahead.
+            const bool currentTimeBuffered = buffered.contain(currentTime);
+            const MediaTime currentPlayableEnd = currentTimeBuffered ? mediaSource->nextStallTime(currentTime, buffered) : MediaTime::invalidTime();
+            const auto rangeStartAfterCurrentTime = currentTimeBuffered ? currentPlayableEnd : currentTime + timeChunk;
             const auto rangeEndAfterCurrentTime = buffered.maximumBufferedTime();
             ASSERT(rangeEndAfterCurrentTime.isValid());
 
             if (rangeStartAfterCurrentTime >= rangeEndAfterCurrentTime)
                 return evictableSize;
-
-            // Do not evict data from the time range that contains currentTime.
-            size_t currentTimeRange = buffered.find(currentTime);
-            size_t startTimeRange = buffered.find(rangeStartAfterCurrentTime);
-            if (currentTimeRange != notFound && startTimeRange == currentTimeRange) {
-                currentTimeRange++;
-                if (currentTimeRange == buffered.length())
-                    return evictableSize;
-                rangeStartAfterCurrentTime = buffered.start(currentTimeRange);
-                if (rangeStartAfterCurrentTime >= rangeEndAfterCurrentTime)
-                    return evictableSize;
-            }
 
             iterateTrackBuffers([&](auto& trackBuffer) {
                 evictableSize += trackBuffer.codedFramesIntervalSize(rangeStartAfterCurrentTime, rangeEndAfterCurrentTime);
@@ -791,13 +815,20 @@ void SourceBufferPrivate::addTrackBuffer(TrackID trackId, RefPtr<MediaDescriptio
         buffer.m_hasVideo = buffer.m_hasVideo || description->isVideo();
 
         // 5.2.9 Add the track description for this track to the track buffer.
-        auto trackBuffer = TrackBuffer::create(WTF::move(description), discontinuityTolerance);
+        RefPtr mediaSource = buffer.m_mediaSource.get();
+        UniqueRef<TrackBuffer> trackBuffer = mediaSource
+            ? TrackBuffer::create(WTF::move(description),
+                [weakMediaSource = ThreadSafeWeakPtr { *mediaSource }, trackId](const MediaTime& fromTime, const MediaTime& toTime) -> bool {
+                    RefPtr ms = weakMediaSource.get();
+                    return ms && (toTime - fromTime) <= ms->gapToleranceAtTime(fromTime, trackId);
+                })
+            : TrackBuffer::create(WTF::move(description));
 #if !RELEASE_LOG_DISABLED
         // False positive see webkit.org/b/302520
         SUPPRESS_UNCOUNTED_ARG trackBuffer->setLogger(protect(buffer.logger()), buffer.logIdentifier());
 #endif
         buffer.m_trackBufferMap.try_emplace(trackId, WTF::move(trackBuffer));
-        if (RefPtr mediaSource = buffer.m_mediaSource.get()) {
+        if (mediaSource) {
             MediaSourcePrivate::TracksType tracksType;
             if (buffer.m_hasAudio)
                 tracksType |= TrackInfoTrackType::Audio;
@@ -952,7 +983,7 @@ bool SourceBufferPrivate::validateInitializationSegment(const SourceBufferPrivat
     }
 
     if (segment.textTracks.size() >= 2) {
-        for (auto& textTrackInfo : segment.videoTracks) {
+        for (auto& textTrackInfo : segment.textTracks) {
             if (m_trackBufferMap.find(RefPtr { textTrackInfo.track }->id()) == m_trackBufferMap.end())
                 return false;
         }
@@ -966,6 +997,13 @@ void SourceBufferPrivate::didReceiveSample(Ref<MediaSample>&& sample)
     assertIsCurrent(m_dispatcher.get());
     DEBUG_LOG(LOGIDENTIFIER, sample.get());
 
+    // Only video tracks produce B-frame reordering (pts > dts); processMediaSample's isBFrame
+    // gate never fires for audio, so audio tails are not tracked.
+    if (!sample->presentationSize().isEmpty()) {
+        auto [entry, inserted] = m_presentationTailPerTrack.try_emplace(sample->trackID(), sample.ptr());
+        if (!inserted && sample->presentationEndTime() > protect(entry->second)->presentationEndTime())
+            entry->second = sample.ptr();
+    }
     m_pendingSamples.append(WTF::move(sample));
 }
 
@@ -1036,6 +1074,106 @@ Ref<MediaPromise> SourceBufferPrivate::append(Ref<SharedBuffer>&& buffer)
     return m_currentSourceBufferOperation.get();
 }
 
+auto SourceBufferPrivate::findPrioritySample(const SamplesVector& samples) const -> PrioritySample
+{
+    assertIsCurrent(m_dispatcher.get());
+
+    // In sequence mode, the spec's coded frame processing algorithm step 1.3
+    // sets timestampOffset = group_start_timestamp − presentation_timestamp
+    // on the first sample to enter the loop. Across multiple tracks the
+    // right "first" sample is the one carrying the smallest presentation
+    // timestamp in the segment, so all of the segment's coded frames land
+    // at or after group_start_timestamp. Step 1.3 fires both on the initial
+    // batch (m_groupStartTimestamp valid here) and after a discontinuity in
+    // step 1.6 retries it on the regressing sample, so the priority sample
+    // must be at position 0 in either case. The look-ahead per track is
+    // bounded by the H.264 / H.265 max reorder window (16); non-video
+    // tracks have no reordering, so 1 arrival suffices. Samples whose
+    // trackID is not in m_trackBufferMap (text / metadata) are dropped by
+    // isMediaSampleAllowed before step 1.3 and don't influence the choice.
+    if (m_appendMode != SourceBufferAppendMode::Sequence
+        || samples.size() <= 1
+        || m_trackBufferMap.size() <= 1)
+        return { };
+
+    static constexpr unsigned maxVideoReorderWindow = 16;
+    StdUnorderedMap<TrackID, std::pair<MediaTime, size_t>> minPresentationTimePerTrack;
+    StdUnorderedMap<TrackID, unsigned> scannedPerTrack;
+    unsigned saturatedTracks = 0;
+    for (size_t i = 0; i < samples.size(); ++i) {
+        if (saturatedTracks == m_trackBufferMap.size())
+            break;
+        Ref sample = samples[i];
+        auto trackID = sample->trackID();
+        auto trackBufferIter = m_trackBufferMap.find(trackID);
+        if (trackBufferIter == m_trackBufferMap.end())
+            continue;
+        auto description = trackBufferIter->second->description();
+        unsigned trackCap = (description && description->isVideo()) ? maxVideoReorderWindow : 1u;
+        auto& scanned = scannedPerTrack[trackID];
+        if (scanned >= trackCap)
+            continue;
+        if (++scanned == trackCap)
+            ++saturatedTracks;
+        auto pts = sample->presentationTime();
+        auto [iter, inserted] = minPresentationTimePerTrack.try_emplace(trackID, std::make_pair(pts, i));
+        if (!inserted && pts < iter->second.first)
+            iter->second = std::make_pair(pts, i);
+    }
+
+    if (minPresentationTimePerTrack.size() <= 1)
+        return { };
+
+    PrioritySample priority;
+    MediaTime priorityPresentationTime = MediaTime::positiveInfiniteTime();
+    for (auto& [trackID, ptsAndIndex] : minPresentationTimePerTrack) {
+        if (ptsAndIndex.first < priorityPresentationTime) {
+            priorityPresentationTime = ptsAndIndex.first;
+            priority.trackID = trackID;
+            priority.index = ptsAndIndex.second;
+        }
+    }
+    return priority;
+}
+
+Ref<MediaPromise> SourceBufferPrivate::processNewMediaSamples(SamplesVector&& samples, PresentationTailMap&& presentationTailPerTrack)
+{
+    assertIsCurrent(m_dispatcher.get());
+
+    RefPtr client = this->client();
+    if (!client)
+        return MediaPromise::createAndReject(PlatformMediaError::BufferRemoved);
+
+    auto [priorityTrackID, priorityIndex] = findPrioritySample(samples);
+
+    // Drain the priority-track samples in [0, priorityIndex] first so step 1.3
+    // fires on the cross-track-min-PTS sample (parser arrival order need not put
+    // it at position 0).
+    if (priorityIndex) {
+        ASSERT(priorityIndex < samples.size());
+        for (size_t i = 0; i <= priorityIndex; ++i) {
+            Ref sample = samples[i];
+            if (sample->trackID() != priorityTrackID)
+                continue;
+            auto it = presentationTailPerTrack.find(sample->trackID());
+            bool isPresentationTail = it != presentationTailPerTrack.end() && sample.ptr() == it->second;
+            if (!processMediaSample(*client, WTF::move(sample), isPresentationTail))
+                return MediaPromise::createAndReject(PlatformMediaError::ParsingError);
+        }
+    }
+
+    for (size_t i = 0; i < samples.size(); ++i) {
+        Ref sample = samples[i];
+        if (priorityIndex && i <= priorityIndex && sample->trackID() == priorityTrackID)
+            continue;
+        auto it = presentationTailPerTrack.find(sample->trackID());
+        bool isPresentationTail = it != presentationTailPerTrack.end() && sample.ptr() == it->second;
+        if (!processMediaSample(*client, WTF::move(sample), isPresentationTail))
+            return MediaPromise::createAndReject(PlatformMediaError::ParsingError);
+    }
+    return MediaPromise::createAndResolve();
+}
+
 void SourceBufferPrivate::processPendingMediaSamples()
 {
     assertIsCurrent(m_dispatcher.get());
@@ -1043,26 +1181,18 @@ void SourceBufferPrivate::processPendingMediaSamples()
     if (m_pendingSamples.isEmpty())
         return;
     auto samples = std::exchange(m_pendingSamples, { });
-    m_currentAppendProcessing = protect(m_currentAppendProcessing)->whenSettled(m_dispatcher, [weakThis = ThreadSafeWeakPtr { *this }, samples = WTF::move(samples), abortCount = m_abortCount.load()](auto result) mutable {
+    auto presentationTailPerTrack = std::exchange(m_presentationTailPerTrack, { });
+    m_currentAppendProcessing = protect(m_currentAppendProcessing)->whenSettled(m_dispatcher, [weakThis = ThreadSafeWeakPtr { *this }, samples = WTF::move(samples), presentationTailPerTrack = WTF::move(presentationTailPerTrack), abortCount = m_abortCount.load()](auto result) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis || !result)
             return MediaPromise::createAndReject(!result ? result.error() : PlatformMediaError::BufferRemoved);
         if (abortCount != protectedThis->m_abortCount)
             return MediaPromise::createAndResolve();
-
-        RefPtr client = protectedThis->client();
-        if (!client)
-            return MediaPromise::createAndReject(PlatformMediaError::BufferRemoved);
-
-        for (auto& sample : samples) {
-            if (!protectedThis->processMediaSample(*client, WTF::move(sample)))
-                return MediaPromise::createAndReject(PlatformMediaError::ParsingError);
-        }
-        return MediaPromise::createAndResolve();
+        return protectedThis->processNewMediaSamples(WTF::move(samples), WTF::move(presentationTailPerTrack));
     });
 }
 
-bool SourceBufferPrivate::processMediaSample(SourceBufferPrivateClient& client, Ref<MediaSample>&& sample)
+bool SourceBufferPrivate::processMediaSample(SourceBufferPrivateClient& client, Ref<MediaSample>&& sample, bool isPresentationTail)
 {
     assertIsCurrent(m_dispatcher.get());
 
@@ -1314,6 +1444,27 @@ bool SourceBufferPrivate::processMediaSample(SourceBufferPrivateClient& client, 
             }
         }
 
+        // Proposed amendment to "Coded Frame Processing" tracked at
+        // w3c/media-source#375 (presentation-timestamp collision cleanup).
+        // Sits between step 1.13 (overlap check) and step 1.14 (remove existing
+        // coded frames) of the algorithm.
+        //
+        // Remove coded frames whose presentation timestamp is within 1
+        // microsecond of the incoming sample's presentation timestamp. The
+        // tolerance matches the one used by step 1.13 and is there for
+        // float/rational timestamp conversion robustness. Must run
+        // unconditionally: a continuous mid-stream append where the incoming
+        // sample's presentation timestamp coincides with an existing sample's
+        // can reach step 1.16 "Add the coded frame" with all other cleanup
+        // steps (1.13, 1.14-first, 1.14-second, step-1.15 sweep) no-opping.
+        {
+            MediaTime lowerPresentationTime = sample->presentationTime() - microsecond;
+            MediaTime upperPresentationTime = sample->presentationTime() + microsecond;
+            auto presentationRange = trackBuffer.samples().presentationOrder().findSamplesBetweenPresentationTimes(lowerPresentationTime, upperPresentationTime);
+            for (auto it = presentationRange.first; it != presentationRange.second; ++it)
+                erasedSamples.addSample(it->second.copyRef());
+        }
+
         // 1.14 Remove existing coded frames in track buffer:
         // If highest presentation timestamp for track buffer is not set:
         if (trackBuffer.highestPresentationTimestamp().isInvalid()) {
@@ -1355,17 +1506,16 @@ bool SourceBufferPrivate::processMediaSample(SourceBufferPrivateClient& client, 
             while (nextSyncSample != trackBuffer.samples().decodeOrder().end() && Ref { nextSyncSample->second }->presentationTime() <= sample->presentationTime())
                 nextSyncSample = trackBuffer.samples().decodeOrder().findSyncSampleAfterDecodeIterator(nextSyncSample);
 
-            // Note that prev(begin()) is Undefined Behaviour, so we exclude that case for nextSyncSample in the if.
-            // We also want to make sure that the list isn't empty in case nextSyncSample is end(), so there's at least
-            // a previous element to get in that case.
-            if (nextSampleInDecodeOrderRef->presentationTime() < sample->presentationTime()
-                && nextSyncSample != trackBuffer.samples().decodeOrder().begin()
-                && trackBuffer.samples().decodeOrder().size() > 0) {
+            // Note: findSyncSampleAfterDecodeIterator pre-increments its input before scanning
+            // (see SampleMap.cpp: std::find_if(++currentSampleDTS, end(), ...)), so it always
+            // returns either end() or an iterator strictly past nextSampleInDecodeOrder.
+            // Since nextSampleInDecodeOrder is not end() by the earlier guard, nextSyncSample
+            // cannot equal begin(), so std::prev(nextSyncSample) is safe.
+            if (nextSampleInDecodeOrderRef->presentationTime() < sample->presentationTime()) {
                 // Try to fix the out-of-ordering by placing the decoding timestamp of sample after the decoding timestamp
-                // of the last pre-existing sample before the next sync sample whis has a presentationTime lower than sample.
+                // of the last pre-existing sample before the next sync sample which has a presentationTime lower than sample.
                 // This would have been the last sample to be erased if this decoding timestamp correction wasn't applied.
                 auto lastSampleBeforeSyncOrBeforeEnd = std::prev(nextSyncSample);
-                // We also exclude the case of no sample previous to the last one.
                 auto lastSampleBeforeSyncOrBeforeEndRef = lastSampleBeforeSyncOrBeforeEnd->second;
                 if (lastSampleBeforeSyncOrBeforeEndRef->presentationTime() < sample->presentationTime()) {
                     const MediaTime epsilon = MediaTime(100, 1000000); // 100 µs.
@@ -1399,6 +1549,38 @@ bool SourceBufferPrivate::processMediaSample(SourceBufferPrivateClient& client, 
                 MediaTime eraseBeginTime = trackBuffer.highestPresentationTimestamp();
                 MediaTime eraseEndTime = frameEndTimestamp - contiguousFrameTolerance;
 
+                // If the incoming sample is the **presentation tail for this track** AND a
+                // reordered frame (B-frame: pts > dts), its declared frame_end may be a trun
+                // decode-to-next-decode placeholder that overshoots the next buffered sample's
+                // pts by a small margin. Taken at face value, step 1.14 treats the overshoot as
+                // a real overlap and removes the overlapped frame, leaving a gap in the buffered
+                // range that stalls playback. If the overshoot is less than timeFudgeFactor,
+                // attribute it to the trun placeholder rather than a genuine overlap and shift
+                // the overlapped frame forward by the overshoot: pts and dts shift equally,
+                // duration shrinks, presentationEndTime is preserved. Any larger overshoot is
+                // treated as a real overlap and left to the default path.
+                bool isBFrame = sample->presentationTime() > sample->decodeTime();
+                if (isPresentationTail && isBFrame) {
+                    MediaTime fudge = PlatformTimeRanges::timeFudgeFactor();
+                    if (frameEndTimestamp > fudge) {
+                        auto it = trackBuffer.samples().presentationOrder().findSampleStartingOnOrAfterPresentationTime(frameEndTimestamp - fudge);
+                        auto presentationEnd = trackBuffer.samples().presentationOrder().end();
+                        for (; it != presentationEnd && it->first < frameEndTimestamp; ++it) {
+                            if (it->first <= presentationTimestamp)
+                                continue;
+                            // Overlapped frame: pts ∈ (presentationTimestamp, frameEndTimestamp)
+                            // and within timeFudgeFactor of frame_end. If fully inside the erase
+                            // range, leave it to the default removal. Otherwise shift forward.
+                            Ref original = it->second;
+                            if (original->presentationEndTime() <= frameEndTimestamp)
+                                break;
+                            MediaTime offset = frameEndTimestamp - original->presentationTime();
+                            trackBuffer.adjustSampleStartTime(original.get(), offset);
+                            break;
+                        }
+                    }
+                }
+
                 if (eraseEndTime <= eraseBeginTime)
                     break;
 
@@ -1429,12 +1611,27 @@ bool SourceBufferPrivate::processMediaSample(SourceBufferPrivateClient& client, 
             auto nextSyncIter = trackBuffer.samples().decodeOrder().findSyncSampleAfterDecodeIterator(lastDecodeIter);
             dependentSamples.insert(firstDecodeIter, nextSyncIter);
 
-            // NOTE: in the case of b-frames, the previous step may leave in place samples whose presentation
-            // timestamp < presentationTime, but whose decode timestamp >= decodeTime. These will eventually cause
-            // a decode error if left in place, so remove these samples as well.
-            DecodeOrderSampleMap::KeyType decodeKey(sample->decodeTime(), sample->presentationTime());
-            if (auto samplesWithHigherDecodeTimes = trackBuffer.samples().decodeOrder().findSamplesBetweenDecodeKeys(decodeKey, erasedSamples.decodeOrder().begin()->first); samplesWithHigherDecodeTimes.size())
-                dependentSamples.insert(samplesWithHigherDecodeTimes.begin(), samplesWithHigherDecodeTimes.end());
+            // Proposed amendment to "Coded Frame Processing" tracked at
+            // w3c/media-source#374 (SAP Type 2 decode-shadowed orphan cleanup).
+            //
+            // Remove non-sync coded frames whose decode timestamp is strictly
+            // greater than the incoming sample's and whose presentation
+            // timestamp is less than the incoming sample's. The issue's
+            // amendment note permits implementations to bound the scan; the
+            // bound used here is erasedSamples.decodeOrder().begin()->first,
+            // relying on the predicate itself to preserve random access points
+            // and samples whose presentation timestamp is at or after the
+            // incoming sample's when the bound does not line up exactly with
+            // the next random access point in decode order.
+            DecodeOrderSampleMap::KeyType incomingDecodeKey(sample->decodeTime(), sample->presentationTime());
+            auto samplesInRange = trackBuffer.samples().decodeOrder().findSamplesBetweenDecodeKeys(incomingDecodeKey, erasedSamples.decodeOrder().begin()->first);
+            for (auto& entry : samplesInRange) {
+                Ref existingSample = entry.second;
+                if (existingSample->isSync())
+                    continue;
+                if (existingSample->presentationTime() < sample->presentationTime())
+                    dependentSamples.insert(entry);
+            }
 
             PlatformTimeRanges erasedRanges = removeSamplesFromTrackBuffer(dependentSamples, trackBuffer, "didReceiveSample"_s);
 
@@ -1563,6 +1760,10 @@ bool SourceBufferPrivate::evictFrames(uint64_t newDataSize, const MediaTime& cur
 
         do {
             auto rangeStartBeforeCurrentTime = minimumBufferedTime();
+            if (!rangeStartBeforeCurrentTime.isValid()) {
+                ASSERT_NOT_REACHED();
+                break;
+            }
             auto rangeEndBeforeCurrentTime = std::min(rangeStartBeforeCurrentTime + timeChunk, maximumRangeEnd);
 
             if (rangeStartBeforeCurrentTime >= rangeEndBeforeCurrentTime)
@@ -1583,34 +1784,40 @@ bool SourceBufferPrivate::evictFrames(uint64_t newDataSize, const MediaTime& cur
     if (!isBufferFull)
         return false;
 
+    RefPtr mediaSource = m_mediaSource.get();
+
     timeChunkAsMilliseconds = evictionAlgorithmInitialTimeChunk;
     do {
         const auto timeChunk = MediaTime(timeChunkAsMilliseconds, 1000);
-        const auto minimumRangeStartAfterCurrentTime = currentTime + timeChunk;
 
         do {
-            PlatformTimeRanges buffered { MediaTime::zeroTime(), MediaTime::positiveInfiniteTime() };
+            PlatformTimeRanges buffered { currentTime, MediaTime::positiveInfiniteTime() };
             iterateTrackBuffers([&](const TrackBuffer& trackBuffer) {
                 buffered.intersectWith(trackBuffer.buffered());
             });
 
+            // Playback bridges gaps within the media source gap policy, so only
+            // data located after the current playable segment is evictable. That
+            // segment ends at the next real stall (nextStallTime evaluated against
+            // this SourceBuffer's ranges).
+            // When currentTime is not buffered here there is no playable segment,
+            // so keep currentTime + timeChunk of look-ahead.
+            const bool currentTimeBuffered = mediaSource && buffered.contain(currentTime);
+            const MediaTime currentPlayableEnd = currentTimeBuffered ? mediaSource->nextStallTime(currentTime, buffered) : MediaTime::invalidTime();
+            const auto minimumRangeStartAfterCurrentTime = currentTimeBuffered ? currentPlayableEnd : currentTime + timeChunk;
+
             auto rangeEndAfterCurrentTime = buffered.maximumBufferedTime();
+            if (!buffered.length())
+                break;
+
+            if (!rangeEndAfterCurrentTime.isValid()) {
+                ASSERT_NOT_REACHED();
+                break;
+            }
             auto rangeStartAfterCurrentTime = std::max(minimumRangeStartAfterCurrentTime, rangeEndAfterCurrentTime - timeChunk);
 
             if (rangeStartAfterCurrentTime >= rangeEndAfterCurrentTime)
                 break;
-
-            // Do not evict data from the time range that contains currentTime.
-            size_t currentTimeRange = buffered.find(currentTime);
-            size_t startTimeRange = buffered.find(rangeStartAfterCurrentTime);
-            if (currentTimeRange != notFound && startTimeRange == currentTimeRange) {
-                currentTimeRange++;
-                if (currentTimeRange == buffered.length())
-                    break;
-                rangeStartAfterCurrentTime = buffered.start(currentTimeRange);
-                if (rangeStartAfterCurrentTime >= rangeEndAfterCurrentTime)
-                    break;
-            }
 
             // 4. For each range in removal ranges, run the coded frame removal algorithm with start and
             // end equal to the removal range start and end timestamp respectively.
@@ -1650,6 +1857,34 @@ void SourceBufferPrivate::iterateTrackBuffers(NOESCAPE const Function<void(const
     assertIsCurrent(m_dispatcher.get());
     for (auto& pair : m_trackBufferMap)
         func(pair.second);
+}
+
+bool SourceBufferPrivate::isAudioBufferedAt(const MediaTime& time, std::optional<TrackID> excluded) const
+{
+    assertIsCurrent(m_dispatcher.get());
+    for (auto& [trackID, trackBuffer] : m_trackBufferMap) {
+        if (excluded && *excluded == trackID)
+            continue;
+        const auto& description = trackBuffer->description();
+        if (!description || !description->isAudio())
+            continue;
+        if (trackBuffer->buffered().contain(time))
+            return true;
+    }
+    return false;
+}
+
+PlatformTimeRanges SourceBufferPrivate::audioBufferedRanges() const
+{
+    assertIsCurrent(m_dispatcher.get());
+    PlatformTimeRanges ranges;
+    for (auto& [_, trackBuffer] : m_trackBufferMap) {
+        const auto& description = trackBuffer->description();
+        if (!description || !description->isAudio())
+            continue;
+        ranges.unionWith(trackBuffer->buffered());
+    }
+    return ranges;
 }
 
 // Issue flushTrack IPCs now (still on m_dispatcher) for any track whose

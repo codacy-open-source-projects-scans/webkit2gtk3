@@ -31,6 +31,8 @@
 #include "WebDriverBidiBackendDispatchers.h"
 #include <JavaScriptCore/InspectorBackendDispatcher.h>
 #include <wtf/Forward.h>
+#include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomString.h>
@@ -71,7 +73,7 @@ private:
     void unsubscribeByEventName(RefPtr<JSON::Array>&& events, Inspector::CommandCallback<void>&&);
 
     WeakPtr<WebAutomationSession> m_session;
-    Ref<Inspector::BidiSessionBackendDispatcher> m_sessionDomainDispatcher;
+    const Ref<Inspector::BidiSessionBackendDispatcher> m_sessionDomainDispatcher;
 
     // https://w3c.github.io/webdriver-bidi/#events
     HashMap<AtomString, unsigned> m_eventSubscriptionCounts;

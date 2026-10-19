@@ -38,7 +38,6 @@
 #include "DocumentPage.h"
 #include "EventNames.h"
 #include "EventTargetInterfaces.h"
-#include "EventTargetInlines.h"
 #include "ExceptionOr.h"
 #include "JSCookieListItem.h"
 #include "JSDOMConvertDictionary.h"
@@ -74,7 +73,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(CookieStore);
 
 class CookieStore::MainThreadBridge : public ThreadSafeRefCounted<MainThreadBridge, WTF::DestructionThread::Main> {
 public:
-    static Ref<MainThreadBridge> create(CookieStore& cookieStore)
+    static Ref<MainThreadBridge> LEGACY_NODELETE create(CookieStore& cookieStore)
     {
         return adoptRef(*new MainThreadBridge(cookieStore));
     }
@@ -82,7 +81,7 @@ public:
     void get(CookieStoreGetOptions&&, URL&&, Function<void(CookieStore&, ExceptionOr<Vector<Cookie>>&&)>&&);
     void set(Cookie&&, URL&&, Function<void(CookieStore&, std::optional<Exception>&&)>&&);
 
-    void detach() { m_cookieStore = nullptr; }
+    void LEGACY_NODELETE detach() { m_cookieStore = nullptr; }
 
 private:
     explicit MainThreadBridge(CookieStore&);
@@ -265,7 +264,7 @@ void CookieStore::getShared(GetType getType, CookieStoreGetOptions&& options, Re
 
     auto url = context->cookieURL();
     if (!options.url.isNull()) {
-        auto parsed = context->completeURL(options.url);
+        auto parsed = context->parseURL(options.url);
         if (context->isDocument() && !equalIgnoringFragmentIdentifier(parsed, url)) {
             promise->reject(Exception { ExceptionCode::TypeError, "URL must match the document URL"_s });
             return;
@@ -280,7 +279,7 @@ void CookieStore::getShared(GetType getType, CookieStoreGetOptions&& options, Re
     }
 
     if (!options.name.isNull())
-        options.name = normalize(options.name);
+        options.name = CookieUtil::cookieStringForStorage(normalize(options.name));
 
     m_promises.add(++m_nextPromiseIdentifier, WTF::move(promise));
     auto completionHandler = [promiseIdentifier = m_nextPromiseIdentifier, getType](CookieStore& cookieStore, ExceptionOr<Vector<Cookie>>&& result) {
@@ -391,6 +390,10 @@ void CookieStore::set(CookieInit&& options, Ref<DeferredPromise>&& promise)
         promise->reject(Exception { ExceptionCode::TypeError, makeString("The size of the cookie name and value must not be greater than "_s, maximumNameValuePairSize, " bytes"_s) });
         return;
     }
+
+    // With all checks complete, reinterpret the string, if necessary, before writing to storage
+    cookie.name = CookieUtil::cookieStringForStorage(cookie.name);
+    cookie.value = CookieUtil::cookieStringForStorage(cookie.value);
 
     // FIXME: This should be further down.
     if (!options.domain.isNull() && cookie.name.startsWithIgnoringASCIICase("__Host-"_s)) {
@@ -525,7 +528,7 @@ void CookieStore::remove(CookieStoreDeleteOptions&& options, Ref<DeferredPromise
     }
 
     CookieInit initOptions;
-    initOptions.name = normalize(options.name);
+    initOptions.name = WTF::move(options.name);
     initOptions.value = emptyString();
     initOptions.domain = WTF::move(options.domain);
     initOptions.path = WTF::move(options.path);
@@ -592,18 +595,13 @@ void CookieStore::stop()
     if (!m_hasChangeEventListener)
         return;
 
-    WeakPtr page = document->page();
-    if (!page)
-        return;
-
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
-    auto host = document->url().host().toString();
-    if (host.isEmpty())
-        return;
-
-    protect(page->cookieJar())->removeChangeListener(host, *this);
+    if (RefPtr cookieJar = m_cookieJar)
+        cookieJar->removeChangeListener(m_host, *this);
 #endif
     m_hasChangeEventListener = false;
+    m_host = { };
+    m_cookieJar = nullptr;
 }
 
 bool CookieStore::virtualHasPendingActivity() const
@@ -628,26 +626,31 @@ void CookieStore::eventListenersDidChange()
     if (!document)
         return;
 
-    auto host = document->url().host().toString();
-    if (host.isEmpty())
-        return;
-
     bool hadChangeEventListener = m_hasChangeEventListener;
     m_hasChangeEventListener = hasEventListeners(eventNames().changeEvent);
 
     if (hadChangeEventListener == m_hasChangeEventListener)
         return;
 
-    WeakPtr page = document->page();
-    if (!page)
-        return;
-
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
-    Ref cookieJar = page->cookieJar();
-    if (m_hasChangeEventListener)
+    if (m_hasChangeEventListener) {
+        auto host = document->url().host().toString();
+        RefPtr page = document->page();
+        if (host.isEmpty() || !page) {
+            m_hasChangeEventListener = false;
+            return;
+        }
+
+        Ref cookieJar = page->cookieJar();
         cookieJar->addChangeListener(*document, *this);
-    else
-        cookieJar->removeChangeListener(host, *this);
+        m_host = WTF::move(host);
+        m_cookieJar = cookieJar;
+    } else {
+        if (RefPtr cookieJar = m_cookieJar)
+            cookieJar->removeChangeListener(m_host, *this);
+        m_host = { };
+        m_cookieJar = nullptr;
+    }
 #endif
 }
 

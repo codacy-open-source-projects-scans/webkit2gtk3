@@ -25,10 +25,10 @@
 
 #pragma once
 
-#include <JavaScriptCore/IteratorOperations.h>
 #include <JavaScriptCore/JSArrayBufferViewInlines.h>
 #include <WebCore/IDLTypes.h>
 #include <WebCore/JSDOMBinding.h>
+#include <WebCore/JSDOMBindingFacade.h>
 #include <WebCore/JSDOMConvertBase.h>
 #include <WebCore/JSDOMConvertBoolean.h>
 #include <WebCore/JSDOMConvertBufferSource.h>
@@ -138,7 +138,7 @@ template<typename... T> struct Converter<IDLUnion<T...>> : DefaultConverter<IDLU
     static constexpr bool hasCallbackFunctionType = numberOfCallbackFunctionTypes > 0;
     using CallbackFunctionType = ConditionalFront<CallbackFunctionTypeList, hasCallbackFunctionType>;
 
-    template<typename F> static decltype(auto) convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, F&& functor)
+    template<typename F> static decltype(auto) convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, NOESCAPE F&& functor)
     {
         using FunctorResultType = decltype(functor(Result::exception()));
 
@@ -187,7 +187,8 @@ template<typename... T> struct Converter<IDLUnion<T...>> : DefaultConverter<IDLU
 
                 using RawType = typename Type::RawType;
 
-                auto castedValue = JSToWrappedOverloader<RawType>::toWrapped(lexicalGlobalObject, value);
+                // This template is instantiated for every IDL interface type, not all of which are ref counted, so we can't use RefPtr here.
+                SUPPRESS_UNCOUNTED_LOCAL auto castedValue = JSToWrappedOverloader<RawType>::toWrapped(lexicalGlobalObject, value);
                 if (!castedValue)
                     return;
 
@@ -301,7 +302,7 @@ template<typename... T> struct Converter<IDLUnion<T...>> : DefaultConverter<IDLU
                     //         2. If method is not undefined, return the result of creating a sequence of that type from V and method.
                     constexpr bool hasSequenceType = numberOfSequenceTypes != 0;
                     if constexpr (hasSequenceType) {
-                        auto method = JSC::iteratorMethod(&lexicalGlobalObject, object);
+                        auto method = WebCore::iteratorMethod(&lexicalGlobalObject, object);
                         if (scope.exception())
                             return functor(ConversionResultException());
                         if (!method.isUndefined()) {
@@ -315,7 +316,7 @@ template<typename... T> struct Converter<IDLUnion<T...>> : DefaultConverter<IDLU
                     //         2. If method is not undefined, return the result of creating a frozen array of that type from V and method.
                     constexpr bool hasFrozenArrayType = numberOfFrozenArrayTypes != 0;
                     if constexpr (hasFrozenArrayType) {
-                        auto method = JSC::iteratorMethod(&lexicalGlobalObject, object);
+                        auto method = WebCore::iteratorMethod(&lexicalGlobalObject, object);
                         if (scope.exception())
                             return functor(ConversionResultException());
                         if (!method.isUndefined()) {
@@ -439,29 +440,16 @@ template<typename... T> struct JSConverter<IDLUnion<T...>> {
     }
 };
 
-// BufferSource specialization. In WebKit, BufferSource is defined as IDLUnion<IDLArrayBufferView, IDLArrayBuffer> as a hack, and it is not compatible to
-// annotation described in WebIDL.
-template<> struct Converter<IDLAllowSharedAdaptor<IDLUnion<IDLArrayBufferView, IDLArrayBuffer>>> : DefaultConverter<IDLUnion<IDLArrayBufferView, IDLArrayBuffer>> {
-    static decltype(auto) convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value)
-    {
-        return WebCore::convert<IDLUnion<IDLAllowSharedAdaptor<IDLArrayBufferView>, IDLAllowSharedAdaptor<IDLArrayBuffer>>>(lexicalGlobalObject, value);
-    }
-};
-
-template<>
-struct JSConverter<IDLAllowSharedAdaptor<IDLUnion<IDLArrayBufferView, IDLArrayBuffer>>> {
-    static constexpr bool needsState = true;
-    static constexpr bool needsGlobalObject = true;
-
-    template<typename U>
-    static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& globalObject, const U& value)
-    {
-        return toJS<IDLUnion<IDLArrayBufferView, IDLArrayBuffer>>(lexicalGlobalObject, globalObject, value);
-    }
-};
-
-
 template<> struct Converter<IDLBufferSource> : DefaultConverter<IDLBufferSource> {
+    using Result = ConversionResult<IDLBufferSource>;
+
+    static Result convert(JSC::JSGlobalObject& globalObject, JSC::JSValue value)
+    {
+        return WebCore::convert<IDLUnion<IDLArrayBufferView, IDLArrayBuffer>>(globalObject, value);
+    }
+};
+
+template<> struct Converter<IDLAllowSharedAdaptor<IDLBufferSource>> : DefaultConverter<IDLBufferSource> {
     using Result = ConversionResult<IDLBufferSource>;
 
     static Result convert(JSC::JSGlobalObject& globalObject, JSC::JSValue value)

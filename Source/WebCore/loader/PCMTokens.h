@@ -50,13 +50,13 @@ struct UnlinkableToken {
 };
 
 struct SourceUnlinkableToken : UnlinkableToken {
-    SourceUnlinkableToken isolatedCopy() const & { return { UnlinkableToken::isolatedCopy() }; }
-    SourceUnlinkableToken isolatedCopy() && { return { UnlinkableToken::isolatedCopy() }; }
+    SourceUnlinkableToken isolatedCopy() const &;
+    SourceUnlinkableToken isolatedCopy() &&;
 };
 
 struct DestinationUnlinkableToken : UnlinkableToken {
-    DestinationUnlinkableToken isolatedCopy() const & { return { UnlinkableToken::isolatedCopy() }; }
-    DestinationUnlinkableToken isolatedCopy() && { return { UnlinkableToken::isolatedCopy() }; }
+    DestinationUnlinkableToken isolatedCopy() const &;
+    DestinationUnlinkableToken isolatedCopy() &&;
 };
 
 struct SecretToken {
@@ -65,7 +65,7 @@ struct SecretToken {
     String keyIDBase64URL;
     SecretToken isolatedCopy() const & { return { tokenBase64URL.isolatedCopy(), signatureBase64URL.isolatedCopy(), keyIDBase64URL.isolatedCopy() }; }
     SecretToken isolatedCopy() && { return { WTF::move(tokenBase64URL).isolatedCopy(), WTF::move(signatureBase64URL).isolatedCopy(), WTF::move(keyIDBase64URL).isolatedCopy() }; }
-    bool isValid() const;
+    bool LEGACY_NODELETE isValid() const;
 };
 
 struct SourceSecretToken : SecretToken {

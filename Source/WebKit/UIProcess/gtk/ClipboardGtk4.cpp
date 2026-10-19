@@ -36,6 +36,7 @@
 #include <array>
 #include <gtk/gtk.h>
 #include <wtf/RefCounted.h>
+#include <wtf/glib/GLibExtras.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 
@@ -88,7 +89,6 @@ public:
 
     void readText(ReadTextCompletionHandler&& completionHandler)
     {
-        RefPtr protectedThis = RefPtr { this };
         m_completionHandler = WTF::move(completionHandler);
         gdk_clipboard_read_text_async(m_clipboard, m_cancellable.get(), [](GObject* clipboard, GAsyncResult* result, gpointer userData) {
             auto task = adoptRef(static_cast<ClipboardTask*>(userData));
@@ -96,7 +96,7 @@ public:
             GUniquePtr<char> text(gdk_clipboard_read_text_finish(GDK_CLIPBOARD(clipboard), result, &error.outPtr()));
             std::get<ReadTextCompletionHandler>(task->m_completionHandler)(String::fromUTF8(text.get()));
             task->done(error.get());
-        }, protectedThis.leakRef());
+        }, protect(this).leakRef());
         run();
     }
 
@@ -104,7 +104,6 @@ public:
 
     void readFilePaths(ReadFilePathsCompletionHandler&& completionHandler)
     {
-        RefPtr protectedThis = RefPtr { this };
         m_completionHandler = WTF::move(completionHandler);
         gdk_clipboard_read_value_async(m_clipboard, GDK_TYPE_FILE_LIST, G_PRIORITY_DEFAULT, m_cancellable.get(), [](GObject* clipboard, GAsyncResult* result, gpointer userData) {
             auto task = adoptRef(static_cast<ClipboardTask*>(userData));
@@ -124,17 +123,16 @@ public:
             }
             std::get<ReadFilePathsCompletionHandler>(task->m_completionHandler)(WTF::move(filePaths));
             task->done(error.get());
-        }, protectedThis.leakRef());
+        }, protect(this).leakRef());
         run();
     }
 
     using ReadBufferCompletionHandler = CompletionHandler<void(Ref<WebCore::SharedBuffer>&&)>;
 
-    void readBuffer(const char* format, ReadBufferCompletionHandler&& completionHandler)
+    void readBuffer(UTF8CStringView format, ReadBufferCompletionHandler&& completionHandler)
     {
-        RefPtr protectedThis = RefPtr { this };
         m_completionHandler = WTF::move(completionHandler);
-        auto mimeTypes = std::to_array<const char*>({ format, nullptr });
+        auto mimeTypes = WTF::toArray<const char*>({ format.utf8(), nullptr });
         gdk_clipboard_read_async(m_clipboard, mimeTypes.data(), G_PRIORITY_DEFAULT, m_cancellable.get(), [](GObject* clipboard, GAsyncResult* result, gpointer userData) {
             auto task = adoptRef(static_cast<ClipboardTask*>(userData));
             GUniqueOutPtr<GError> error;
@@ -162,7 +160,7 @@ public:
                     std::get<ReadBufferCompletionHandler>(task->m_completionHandler)(WebCore::SharedBuffer::create(bytes.get()));
                     task->done(error.get());
                 }, task.leakRef());
-        }, protectedThis.leakRef());
+        }, protect(this).leakRef());
         run();
     }
 
@@ -170,7 +168,6 @@ public:
 
     void readURL(ReadURLCompletionHandler&& completionHandler)
     {
-        RefPtr protectedThis = RefPtr { this };
         m_completionHandler = WTF::move(completionHandler);
         gdk_clipboard_read_value_async(m_clipboard, GDK_TYPE_FILE_LIST, G_PRIORITY_DEFAULT, m_cancellable.get(), [](GObject* clipboard, GAsyncResult* result, gpointer userData) {
             auto task = adoptRef(static_cast<ClipboardTask*>(userData));
@@ -181,7 +178,7 @@ public:
             GUniquePtr<char> uri(g_file_get_uri(file));
             std::get<ReadURLCompletionHandler>(task->m_completionHandler)(uri ? String::fromUTF8(uri.get()) : String(), { });
             task->done(error.get());
-        }, protectedThis.leakRef());
+        }, protect(this).leakRef());
         run();
     }
 
@@ -245,7 +242,7 @@ void Clipboard::readFilePaths(CompletionHandler<void(Vector<String>&&)>&& comple
     ClipboardTask::create(m_clipboard, readMode)->readFilePaths(WTF::move(completionHandler));
 }
 
-void Clipboard::readBuffer(const char* format, CompletionHandler<void(Ref<WebCore::SharedBuffer>&&)>&& completionHandler, ReadMode readMode)
+void Clipboard::readBuffer(UTF8CStringView format, CompletionHandler<void(Ref<WebCore::SharedBuffer>&&)>&& completionHandler, ReadMode readMode)
 {
     ClipboardTask::create(m_clipboard, readMode)->readBuffer(format, WTF::move(completionHandler));
 }
@@ -258,16 +255,17 @@ void Clipboard::readURL(CompletionHandler<void(String&& url, String&& title)>&& 
 void Clipboard::write(WebCore::SelectionData&& selectionData, CompletionHandler<void(int64_t)>&& completionHandler)
 {
     Vector<GdkContentProvider*> providers;
-    if (selectionData.hasMarkup()) {
-        CString markup = selectionData.markup().utf8();
-        GRefPtr<GBytes> bytes = adoptGRef(g_bytes_new(markup.data(), markup.length()));
-        providers.append(gdk_content_provider_new_for_bytes("text/html", bytes.get()));
-    }
 
     if (selectionData.hasURIList()) {
-        CString uriList = selectionData.uriList().utf8();
-        GRefPtr<GBytes> bytes = adoptGRef(g_bytes_new(uriList.data(), uriList.length()));
+        auto uriList = selectionData.uriList().utf8();
+        GRefPtr bytes = gBytesNew(uriList.span());
         providers.append(gdk_content_provider_new_for_bytes("text/uri-list", bytes.get()));
+    }
+
+    if (selectionData.hasMarkup()) {
+        auto markup = selectionData.markup().utf8();
+        GRefPtr bytes = gBytesNew(markup.span());
+        providers.append(gdk_content_provider_new_for_bytes("text/html", bytes.get()));
     }
 
     if (selectionData.hasImage()) {
@@ -276,7 +274,7 @@ void Clipboard::write(WebCore::SelectionData&& selectionData, CompletionHandler<
     }
 
     if (selectionData.hasText())
-        providers.append(gdk_content_provider_new_typed(G_TYPE_STRING, selectionData.text().utf8().data()));
+        providers.append(gdk_content_provider_new_typed(G_TYPE_STRING, selectionData.text().utf8().legacyCStringPointer()));
 
     if (selectionData.canSmartReplace()) {
         GRefPtr<GBytes> bytes = adoptGRef(g_bytes_new(nullptr, 0));
@@ -290,7 +288,7 @@ void Clipboard::write(WebCore::SelectionData&& selectionData, CompletionHandler<
 
     for (const auto& it : selectionData.buffers()) {
         GRefPtr<GBytes> bytes = it.value->createGBytes();
-        providers.append(gdk_content_provider_new_for_bytes(it.key.utf8().data(), bytes.get()));
+        providers.append(gdk_content_provider_new_for_bytes(it.key.utf8().legacyCStringPointer(), bytes.get()));
     }
 
     if (providers.isEmpty()) {

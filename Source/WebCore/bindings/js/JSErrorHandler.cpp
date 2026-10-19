@@ -42,9 +42,11 @@
 #include "JSEvent.h"
 #include "JSExecState.h"
 #include "JSExecStateInstrumentation.h"
+#include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/VMEntryScopeInlines.h>
 #include <wtf/Ref.h>
+#include <wtf/Scope.h>
 
 namespace WebCore {
 using namespace JSC;
@@ -74,7 +76,7 @@ void JSErrorHandler::handleEvent(ScriptExecutionContext& scriptExecutionContext,
     if (!jsFunction)
         return;
 
-    auto* isolatedWorld = this->isolatedWorld();
+    RefPtr isolatedWorld = this->isolatedWorld();
     if (!isolatedWorld) [[unlikely]]
         return;
 
@@ -96,6 +98,11 @@ void JSErrorHandler::handleEvent(ScriptExecutionContext& scriptExecutionContext,
                 jsFunctionWindow->setCurrentEvent(errorEvent);
         }
 
+        auto restoreCurrentEventOnExit = makeScopeExit([&] {
+            if (jsFunctionWindow)
+                jsFunctionWindow->setCurrentEvent(savedEvent.get());
+        });
+
         auto exception = ([&] -> NakedPtr<JSC::Exception> {
             VM& vm = globalObject->vm();
 
@@ -107,7 +114,7 @@ void JSErrorHandler::handleEvent(ScriptExecutionContext& scriptExecutionContext,
 
             {
                 auto scope = DECLARE_TOP_EXCEPTION_SCOPE(vm);
-                auto* jsErrorEvent = uncheckedDowncast<JSErrorEvent>(toJS(globalObject, globalObject, *errorEvent));
+                auto* jsErrorEvent = downcast<JSErrorEvent>(toJS(globalObject, globalObject, *errorEvent));
                 if (auto* exception = scope.exception()) [[unlikely]] {
                     scope.clearException();
                     return exception;
@@ -135,9 +142,6 @@ void JSErrorHandler::handleEvent(ScriptExecutionContext& scriptExecutionContext,
 
             if (returnValue.isTrue())
                 errorEvent->preventDefault();
-
-            if (jsFunctionWindow)
-                jsFunctionWindow->setCurrentEvent(savedEvent.get());
 
             return nullptr;
         }());

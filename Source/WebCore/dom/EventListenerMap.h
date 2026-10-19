@@ -40,11 +40,11 @@
 #include <wtf/Assertions.h>
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/Compiler.h>
+#include <wtf/CurrentThread.h>
 #include <wtf/Forward.h>
 #include <wtf/Lock.h>
 #include <wtf/Locker.h>
 #include <wtf/Platform.h>
-#include <wtf/Threading.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomString.h>
 
@@ -64,8 +64,8 @@ public:
 
     bool isEmpty() const { return m_entries.isEmpty(); }
     bool contains(const AtomString& eventType) const { return find(eventType); }
-    bool NODELETE containsCapturing(const AtomString& eventType) const;
-    bool NODELETE containsActive(const AtomString& eventType) const;
+    bool LEGACY_NODELETE containsCapturing(const AtomString& eventType) const;
+    bool LEGACY_NODELETE containsActive(const AtomString& eventType) const;
 
     void clear();
     void clearEntriesForTearDown()
@@ -77,7 +77,7 @@ public:
     void replacePreservingOptions(const AtomString& eventType, EventListener& oldListener, Ref<EventListener>&& newListener, bool useCapture = false);
     bool add(const AtomString& eventType, Ref<EventListener>&&, const RegisteredEventListener::Options&);
     bool remove(const AtomString& eventType, EventListener&, bool useCapture);
-    WEBCORE_EXPORT EventListenerVector* NODELETE find(const AtomString& eventType);
+    WEBCORE_EXPORT EventListenerVector* LEGACY_NODELETE find(const AtomString& eventType);
     const EventListenerVector* find(const AtomString& eventType) const { return const_cast<EventListenerMap*>(this)->find(eventType); }
     Vector<AtomString> eventTypes() const;
 
@@ -121,13 +121,13 @@ private:
             return;
 #endif
         if (!m_threadUID) {
-            ASSERT(!Thread::mayBeGCThread());
-            m_threadUID = Thread::currentSingleton().uid();
+            ASSERT(!currentThreadMayBeGCThread());
+            m_threadUID = currentThreadID();
             return;
         }
-        if (m_threadUID == Thread::currentSingleton().uid()) [[likely]]
+        if (m_threadUID == currentThreadID()) [[likely]]
             return;
-        RELEASE_ASSERT(Thread::mayBeGCThread());
+        RELEASE_ASSERT(currentThreadMayBeGCThread());
     }
 
     Vector<std::pair<AtomString, EventListenerVector>, 0, CrashOnOverflow, 4> m_entries;

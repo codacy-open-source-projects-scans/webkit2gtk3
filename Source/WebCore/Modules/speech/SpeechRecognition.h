@@ -31,6 +31,7 @@
 #include "SpeechRecognitionConnection.h"
 #include "SpeechRecognitionConnectionClient.h"
 #include "SpeechRecognitionResult.h"
+#include <wtf/ThreadSafeWeakPtr.h>
 
 namespace WebCore {
 
@@ -77,6 +78,9 @@ private:
     explicit SpeechRecognition(Document&);
 
     // SpeechRecognitionConnectionClient
+#if ENABLE(MEDIA_STREAM)
+    void captureSourceCreated(RealtimeMediaSource&) final;
+#endif
     void didStart() final;
     void didStartCapturingAudio() final;
     void didStartCapturingSound() final;
@@ -94,11 +98,11 @@ private:
     void stop() final;
 
     // EventTarget
-    ScriptExecutionContext* NODELETE scriptExecutionContext() const final;
+    ScriptExecutionContext* LEGACY_NODELETE scriptExecutionContext() const final;
     enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::SpeechRecognition; }
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
-    bool NODELETE virtualHasPendingActivity() const final;
+    bool LEGACY_NODELETE virtualHasPendingActivity() const final;
 
     String m_lang;
     bool m_continuous { false };
@@ -108,6 +112,9 @@ private:
     State m_state { State::Inactive };
     Vector<Ref<SpeechRecognitionResult>> m_finalResults;
     const RefPtr<SpeechRecognitionConnection> m_connection;
+#if ENABLE(MEDIA_STREAM)
+    ThreadSafeWeakPtr<RealtimeMediaSource> m_captureSource;
+#endif
 };
 
 } // namespace WebCore

@@ -61,15 +61,17 @@ FrameView* Widget::root() const
     const Widget* top = this;
     while (top->parent())
         top = top->parent();
-    if (auto* frameView = dynamicDowncast<FrameView>(top))
-        return const_cast<FrameView*>(frameView);
+    if (auto* frameView = dynamicDowncast<FrameView>(top)) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<FrameView*>(frameView);
+    }
     return nullptr;
 }
     
 void Widget::removeFromParent()
 {
     if (parent())
-        parent()->removeChild(*this);
+        protect(parent())->removeChild(*this);
 }
 
 void Widget::setCursor(const Cursor& cursor)

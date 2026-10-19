@@ -34,7 +34,6 @@
 #include "AccessibilityObjectInlines.h"
 #include "ElementChildIteratorInlines.h"
 #include "ElementInlines.h"
-#include "EventTargetInlines.h"
 #include "HTMLNames.h"
 #include "RenderIterator.h"
 #include "RenderObject.h"
@@ -106,6 +105,18 @@ void AccessibilitySVGObject::accessibilityText(Vector<AccessibilityText>& textOr
     String helptext = helpTextFromChildren(titleChild.get(), descChild.get(), descriptionText);
     if (!helptext.isEmpty())
         textOrder.append(AccessibilityText(WTF::move(helptext), AccessibilityTextSource::Help));
+}
+
+void AccessibilitySVGObject::alternativeText(Vector<AccessibilityText>& textOrder) const
+{
+    // https://w3c.github.io/svg-aam/#mapping_additional_nd
+    // Per SVG-AAM §7.1, the accessible name comes from aria-labelledby/aria-label,
+    // a <title> child, xlink:title (on <a>), the <use> target, or alt (on <image>).
+    // Expose this as Alternative text so host-language parents (e.g. <a> or <button>)
+    // pick it up via textUnderElement when deriving their own accname.
+    String descriptionText = description();
+    if (!descriptionText.isEmpty())
+        textOrder.append(AccessibilityText(WTF::move(descriptionText), AccessibilityTextSource::Alternative));
 }
 
 auto AccessibilitySVGObject::matchingTitleAndDescChildren() const -> MatchingLanguageChildren
@@ -354,24 +365,26 @@ AccessibilityRole AccessibilitySVGObject::determineAccessibilityRole()
     if (m_ariaRole != AccessibilityRole::Unknown)
         return m_ariaRole;
 
+    RefPtr element = this->element();
+    if (is<SVGGElement>(element)) {
+        // https://w3c.github.io/svg-aam/#include_elements
+        // g elements are generic (like a div) unless they have a name or is focusable.
+        // Evaluated before the renderer check so display:contents <g> still exposes its role.
+        if (WebCore::hasAccNameAttribute(*element) || hasTitleOrDescriptionChild() || canSetFocusAttribute())
+            return AccessibilityRole::Group;
+        return AccessibilityRole::Generic;
+    }
+
     if (!m_renderer)
         return AccessibilityRole::Unknown;
 
     if (isAccessibilitySVGRoot())
         return AccessibilityRole::Generic;
 
-    RefPtr element = this->element();
     if (m_renderer->isRenderOrLegacyRenderSVGShape() || m_renderer->isRenderOrLegacyRenderSVGPath() || m_renderer->isRenderOrLegacyRenderSVGImage() || is<SVGUseElement>(element))
         return AccessibilityRole::Image;
     if (m_renderer->isRenderOrLegacyRenderSVGForeignObject())
         return AccessibilityRole::Generic;
-    if (is<SVGGElement>(element)) {
-        // https://w3c.github.io/svg-aam/#include_elements
-        // g elements are generic (like a div) unless they have a name or is focusable.
-        if (WebCore::hasAccNameAttribute(*element) || hasTitleOrDescriptionChild() || canSetFocusAttribute())
-            return AccessibilityRole::Group;
-        return AccessibilityRole::Generic;
-    }
     if (m_renderer->isRenderSVGInlineText())
         return AccessibilityRole::StaticText;
     if (m_renderer->isRenderSVGText())
@@ -380,8 +393,10 @@ AccessibilityRole AccessibilitySVGObject::determineAccessibilityRole()
         return AccessibilityRole::SVGTextPath;
     if (m_renderer->isRenderSVGTSpan())
         return AccessibilityRole::SVGTSpan;
-    if (is<SVGAElement>(element))
-        return AccessibilityRole::Link;
+    if (is<SVGAElement>(element)) {
+        if (element->isLink() || hasClickHandler())
+            return AccessibilityRole::Link;
+    }
 
     return AccessibilityRenderObject::determineAccessibilityRole();
 }

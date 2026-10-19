@@ -64,6 +64,7 @@
 #import "WebFrameProxy.h"
 #import "WebNavigationState.h"
 #import "WebPageProxy.h"
+#import "WebPreferences.h"
 #import "WebProcessProxy.h"
 #import "WebProtectionSpace.h"
 #import "WebsiteDataStore.h"
@@ -81,6 +82,7 @@
 #import <WebCore/SecurityOriginData.h>
 #import <WebCore/SerializedCryptoKeyWrap.h>
 #import <wtf/BlockPtr.h>
+#import <wtf/Borrow.h>
 #import <wtf/NeverDestroyed.h>
 #import <wtf/Scope.h>
 #import <wtf/TZoneMallocInlines.h>
@@ -108,7 +110,7 @@
 namespace WebKit {
 using namespace WebCore;
 
-static WeakHashMap<WebPageProxy, WeakPtr<NavigationState>>& NODELETE navigationStates()
+static WeakHashMap<WebPageProxy, WeakPtr<NavigationState>>& LEGACY_NODELETE navigationStates()
 {
     static NeverDestroyed<WeakHashMap<WebPageProxy, WeakPtr<NavigationState>>> navigationStates;
 
@@ -431,13 +433,24 @@ void NavigationState::NavigationClient::shouldGoToBackForwardListItem(WebPagePro
 static void trySOAuthorization(Ref<API::NavigationAction>&& navigationAction, WebPageProxy& page, Function<void(bool)>&& completionHandler)
 {
 #if HAVE(APP_SSO)
-    if (!navigationAction->shouldPerformSOAuthorization()) {
-        completionHandler(false);
+    if (!navigationAction->shouldPerformSOAuthorization() || !protect(page.preferences())->isExtensibleSSOEnabled()) {
+        callOnMainRunLoop([completionHandler = WTF::move(completionHandler)] mutable {
+            completionHandler(false);
+        });
+        return;
+    }
+    // URLs with a registered WKURLSchemeHandler are handled locally and should not go through SSO.
+    if (page.urlSchemeHandlerForScheme(navigationAction->request().url().protocol())) {
+        callOnMainRunLoop([completionHandler = WTF::move(completionHandler)] mutable {
+            completionHandler(false);
+        });
         return;
     }
     protect(page.websiteDataStore())->soAuthorizationCoordinator(page).tryAuthorize(WTF::move(navigationAction), page, WTF::move(completionHandler));
 #else
-    completionHandler(false);
+    callOnMainRunLoop([completionHandler = WTF::move(completionHandler)] mutable {
+        completionHandler(false);
+    });
 #endif
 }
 
@@ -461,9 +474,10 @@ static void interceptMarketplaceKitNavigation(Ref<API::NavigationAction>&& actio
         weakPage->addConsoleMessage(*sourceFrameID, MessageSource::Network, MessageLevel::Error, makeString("Can't handle MarketplaceKit link "_s, url.string(), " due to error: "_s, error));
     };
 
-    auto requester = action->data().requester;
-    if (!action->shouldOpenExternalSchemes() || !action->isProcessingUserGesture() || action->isRedirect() || !requester || requester->topOrigin->data().isNull()) {
-        RELEASE_LOG_ERROR(Loading, "NavigationState: can't handle MarketplaceKit navigation with shouldOpenExternalSchemes: %d, isProcessingUserGesture: %d, isRedirect: %d, requesterTopOriginIsNull: %d", action->shouldOpenExternalSchemes(), action->isProcessingUserGesture(), action->isRedirect(), !requester || requester->topOrigin->data().isNull());
+    RefPtr mainFrame = page.mainFrame();
+    auto topOrigin = mainFrame ? WebCore::SecurityOriginData::fromURL(mainFrame->url()) : WebCore::SecurityOriginData { };
+    if (!action->shouldOpenExternalSchemes() || !action->isProcessingUserGesture() || action->isRedirect() || topOrigin.isNull()) {
+        RELEASE_LOG_ERROR(Loading, "NavigationState: can't handle MarketplaceKit navigation with shouldOpenExternalSchemes: %d, isProcessingUserGesture: %d, isRedirect: %d, requesterTopOriginIsNull: %d", action->shouldOpenExternalSchemes(), action->isProcessingUserGesture(), action->isRedirect(), topOrigin.isNull());
 
         if (!action->isProcessingUserGesture())
             addConsoleError("must be activated via a user gesture"_s);
@@ -473,7 +487,7 @@ static void interceptMarketplaceKitNavigation(Ref<API::NavigationAction>&& actio
         return;
     }
 
-    RetainPtr requesterTopOriginURL = protect(requester->topOrigin)->toURL().createNSURL();
+    RetainPtr requesterTopOriginURL = topOrigin.toURL().createNSURL();
     RetainPtr url = action->request().url().createNSURL();
 
     if (!requesterTopOriginURL || !url) {
@@ -482,8 +496,12 @@ static void interceptMarketplaceKitNavigation(Ref<API::NavigationAction>&& actio
     }
 
     [getWKMarketplaceKitClassSingleton() requestAppInstallationWithTopOrigin:requesterTopOriginURL.get() url:url.get() completionHandler:makeBlockPtr([addConsoleError = WTF::move(addConsoleError)](NSError *error) mutable {
-        if (error)
-            addConsoleError(error.description);
+        if (!error)
+            return;
+
+        ensureOnMainRunLoop([addConsoleError = WTF::move(addConsoleError), error = protect(error)] mutable {
+            addConsoleError([error description]);
+        });
     }).get()];
 }
 
@@ -491,10 +509,21 @@ static void interceptMarketplaceKitNavigation(Ref<API::NavigationAction>&& actio
 
 static void tryInterceptNavigation(Ref<API::NavigationAction>&& navigationAction, WebPageProxy& page, WTF::Function<void(bool)>&& completionHandler)
 {
+    // URLs with a registered WKURLSchemeHandler are handled locally and should not be intercepted by app links or SSO.
+    if (page.urlSchemeHandlerForScheme(navigationAction->request().url().protocol())) {
+        callOnMainRunLoop([completionHandler = WTF::move(completionHandler)] mutable {
+            completionHandler(false);
+        });
+        return;
+    }
+
 #if HAVE(MARKETPLACE_KIT)
     if (isMarketplaceKitURL(navigationAction->request().url())) {
         interceptMarketplaceKitNavigation(WTF::move(navigationAction), page);
-        return completionHandler(true /* interceptedNavigation */);
+        callOnMainRunLoop([completionHandler = WTF::move(completionHandler)] mutable {
+            completionHandler(true /* interceptedNavigation */);
+        });
+        return;
     }
 #endif // HAVE(MARKETPLACE_KIT)
 
@@ -511,13 +540,15 @@ static void tryInterceptNavigation(Ref<API::NavigationAction>&& navigationAction
 
         auto* localCompletionHandler = new WTF::Function<void (bool)>([navigationAction = WTF::move(navigationAction), weakPage = WeakPtr { page }, completionHandler = WTF::move(completionHandler)] (bool success) mutable {
             ASSERT(RunLoop::isMain());
-            if (!success && weakPage) {
-                trySOAuthorization(WTF::move(navigationAction), *weakPage, WTF::move(completionHandler));
+            RELEASE_LOG(Loading, "tryInterceptNavigation: LSAppLink openWithURL completed, success=%d", success);
+            RefPtr page = weakPage;
+            if (!success && page) {
+                trySOAuthorization(WTF::move(navigationAction), *page, WTF::move(completionHandler));
                 return;
             }
 #if PLATFORM(IOS_FAMILY)
-            if (success && weakPage)
-                weakPage->willOpenAppLink();
+            if (success && page)
+                page->willOpenAppLink();
 #endif
             completionHandler(success);
         });
@@ -525,6 +556,7 @@ static void tryInterceptNavigation(Ref<API::NavigationAction>&& navigationAction
         RetainPtr<_LSOpenConfiguration> configuration = adoptNS([[_LSOpenConfiguration alloc] init]);
         configuration.get().referrerURL = referrerURL.get();
 
+        RELEASE_LOG(Loading, "tryInterceptNavigation: Calling async LSAppLink openWithURL");
         [LSAppLink openWithURL:url.createNSURL().get() configuration:configuration.get() completionHandler:[localCompletionHandler](BOOL success, NSError *) {
             RunLoop::mainSingleton().dispatch([localCompletionHandler, success] {
                 (*localCompletionHandler)(success);
@@ -568,6 +600,7 @@ void NavigationState::NavigationClient::decidePolicyForNavigationAction(WebPageP
     if (!m_navigationState || (!m_navigationState->m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionDecisionHandler
         && !m_navigationState->m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionWithPreferencesUserInfoDecisionHandler
         && !m_navigationState->m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionWithPreferencesDecisionHandler)) {
+        RELEASE_LOG(Loading, "NavigationState::decidePolicyForNavigationAction: Client does not implement decidePolicyForNavigationAction");
         auto completionHandler = [webPage = protect(webPageProxy), listener = WTF::move(listener), navigationAction, defaultWebsitePolicies] (bool interceptedNavigation) {
             if (interceptedNavigation) {
                 listener->ignore(WasNavigationIntercepted::Yes);
@@ -592,7 +625,7 @@ void NavigationState::NavigationClient::decidePolicyForNavigationAction(WebPageP
 
             auto nsURLRequest = wrapper(API::URLRequest::create(navigationAction->request()));
             if ((nsURLRequest.get().URL && [NSURLConnection canHandleRequest:nsURLRequest.get()])
-                || webPage->urlSchemeHandlerForScheme(nsURLRequest.get().URL.scheme)
+                || webPage->urlSchemeHandlerForScheme(String(nsURLRequest.get().URL.scheme))
                 || [nsURLRequest.get().URL.scheme isEqualToString:@"blob"]) {
                 if (navigationAction->shouldPerformDownload())
                     listener->download();
@@ -632,6 +665,7 @@ void NavigationState::NavigationClient::decidePolicyForNavigationAction(WebPageP
         if (checker->completionHandlerHasBeenCalled())
             return;
         checker->didCallCompletionHandler();
+        RELEASE_LOG(Loading, "NavigationState::decidePolicyForNavigationAction: Client responded with policy %d", static_cast<int>(actionPolicy));
 
         RefPtr<API::WebsitePolicies> apiWebsitePolicies = preferences ?  protect(preferences->_websitePolicies.get()) : defaultWebsitePolicies;
 
@@ -735,10 +769,11 @@ void NavigationState::NavigationClient::contentRuleListNotification(WebPageProxy
     RetainPtr<NSMutableArray<NSString *>> identifiers;
     RetainPtr<NSMutableArray<NSString *>> notifications;
 
-    for (const auto& pair : results.results) {
+    Borrow borrowedResults = results.results;
+    for (const auto& pair : borrowedResults) {
         const String& listIdentifier = pair.first;
         const auto& result = pair.second;
-        for (const String& notification : result.notifications) {
+        for (const String& notification : borrow(result.notifications)) {
             if (!identifiers)
                 identifiers = adoptNS([NSMutableArray new]);
             if (!notifications)
@@ -752,7 +787,7 @@ void NavigationState::NavigationClient::contentRuleListNotification(WebPageProxy
         [static_cast<id<WKNavigationDelegatePrivate>>(navigationDelegate) _webView:protect(m_navigationState)->webView().get() URL:url.createNSURL().get() contentRuleListIdentifiers:identifiers.get() notifications:notifications.get()];
 
     if (m_navigationState->m_navigationDelegateMethods.webViewContentRuleListWithIdentifierPerformedActionForURL) {
-        for (auto&& pair : WTF::move(results.results))
+        for (auto&& pair : borrowedResults)
             [static_cast<id<WKNavigationDelegatePrivate>>(navigationDelegate) _webView:protect(m_navigationState)->webView().get() contentRuleListWithIdentifier:pair.first.createNSString().get() performedAction:protect(wrapper(API::ContentRuleListAction::create(WTF::move(pair.second)).get())).get() forURL:url.createNSURL().get()];
     }
 }
@@ -773,6 +808,7 @@ void NavigationState::NavigationClient::decidePolicyForNavigationResponse(WebPag
 {
     RefPtr navigationState = m_navigationState.get();
     if (!navigationState || !navigationState->m_navigationDelegateMethods.webViewDecidePolicyForNavigationResponseDecisionHandler) {
+        RELEASE_LOG(Loading, "NavigationState::decidePolicyForNavigationResponse: Client does not implement decidePolicyForNavigationResponse");
         RetainPtr<NSURL> url = protect(navigationResponse->response().nsURLResponse()).get().URL;
         if ([url isFileURL]) {
             BOOL isDirectory = NO;
@@ -801,6 +837,7 @@ void NavigationState::NavigationClient::decidePolicyForNavigationResponse(WebPag
         if (checker->completionHandlerHasBeenCalled())
             return;
         checker->didCallCompletionHandler();
+        RELEASE_LOG(Loading, "NavigationState::decidePolicyForNavigationResponse: Client responded with policy %d", static_cast<int>(responsePolicy));
         ensureOnMainRunLoop([responsePolicy, localListener = WTF::move(localListener)] {
             switch (responsePolicy) {
             case WKNavigationResponsePolicyAllow:
@@ -944,7 +981,8 @@ void NavigationState::NavigationClient::didFailProvisionalNavigationWithError(We
 
     auto errorWithRecoveryAttempter = createErrorWithRecoveryAttempter(navigationState->webView().get(), frameInfo, protect(error.nsError()).get(), url);
 
-    if (frameInfo.isMainFrame) {
+    RefPtr frame = WebFrameProxy::webFrame(frameInfo.frameID);
+    if (frame && frame->isMainFrame()) {
         // FIXME: We should assert that navigation is not null here, but it's currently null for some navigations through the back/forward cache.
         if (navigationState->m_navigationDelegateMethods.webViewDidFailProvisionalNavigationWithError)
             [navigationDelegate webView:navigationState->webView().get() didFailProvisionalNavigation:protect(wrapper(navigation)).get() withError:errorWithRecoveryAttempter.get()];
@@ -1267,6 +1305,9 @@ static _WKProcessTerminationReason wkProcessTerminationReason(ProcessTermination
 
 bool NavigationState::NavigationClient::processDidTerminate(WebPageProxy& page, ProcessTerminationReason reason)
 {
+    if (reason == ProcessTerminationReason::NonMainFrameWebContentProcessCrash)
+        return true;
+
     RefPtr navigationState = m_navigationState.get();
     if (!navigationState)
         return false;
@@ -1442,7 +1483,7 @@ void NavigationState::NavigationClient::didFinishLoadForQuickLookDocumentInMainF
 #endif
 
 #if HAVE(APP_SSO)
-static SOAuthorizationLoadPolicy NODELETE soAuthorizationLoadPolicy(_WKSOAuthorizationLoadPolicy policy)
+static SOAuthorizationLoadPolicy LEGACY_NODELETE soAuthorizationLoadPolicy(_WKSOAuthorizationLoadPolicy policy)
 {
     switch (policy) {
     case _WKSOAuthorizationLoadPolicyAllow:
@@ -1454,7 +1495,7 @@ static SOAuthorizationLoadPolicy NODELETE soAuthorizationLoadPolicy(_WKSOAuthori
     return SOAuthorizationLoadPolicy::Allow;
 }
 
-static _WKSOAuthorizationLoadPolicy NODELETE wkSOAuthorizationLoadPolicy(SOAuthorizationLoadPolicy policy)
+static _WKSOAuthorizationLoadPolicy LEGACY_NODELETE wkSOAuthorizationLoadPolicy(SOAuthorizationLoadPolicy policy)
 {
     switch (policy) {
     case SOAuthorizationLoadPolicy::Allow:
@@ -1736,6 +1777,16 @@ void NavigationState::willChangeWebProcessIsResponsive()
 void NavigationState::didChangeWebProcessIsResponsive()
 {
     [webView() didChangeValueForKey:@"_webProcessIsResponsive"];
+}
+
+void NavigationState::willChangeQualifiedServerTrust()
+{
+    [webView() willChangeValueForKey:@"qualifiedServerTrust"];
+}
+
+void NavigationState::didChangeQualifiedServerTrust()
+{
+    [webView() didChangeValueForKey:@"qualifiedServerTrust"];
 }
 
 void NavigationState::didSwapWebProcesses()

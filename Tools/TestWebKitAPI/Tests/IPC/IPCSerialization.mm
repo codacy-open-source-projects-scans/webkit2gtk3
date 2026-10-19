@@ -28,6 +28,7 @@
 #import "ArgumentCodersCocoa.h"
 #import "CoreIPCCFDictionary.h"
 #import "CoreIPCError.h"
+#import "CoreIPCNSURLCredential.h"
 #import "CoreIPCNSURLRequest.h"
 #import "CoreIPCPKPayment.h"
 #import "CoreIPCPKPaymentMethod.h"
@@ -47,6 +48,7 @@
 #import <limits.h>
 #import <pal/spi/cf/CFNetworkSPI.h>
 #import <pal/spi/cocoa/ContactsSPI.h>
+#import <pal/spi/cocoa/WebFilterEvaluatorSPI.h>
 #import <wtf/RetainPtr.h>
 #import <wtf/cocoa/TypeCastsCocoa.h>
 #import <wtf/spi/cocoa/SecuritySPI.h>
@@ -56,6 +58,7 @@
 #import <pal/cocoa/ContactsSoftLink.h>
 #import <pal/cocoa/DataDetectorsCoreSoftLink.h>
 #import <pal/cocoa/PassKitSoftLink.h>
+#import <pal/cocoa/WebContentAnalysisSoftLink.h>
 #import <pal/ios/UIKitSoftLink.h>
 #import <pal/mac/DataDetectorsSoftLink.h>
 
@@ -490,6 +493,9 @@ struct ObjCHolderForTesting {
         RetainPtr<PKPayment>,
         RetainPtr<PKPaymentSetupFeature>,
 #endif
+#if !HAVE(WEBCONTENTRESTRICTIONS) && HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER)
+        RetainPtr<WebFilterEvaluator>,
+#endif
         RetainPtr<NSShadow>,
         RetainPtr<NSValue>
     > ValueType;
@@ -640,7 +646,7 @@ static bool NSURLCredentialTesting_isEqual(NSURLCredential *a, NSURLCredential *
     return true;
 }
 
-#if USE(PASSKIT)
+#if USE(PASSKIT) || (!HAVE(WEBCONTENTRESTRICTIONS) && HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER))
 static BOOL wkSecureCoding_isEqual(id a, SEL, id b)
 {
     RetainPtr<WKKeyedCoder> aCoder = adoptNS([WKKeyedCoder new]);
@@ -651,7 +657,7 @@ static BOOL wkSecureCoding_isEqual(id a, SEL, id b)
 
     return [[aCoder accumulatedDictionary] isEqual:[bCoder accumulatedDictionary]];
 }
-#endif // USE(PASSKIT)
+#endif // USE(PASSKIT) || (!HAVE(WEBCONTENTRESTRICTIONS) && HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER))
 
 inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting& b)
 {
@@ -676,6 +682,9 @@ inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting
 #endif
 #if ENABLE(DATA_DETECTION) && PLATFORM(MAC)
         class_addMethod(PAL::getWKDDActionContextClassSingleton(), @selector(isEqual:), (IMP)wkDDActionContext_isEqual, "v@:@");
+#endif
+#if !HAVE(WEBCONTENTRESTRICTIONS) && HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER)
+        class_addMethod(PAL::getWebFilterEvaluatorClassSingleton(), @selector(isEqual:), (IMP)wkSecureCoding_isEqual, "v@:@");
 #endif
     });
 
@@ -996,7 +1005,7 @@ TEST(IPCSerialization, Plist)
 TEST(IPCSerialization, Basic)
 {
     // CVPixelBuffer
-    auto s1 = WebCore::IOSurface::create(nullptr, { 5, 5 }, WebCore::DestinationColorSpace::SRGB());
+    auto s1 = WebCore::IOSurface::create(nullptr, { 5, 5 }, WebCore::ColorSpace::SRGB());
     auto pixelBuffer = WebCore::createCVPixelBuffer(s1->surface());
 
     runTestCF({ pixelBuffer->get() });
@@ -1344,6 +1353,41 @@ TEST(IPCSerialization, Basic)
     runTestNS({ [NSURLCredential credentialWithUser:@"user" password:@"password" persistence:NSURLCredentialPersistenceSynchronizable] });
 }
 
+TEST(IPCSerialization, NSErrorNetworkResolutionReport)
+{
+    NSDictionary *resolutionReport = @{
+        @"provider" : @"Cloudflare DNS",
+        @"dnsFailureReason" : @"censored",
+        @"extendedDNSErrorExtraText" : @"some extra text",
+        @"interfaces" : @[
+            @{ @"type" : @"wifi", @"name" : @"en0" },
+            @{ @"type" : @"wired", @"name" : @"en1" },
+        ],
+    };
+    NSError *originalError = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCannotFindHost userInfo:@{
+        NSLocalizedDescriptionKey : @"A server with the specified hostname could not be found.",
+        @"networkResolutionReport" : resolutionReport,
+    }];
+
+    WebKit::CoreIPCError ipcError = WebKit::CoreIPCError(originalError);
+    RetainPtr<id> roundTripped = ipcError.toID();
+    NSDictionary *roundTrippedReport = [[roundTripped userInfo] objectForKey:@"networkResolutionReport"];
+    ASSERT_TRUE([roundTrippedReport isKindOfClass:NSDictionary.class]);
+    EXPECT_TRUE([[roundTrippedReport objectForKey:@"dnsFailureReason"] isEqual:@"censored"]);
+    EXPECT_TRUE([[roundTrippedReport objectForKey:@"provider"] isEqual:@"Cloudflare DNS"]);
+    EXPECT_TRUE([[roundTrippedReport objectForKey:@"extendedDNSErrorExtraText"] isEqual:@"some extra text"]);
+
+    NSArray *roundTrippedInterfaces = [roundTrippedReport objectForKey:@"interfaces"];
+    ASSERT_TRUE([roundTrippedInterfaces isKindOfClass:NSArray.class]);
+    ASSERT_EQ([roundTrippedInterfaces count], (NSUInteger)2);
+    EXPECT_TRUE([[[roundTrippedInterfaces objectAtIndex:0] objectForKey:@"type"] isEqual:@"wifi"]);
+    EXPECT_TRUE([[[roundTrippedInterfaces objectAtIndex:0] objectForKey:@"name"] isEqual:@"en0"]);
+    EXPECT_TRUE([[[roundTrippedInterfaces objectAtIndex:1] objectForKey:@"type"] isEqual:@"wired"]);
+    EXPECT_TRUE([[[roundTrippedInterfaces objectAtIndex:1] objectForKey:@"name"] isEqual:@"en1"]);
+
+    runTestNS({ (NSError *)roundTripped.get() });
+}
+
 #if HAVE(WK_SECURE_CODING_SECTRUST)
 String cert1(""
     "MIIHezCCBmOgAwIBAgIQfrZYqgaHdOKdEb5ZVqa0LTANBgkqhkiG9w0BAQsFADBRMQswCQYDVQQGEw"
@@ -1512,6 +1556,11 @@ TEST(IPCSerialization, SecTrustRef)
             @{ },
         ],
         @"info" : @{
+            @"Builder" : @{
+                @"RevocationDbIgnored" : @(NO),
+                @"RevocationIfTrusted" : @(YES),
+                @"RevocationOnline" : @(NO)
+            },
             @"CertificateTransparency" : @(YES),
             @"CompanyName" : @"Apple Inc.",
             @"ExtendedValidation" : @(YES),
@@ -1718,7 +1767,7 @@ TEST(IPCSerialization, NSURLRequest)
     runTestNS({ urlRequest });
 }
 
-#if PLATFORM(COCOA) && HAVE(WK_SECURE_CODING_NSURLREQUEST)
+#if PLATFORM(COCOA)
 
 @interface NSURLRequest (WKSecureCoding)
 - (NSDictionary *)_webKitPropertyListData;
@@ -1740,6 +1789,10 @@ TEST(IPCSerialization, NSURLRequestProtocolProperties)
     props.fileProtocolExpectedDevice = WebKit::CoreIPCNumber(@123);
     props.shouldSniff = false;
     props.contentDecoderSkipURLCheck = true;
+    props.adIdentifier = WebKit::CoreIPCString(@"test-ad-id");
+    props.maximumRequestCount = WebKit::CoreIPCNumber(@5);
+    props.apProxyIsRecursive = true;
+    props.requestType = WebKit::APProxyRequestType::WebView;
     requestData.protocolProperties = WTF::move(props);
 
     WebKit::CoreIPCNSURLRequest wrapper(WTF::move(requestData));
@@ -1751,7 +1804,7 @@ TEST(IPCSerialization, NSURLRequestProtocolProperties)
     RetainPtr plistData = [reconstructedRequest _webKitPropertyListData];
     RetainPtr protocolProperties = [plistData.get() objectForKey:@"protocolProperties"];
     EXPECT_TRUE(protocolProperties != nil);
-    EXPECT_EQ([protocolProperties count], 8U);
+    EXPECT_EQ([protocolProperties count], 12U);
 
     EXPECT_TRUE([[protocolProperties objectForKey:@"_kCFHTTPCookiePolicyPropertyIsTopLevelNavigation"] boolValue]);
     EXPECT_FALSE([[protocolProperties objectForKey:@"kCFURLRequestAllowAllPOSTCaching"] boolValue]);
@@ -1761,6 +1814,10 @@ TEST(IPCSerialization, NSURLRequestProtocolProperties)
     EXPECT_EQ([[protocolProperties objectForKey:@"NSURLRequestFileProtocolExpectedDevice"] intValue], 123);
     EXPECT_FALSE([[protocolProperties objectForKey:@"_kCFURLConnectionPropertyShouldSniff"] boolValue]);
     EXPECT_TRUE([[protocolProperties objectForKey:@"kCFURLRequestContentDecoderSkipURLCheck"] boolValue]);
+    EXPECT_TRUE([[protocolProperties objectForKey:@"adIdentifier"] isEqualToString:@"test-ad-id"]);
+    EXPECT_EQ([[protocolProperties objectForKey:@"maximumRequestCount"] intValue], 5);
+    EXPECT_TRUE([[protocolProperties objectForKey:@"com.apple.ap.pc.proxy-is-recursive"] boolValue]);
+    EXPECT_EQ([[protocolProperties objectForKey:@"requestType"] intValue], 1);
 
     // Test full round-trip serialization
     runTestNS({ reconstructedRequest });
@@ -1816,7 +1873,90 @@ TEST(IPCSerialization, NSURLRequestProtocolProperties)
     runTestNS({ reconstructedRequest3 });
 }
 
-#endif // PLATFORM(COCOA) && HAVE(WK_SECURE_CODING_NSURLREQUEST)
+TEST(IPCSerialization, NSURLRequestNSURLProtocolProperties)
+{
+    RetainPtr request = adoptNS([[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:@"https://webkit.org/"]]);
+    [NSURLProtocol setProperty:@"ad-123" forKey:@"adIdentifier" inRequest:request.get()];
+    [NSURLProtocol setProperty:@3 forKey:@"maximumRequestCount" inRequest:request.get()];
+    [NSURLProtocol setProperty:@YES forKey:@"com.apple.ap.pc.proxy-is-recursive" inRequest:request.get()];
+    [NSURLProtocol setProperty:@2 forKey:@"requestType" inRequest:request.get()];
+
+    WebKit::CoreIPCNSURLRequest wrapper(request.get());
+    RetainPtr reconstructed = dynamic_objc_cast<NSURLRequest>(wrapper.toID().get());
+    EXPECT_TRUE(reconstructed);
+
+    EXPECT_TRUE([[NSURLProtocol propertyForKey:@"adIdentifier" inRequest:reconstructed.get()] isEqualToString:@"ad-123"]);
+    EXPECT_EQ([[NSURLProtocol propertyForKey:@"maximumRequestCount" inRequest:reconstructed.get()] intValue], 3);
+    EXPECT_TRUE([[NSURLProtocol propertyForKey:@"com.apple.ap.pc.proxy-is-recursive" inRequest:reconstructed.get()] boolValue]);
+    EXPECT_EQ([[NSURLProtocol propertyForKey:@"requestType" inRequest:reconstructed.get()] integerValue], 2);
+
+    runTestNS({ request.get() });
+}
+
+TEST(IPCSerialization, NSURLRequestArbitraryAppProperties)
+{
+    // App-supplied properties via NSURLProtocol +setProperty:forKey:inRequest: that are
+    // not in the typed allowlist must still round-trip through IPC, but only when they
+    // are plist-primitive values (NSNumber/NSString/NSData) and the key is not in a
+    // reserved CFNetwork/Foundation/WebKit/Apple namespace.
+
+    RetainPtr request = adoptNS([[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:@"https://webkit.org/"]]);
+
+    // Allowed app-supplied entries: number, string, bool (NSNumber), data.
+    [NSURLProtocol setProperty:@"hello" forKey:@"com.example.appName" inRequest:request.get()];
+    [NSURLProtocol setProperty:@42 forKey:@"com.example.requestCount" inRequest:request.get()];
+    [NSURLProtocol setProperty:@YES forKey:@"com.example.featureFlag" inRequest:request.get()];
+    RetainPtr<NSData> blob = [NSData dataWithBytes:"\x01\x02\x03\x04" length:4];
+    [NSURLProtocol setProperty:blob.get() forKey:@"com.example.blob" inRequest:request.get()];
+
+    // Disallowed values: complex container types must be dropped on the wire.
+    [NSURLProtocol setProperty:@{ @"nested": @1 } forKey:@"com.example.dictValue" inRequest:request.get()];
+    [NSURLProtocol setProperty:@[ @"a", @"b" ] forKey:@"com.example.arrayValue" inRequest:request.get()];
+
+    // Disallowed key: reserved-prefix keys an app should not be able to spoof over IPC.
+    [NSURLProtocol setProperty:@"injected" forKey:@"_kCFFutureInternalProperty" inRequest:request.get()];
+    [NSURLProtocol setProperty:@"injected" forKey:@"NSURLRequestFutureInternalProperty" inRequest:request.get()];
+    [NSURLProtocol setProperty:@"injected" forKey:@"com.apple.something-private" inRequest:request.get()];
+
+    WebKit::CoreIPCNSURLRequest wrapper(request.get());
+    RetainPtr reconstructed = dynamic_objc_cast<NSURLRequest>(wrapper.toID().get());
+    EXPECT_TRUE(reconstructed);
+
+    EXPECT_TRUE([[NSURLProtocol propertyForKey:@"com.example.appName" inRequest:reconstructed.get()] isEqualToString:@"hello"]);
+    EXPECT_EQ([[NSURLProtocol propertyForKey:@"com.example.requestCount" inRequest:reconstructed.get()] intValue], 42);
+    EXPECT_TRUE([[NSURLProtocol propertyForKey:@"com.example.featureFlag" inRequest:reconstructed.get()] boolValue]);
+    EXPECT_TRUE([[NSURLProtocol propertyForKey:@"com.example.blob" inRequest:reconstructed.get()] isEqualToData:blob.get()]);
+
+    EXPECT_NULL([NSURLProtocol propertyForKey:@"com.example.dictValue" inRequest:reconstructed.get()]);
+    EXPECT_NULL([NSURLProtocol propertyForKey:@"com.example.arrayValue" inRequest:reconstructed.get()]);
+
+    EXPECT_NULL([NSURLProtocol propertyForKey:@"_kCFFutureInternalProperty" inRequest:reconstructed.get()]);
+    EXPECT_NULL([NSURLProtocol propertyForKey:@"NSURLRequestFutureInternalProperty" inRequest:reconstructed.get()]);
+    EXPECT_NULL([NSURLProtocol propertyForKey:@"com.apple.something-private" inRequest:reconstructed.get()]);
+
+    // Full wire-format round-trip on a request containing only the allowed entries —
+    // runTestNS asserts that the original and the round-tripped request compare equal,
+    // so we cannot include the keys we expect to be stripped above.
+    RetainPtr cleanRequest = adoptNS([[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:@"https://webkit.org/"]]);
+    [NSURLProtocol setProperty:@"hello" forKey:@"com.example.appName" inRequest:cleanRequest.get()];
+    [NSURLProtocol setProperty:@42 forKey:@"com.example.requestCount" inRequest:cleanRequest.get()];
+    [NSURLProtocol setProperty:@YES forKey:@"com.example.featureFlag" inRequest:cleanRequest.get()];
+    [NSURLProtocol setProperty:blob.get() forKey:@"com.example.blob" inRequest:cleanRequest.get()];
+    runTestNS({ cleanRequest.get() });
+}
+
+TEST(IPCSerialization, NSURLRequestAttribution)
+{
+    WebKit::CoreIPCNSURLRequestData requestData;
+    requestData.url = WebKit::CoreIPCURL([NSURL URLWithString:@"https://webkit.org/"]);
+    requestData.attribution = WebKit::NSURLRequestAttribution::User;
+
+    RetainPtr request = dynamic_objc_cast<NSURLRequest>(WebKit::CoreIPCNSURLRequest(WTF::move(requestData)).toID().get());
+    RetainPtr reconstructed = dynamic_objc_cast<NSURLRequest>(WebKit::CoreIPCNSURLRequest(request.get()).toID().get());
+    EXPECT_EQ([reconstructed attribution], NSURLRequestAttributionUser);
+}
+
+#endif // PLATFORM(COCOA)
 
 #if USE(AVFOUNDATION) && PLATFORM(MAC)
 TEST(IPCSerialization, AVOutputContext)
@@ -1902,6 +2042,30 @@ TEST(IPCSerialization, PKPayment)
 }
 #endif
 
+#if !HAVE(WEBCONTENTRESTRICTIONS) && HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER)
+
+@interface WebFilterEvaluator (IPCSerializationTesting)
+- (instancetype)initWithCoder:(NSCoder *)coder;
+@end
+
+TEST(IPCSerialization, WebFilterEvaluator)
+{
+    // WebFilterEvaluator does not implement -_initWithWebKitPropertyListData:, so both ends of the
+    // IPC need to go through WKKeyedCoder instead of a WebKit secure coding property list.
+    RetainPtr coder = adoptNS([[WKKeyedCoder alloc] initWithDictionary:@{
+        @"WebContentFilterStateKey": @(kWFEStateBlocked),
+        @"WebContentFilterURLKey": [NSURL URLWithString:@"https://webkit.org/"],
+        @"WebContentFilterPageTitleKey": @"WebKit"
+    }]);
+
+    RetainPtr<WebFilterEvaluator> evaluator = adoptNS([PAL::allocWebFilterEvaluatorInstance() initWithCoder:coder.get()]);
+    EXPECT_NOT_NULL(evaluator.get());
+
+    runTestNS({ evaluator.get() });
+}
+
+#endif // !HAVE(WEBCONTENTRESTRICTIONS) && HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER)
+
 #if PLATFORM(MAC)
 
 static RetainPtr<DDScannerResult> fakeDataDetectorResultForTesting()
@@ -1979,6 +2143,59 @@ TEST(IPCSerialization, DDScannerResultPlist)
     EXPECT_TRUE(done);
 }
 #endif // HAVE(WK_SECURE_CODING_DATA_DETECTORS)
+
+#if HAVE(WK_SECURE_CODING_NSURLCREDENTIAL)
+
+@interface NSURLCredential (WKSecureCodingForTesting)
+- (instancetype)_initWithWebKitPropertyListData:(NSDictionary *)plist;
+- (NSDictionary *)_webKitPropertyListData;
+@end
+
+TEST(IPCSerialization, NSURLCredentialKerberosFlags)
+{
+    RetainPtr credential = adoptNS([[NSURLCredential alloc] _initWithWebKitPropertyListData:@{
+        @"type": @(kURLCredentialKerberosTicket),
+        @"uuid": @"uuid",
+        @"flags": @{ @"name": @"value" },
+    }]);
+
+    IPC::Encoder encoder(IPC::MessageName::IPCTester_AsyncPing, 0);
+    encoder << WebKit::CoreIPCNSURLCredential { credential.get() };
+    auto decoder = IPC::Decoder::create(encoder.span(), encoder.releaseAttachments());
+    auto decoded = decoder->decode<WebKit::CoreIPCNSURLCredentialData>();
+    EXPECT_FALSE(decoded->flags->isEmpty());
+}
+
+TEST(IPCSerialization, NSURLCredentialAttributes)
+{
+    RetainPtr credential = adoptNS([[NSURLCredential alloc] _initWithWebKitPropertyListData:@{
+        @"type": @(kURLCredentialInternetPassword),
+        @"persistence": @(kCFURLCredentialPersistenceForSession),
+        @"attributes": @{ @"name": @"value" },
+    }]);
+
+    IPC::Encoder encoder(IPC::MessageName::IPCTester_AsyncPing, 0);
+    encoder << WebKit::CoreIPCNSURLCredential { credential.get() };
+    auto decoder = IPC::Decoder::create(encoder.span(), encoder.releaseAttachments());
+    auto decoded = decoder->decode<WebKit::CoreIPCNSURLCredentialData>();
+    EXPECT_EQ(decoded->attributes->size(), 1u);
+}
+
+TEST(IPCSerialization, NSURLCredentialAttributesToID)
+{
+    using Attributes = WebKit::CoreIPCNSURLCredentialData::Attributes;
+
+    WebKit::CoreIPCNSURLCredentialData credentialData;
+    credentialData.type = WebKit::CoreIPCNSURLCredentialType::Password;
+    credentialData.attributes = Vector<Attributes> { { WebKit::CoreIPCString(@"key"), WebKit::CoreIPCString(@"value") } };
+
+    WebKit::CoreIPCNSURLCredential wrapper(WTF::move(credentialData));
+    RetainPtr reconstructed = dynamic_objc_cast<NSURLCredential>(wrapper.toID().get());
+    RetainPtr attributes = dynamic_objc_cast<NSDictionary>([[reconstructed _webKitPropertyListData] objectForKey:@"attributes"]);
+    EXPECT_TRUE([[attributes objectForKey:@"key"] isEqual:@"value"]);
+}
+
+#endif // HAVE(WK_SECURE_CODING_NSURLCREDENTIAL)
 
 @interface PKPaymentMerchantSession ()
 - (instancetype)initWithMerchantIdentifier:(NSString *)merchantIdentifier
@@ -2544,6 +2761,7 @@ TEST(IPCSerialization, PKPaymentMethod)
     data1.type = WebKit::PKPaymentMethodType::Credit;
     data1.displayName = @"WebKitPay";
     data1.network = @"WebKitCard";
+    data1.issuingRegionCode = @"GB";
     data1.billingAddress = billingContact.get();
     data1.installmentBindToken = @"TestBindToken123";
     data1.usePeerPaymentBalance = true;
@@ -2556,6 +2774,10 @@ TEST(IPCSerialization, PKPaymentMethod)
     EXPECT_TRUE([reconstructedMethod1.displayName isEqualToString:@"WebKitPay"]);
     EXPECT_TRUE([reconstructedMethod1.network isEqualToString:@"WebKitCard"]);
     EXPECT_EQ(reconstructedMethod1.type, PKPaymentMethodTypeCredit);
+#if HAVE(PASSKIT_ISSUING_REGION_CODE)
+    if ([reconstructedMethod1 respondsToSelector:@selector(issuingRegionCode)])
+        EXPECT_TRUE([reconstructedMethod1.issuingRegionCode isEqualToString:@"GB"]);
+#endif
     runTestNS({ reconstructedMethod1 });
 
     // Test with different types set

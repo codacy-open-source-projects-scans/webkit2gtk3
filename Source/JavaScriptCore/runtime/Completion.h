@@ -73,12 +73,13 @@ JS_EXPORT_PRIVATE JSPromise* loadAndEvaluateModule(JSGlobalObject*, SourceCode&&
 
 // Fetch the module source, and instantiate the module record.
 JS_EXPORT_PRIVATE JSPromise* loadModule(JSGlobalObject*, const Identifier& moduleKey, RefPtr<ScriptFetchParameters>, RefPtr<ScriptFetcher>);
+JS_EXPORT_PRIVATE JSPromise* loadModule(JSGlobalObject*, const Identifier& moduleKey, SourceCode&&, RefPtr<ScriptFetcher>);
 JS_EXPORT_PRIVATE JSPromise* loadModule(JSGlobalObject*, SourceCode&&, RefPtr<ScriptFetcher>);
 
 // Link and evaluate the already linked module. This function is called in an async manner.
 JS_EXPORT_PRIVATE JSPromise* linkAndEvaluateModule(JSGlobalObject*, const Identifier& moduleKey, RefPtr<ScriptFetcher>);
 
-JS_EXPORT_PRIVATE JSPromise* importModule(JSGlobalObject*, const Identifier& moduleName, const Identifier& referrer, RefPtr<ScriptFetchParameters>, RefPtr<ScriptFetcher>);
+JS_EXPORT_PRIVATE JSPromise* importModule(JSGlobalObject*, const Identifier& moduleName, const Identifier& referrer, RefPtr<ScriptFetchParameters>, RefPtr<ScriptFetcher>, bool deferred = false);
 
 JS_EXPORT_PRIVATE UncheckedKeyHashMap<RefPtr<UniquedStringImpl>, String> retrieveImportAttributesFromDynamicImportOptions(JSGlobalObject*, JSValue, const Vector<RefPtr<UniquedStringImpl>>& supportedAssertions);
 JS_EXPORT_PRIVATE std::optional<ScriptFetchParameters::Type> retrieveTypeImportAttribute(JSGlobalObject*, const UncheckedKeyHashMap<RefPtr<UniquedStringImpl>, String>&);

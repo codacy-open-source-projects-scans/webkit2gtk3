@@ -24,17 +24,12 @@
 
 #include "RenderChildIterator.h"
 #include "RenderSVGInline.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderSVGInlineText.h"
 #include "RenderSVGText.h"
 #include "SVGTextPositioningElement.h"
+#include "StyleComputedStyle+GettersInlines.h"
 
 namespace WebCore {
-
-SVGTextLayoutAttributesBuilder::SVGTextLayoutAttributesBuilder()
-    : m_textLength(0)
-{
-}
 
 void SVGTextLayoutAttributesBuilder::buildLayoutAttributesForTextRenderer(RenderSVGInlineText& text)
 {
@@ -58,7 +53,7 @@ void SVGTextLayoutAttributesBuilder::buildLayoutAttributesForTextRenderer(Render
     m_metricsBuilder.buildMetricsAndLayoutAttributes(*textRoot, &text, m_characterDataMap);
 }
 
-bool SVGTextLayoutAttributesBuilder::buildLayoutAttributesForForSubtree(RenderSVGText& textRoot)
+bool SVGTextLayoutAttributesBuilder::buildLayoutAttributesForSubtree(RenderSVGText& textRoot)
 {
     m_characterDataMap.clear();
 
@@ -81,20 +76,28 @@ void SVGTextLayoutAttributesBuilder::rebuildMetricsForSubtree(RenderSVGText& tex
     m_metricsBuilder.measureTextRenderer(text, nullptr);
 }
 
-static inline void NODELETE processRenderSVGInlineText(const RenderSVGInlineText& text, unsigned& atCharacter, bool& lastCharacterWasSpace)
+static inline void LEGACY_NODELETE processRenderSVGInlineText(const RenderSVGInlineText& text, unsigned& atCharacter, bool& lastCharacterWasSpace)
 {
     auto& string = text.text();
     auto length = string.length();
+
+    // The value list position advances once per character (code point), so a non-BMP character
+    // encoded as a UTF-16 surrogate pair must count once, not once per code unit. This keeps the
+    // value list keys consistent with the per-character lookup in measureTextRendererWithIterator().
     if (text.style().whiteSpaceCollapse() == WhiteSpaceCollapse::Preserve) {
-        atCharacter += length;
+        for (unsigned i = 0; i < length;) {
+            U16_FWD_1(string, i, length);
+            ++atCharacter;
+        }
         if (length)
             lastCharacterWasSpace = string[length - 1] == ' ';
         return;
     }
 
     // FIXME: This is not a complete whitespace collapsing implementation; it doesn't handle newlines or tabs.
-    for (unsigned i = 0; i < length; ++i) {
-        char16_t character = string[i];
+    for (unsigned i = 0; i < length;) {
+        char32_t character;
+        U16_NEXT(string, i, length, character);
         if (character == ' ' && lastCharacterWasSpace)
             continue;
 
@@ -184,28 +187,28 @@ void SVGTextLayoutAttributesBuilder::fillCharacterDataMap(const TextPosition& po
 
     SVGLengthContext lengthContext(element.get());
     for (unsigned i = 0; i < position.length; ++i) {
-        const SVGLengthList* xListPtr = i < xListSize ? xList.ptr() : nullptr;
-        const SVGLengthList* yListPtr = i < yListSize ? yList.ptr() : nullptr;
-        const SVGLengthList* dxListPtr = i < dxListSize ? dxList.ptr() : nullptr;
-        const SVGLengthList* dyListPtr = i < dyListSize ? dyList.ptr() : nullptr;
-        const SVGNumberList* rotateListPtr = rotateListSize ? rotateList.ptr() : nullptr;
-        if (!xListPtr && !yListPtr && !dxListPtr && !dyListPtr && !rotateListPtr)
+        bool hasX = i < xListSize;
+        bool hasY = i < yListSize;
+        bool hasDX = i < dxListSize;
+        bool hasDY = i < dyListSize;
+        bool hasRotate = !!rotateListSize;
+        if (!hasX && !hasY && !hasDX && !hasDY && !hasRotate)
             break;
 
         auto& data = m_characterDataMap.ensure((position.start + i + 1), [] {
             return SVGCharacterData();
         }).iterator->value;
 
-        if (xListPtr)
+        if (hasX)
             data.x = xList->items()[i]->value().value(lengthContext);
-        if (yListPtr)
+        if (hasY)
             data.y = yList->items()[i]->value().value(lengthContext);
-        if (dxListPtr)
+        if (hasDX)
             data.dx = dxList->items()[i]->value().value(lengthContext);
-        if (dyListPtr)
+        if (hasDY)
             data.dy = dyList->items()[i]->value().value(lengthContext);
 
-        if (rotateListPtr) {
+        if (hasRotate) {
             unsigned rotateIndex = std::min(i, rotateListSize - 1);
             data.rotate = rotateList->items()[rotateIndex]->value();
         }

@@ -121,16 +121,22 @@ std::unique_ptr<WebCore::NowPlayingManager> WebMediaStrategy::createNowPlayingMa
 #if ENABLE(GPU_PROCESS)
     if (m_useGPUProcess) {
         class NowPlayingInfoForGPUManager : public WebCore::NowPlayingManager {
-            void clearNowPlayingInfoPrivate() final
+            void clearNowPlayingInfoPrivate(std::optional<WebCore::PageIdentifier> pageIdentifier) final
             {
                 if (RefPtr connection = WebProcess::singleton().existingGPUProcessConnection())
-                    connection->connection().send(Messages::GPUConnectionToWebProcess::ClearNowPlayingInfo { }, 0);
+                    connection->connection().send(Messages::GPUConnectionToWebProcess::ClearNowPlayingInfoForPage { pageIdentifier }, 0);
             }
 
-            void setNowPlayingInfoPrivate(const WebCore::NowPlayingInfo& nowPlayingInfo, bool) final
+            void setNowPlayingInfoPrivate(const WebCore::NowPlayingInfo& nowPlayingInfo, bool, std::optional<WebCore::PageIdentifier> pageIdentifier) final
             {
                 Ref connection = WebProcess::singleton().ensureGPUProcessConnection().connection();
-                connection->send(Messages::GPUConnectionToWebProcess::SetNowPlayingInfo { nowPlayingInfo }, 0);
+                connection->send(Messages::GPUConnectionToWebProcess::SetNowPlayingInfoForPage { nowPlayingInfo, pageIdentifier }, 0);
+            }
+
+            void updateNowPlayingCandidateStatePrivate(const WebCore::NowPlayingCandidateState& candidateState) final
+            {
+                Ref connection = WebProcess::singleton().ensureGPUProcessConnection().connection();
+                connection->send(Messages::GPUConnectionToWebProcess::SetNowPlayingCandidateState { candidateState }, 0);
             }
         };
         return makeUnique<NowPlayingInfoForGPUManager>();
@@ -139,10 +145,61 @@ std::unique_ptr<WebCore::NowPlayingManager> WebMediaStrategy::createNowPlayingMa
     return WebCore::MediaStrategy::createNowPlayingManager();
 }
 
-bool WebMediaStrategy::hasThreadSafeMediaSourceSupport() const
+void WebMediaStrategy::isActiveNowPlayingSessionInGPUProcessForTesting(WebCore::MediaSessionIdentifier identifier, CompletionHandler<void(bool)>&& completion)
 {
 #if ENABLE(GPU_PROCESS)
-    return m_useGPUProcess;
+    if (m_useGPUProcess) {
+        RefPtr gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection();
+        if (!gpuProcessConnection) {
+            completion(false);
+            return;
+        }
+        gpuProcessConnection->connection().sendWithAsyncReply(Messages::GPUConnectionToWebProcess::IsActiveNowPlayingSessionForTesting(identifier), WTF::move(completion), 0);
+        return;
+    }
+#endif
+
+    completion(false);
+}
+
+void WebMediaStrategy::isRemoteCommandTargetSessionInGPUProcessForTesting(WebCore::MediaSessionIdentifier identifier, CompletionHandler<void(bool)>&& completion)
+{
+#if ENABLE(GPU_PROCESS)
+    if (m_useGPUProcess) {
+        RefPtr gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection();
+        if (!gpuProcessConnection) {
+            completion(false);
+            return;
+        }
+        gpuProcessConnection->connection().sendWithAsyncReply(Messages::GPUConnectionToWebProcess::IsRemoteCommandTargetSessionForTesting(identifier), WTF::move(completion), 0);
+        return;
+    }
+#endif
+
+    completion(false);
+}
+
+bool WebMediaStrategy::postNowPlayingRemoteControlCommandToGPUProcessForTesting(WebCore::PlatformMediaSession::RemoteControlCommandType type, const WebCore::PlatformMediaSession::RemoteCommandArgument& argument)
+{
+#if ENABLE(GPU_PROCESS)
+    if (m_useGPUProcess) {
+        if (RefPtr gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection()) {
+            gpuProcessConnection->connection().send(Messages::GPUConnectionToWebProcess::PostNowPlayingRemoteControlCommandForTesting(type, argument), 0);
+            return true;
+        }
+    }
+#else
+    UNUSED_PARAM(type);
+    UNUSED_PARAM(argument);
+#endif
+
+    return false;
+}
+
+bool WebMediaStrategy::hasThreadSafeMediaSourceSupport() const
+{
+#if USE(AVFOUNDATION)
+    return true;
 #else
     return false;
 #endif
@@ -160,20 +217,6 @@ void WebMediaStrategy::enableMockMediaSource()
 #endif
     m_mockMediaSourceEnabled = true;
 
-#if USE(AVFOUNDATION)
-    if (hasRemoteRendererFor(MediaPlayerMediaEngineIdentifier::AVFoundationMSE)) {
-        WebCore::MediaStrategy::addMockMediaSourceEngine();
-        return;
-    }
-#endif
-
-#if ENABLE(GPU_PROCESS)
-    if (m_useGPUProcess) {
-        Ref connection = WebProcess::singleton().ensureGPUProcessConnection().connection();
-        connection->send(Messages::GPUConnectionToWebProcess::EnableMockMediaSource { }, 0);
-        return;
-    }
-#endif
     WebCore::MediaStrategy::addMockMediaSourceEngine();
 }
 #endif

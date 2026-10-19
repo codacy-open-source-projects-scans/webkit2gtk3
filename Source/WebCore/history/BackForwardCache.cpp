@@ -41,6 +41,8 @@
 #include "FocusController.h"
 #include "FrameDestructionObserverInlines.h"
 #include "FrameLoader.h"
+#include "FrameTree.h"
+#include "HTMLMediaElement.h"
 #include "HTTPParsers.h"
 #include "HistoryController.h"
 #include "LocalDOMWindow.h"
@@ -50,7 +52,6 @@
 #include "LocalFrameView.h"
 #include "Logging.h"
 #include "Page.h"
-#include "RemoteFrame.h"
 #include "ScriptDisallowedScope.h"
 #include "SecurityOriginHash.h"
 #include "Settings.h"
@@ -69,7 +70,7 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(BackForwardCache);
 
-#define PCLOG(...) LOG(BackForwardCache, "%*s%s", indentLevel*4, "", makeString(__VA_ARGS__).utf8().data())
+#define PCLOG(...) LOG(BackForwardCache, "%*s%s", indentLevel*4, "", makeString(__VA_ARGS__).utf8())
 
 static inline void logBackForwardCacheFailureDiagnosticMessage(DiagnosticLoggingClient& client, const String& reason)
 {
@@ -250,6 +251,17 @@ static bool canCachePage(Page& page)
         logBackForwardCacheFailureDiagnosticMessage(diagnosticLoggingClient, DiagnosticLoggingKeys::isDisabledKey());
         isCacheable = false;
     }
+#if PLATFORM(WPE)
+    if (!page.settings().backForwardCacheWithMediaEnabled()) {
+        bool hasMedia = false;
+        page.forEachMediaElement([&](HTMLMediaElement&) { hasMedia = true; });
+        if (hasMedia) {
+            PCLOG("   -Page contains media elements and back/forward cache with media is disabled"_s);
+            logBackForwardCacheFailureDiagnosticMessage(diagnosticLoggingClient, DiagnosticLoggingKeys::pageContainsMediaEngineKey());
+            isCacheable = false;
+        }
+    }
+#endif
 #if ENABLE(DEVICE_ORIENTATION) && !PLATFORM(IOS_FAMILY)
     if (DeviceMotionController::isActiveAt(&page)) {
         PCLOG("   -Page is using DeviceMotion"_s);
@@ -362,7 +374,7 @@ void BackForwardCache::dump() const
     for (auto& item : m_cachedPageMap) {
         if (auto* cachedPage = std::get_if<UniqueRef<CachedPage>>(&item.value)) {
             RefPtr document = (*cachedPage)->document();
-            WTFLogAlways("  Page %p, document %p %s", protect((*cachedPage)->page()).ptr(), document.get(), document ? document->url().string().utf8().data() : "");
+            SAFE_WTFLOGALWAYS("  Page %p, document %p %s", protect((*cachedPage)->page()).ptr(), document.get(), document ? document->url().string().utf8() : ""_s);
         }
     }
 }
@@ -530,14 +542,21 @@ std::unique_ptr<CachedPage> BackForwardCache::trySuspendPage(Page& page, ForceSu
     return makeUnique<CachedPage>(page);
 }
 
-bool BackForwardCache::addIfCacheable(BackForwardFrameItemIdentifier identifier, Page& page)
+bool BackForwardCache::addIfCacheable(BackForwardFrameItemIdentifier identifier, Page& page, std::optional<BackForwardItemIdentifier> itemID)
 {
     if (isInBackForwardCache(identifier))
         return false;
 
+    // Bug 316458: no-LocalFrame pages null-deref on restore via
+    // loadDifferentDocumentItem; FrameLoader::commitProvisionalLoad gates this out.
+    ASSERT(page.hasAnyLocalFrame());
+
     auto cachedPage = trySuspendPage(page, ForceSuspension::No);
     if (!cachedPage)
         return false;
+
+    if (itemID)
+        cachedPage->setItemID(*itemID);
 
     {
         ScriptDisallowedScope::InMainThread scriptDisallowedScope;
@@ -545,8 +564,11 @@ bool BackForwardCache::addIfCacheable(BackForwardFrameItemIdentifier identifier,
         m_items.add(identifier);
     }
     prune(PruningReason::ReachedMaxSize);
-    RELEASE_LOG(BackForwardCache, "BackForwardCache::addIfCacheable frameItemID: %s, size: %u / %u", identifier.toString().utf8().data(), pageCount(), maxSize());
-    return true;
+    RELEASE_LOG(BackForwardCache, "BackForwardCache::addIfCacheable frameItemID: %s, size: %u / %u", identifier.toString().utf8(), pageCount(), maxSize());
+    // prune() can evict the entry we just inserted (e.g. if maxSize() == 0 or
+    // the new entry is the oldest under the configured policy), so reflect the
+    // actual post-prune state.
+    return isInBackForwardCache(identifier);
 }
 
 bool BackForwardCache::addIfCacheable(HistoryItem& item, Page* page)
@@ -554,14 +576,12 @@ bool BackForwardCache::addIfCacheable(HistoryItem& item, Page* page)
     if (!page)
         return false;
 
-    // Same-site BFCache is not yet supported under Site Isolation — same-origin
-    // navigations can leave stale RemotePageProxy objects in the BCG.
-    // Cross-site (multi-process) BFCache uses the other addIfCacheable overload
-    // which is only called when both SI and multiProcessBackForwardCache are enabled.
-    if (page->settings().siteIsolationEnabled())
+    // Under Site Isolation, BFCache requires MultiProcessBackForwardCacheEnabled
+    // to keep iframe state consistent with the cached main frame.
+    if (page->settings().siteIsolationEnabled() && !page->settings().multiProcessBackForwardCacheEnabled())
         return false;
 
-    if (!addIfCacheable(item.frameItemID(), *page))
+    if (!addIfCacheable(item.frameItemID(), *page, item.itemID()))
         return false;
     item.notifyChanged();
     return true;
@@ -600,7 +620,7 @@ std::unique_ptr<CachedPage> BackForwardCache::take(BackForwardFrameItemIdentifie
     m_items.remove(identifier);
     auto cachedPage = std::get<UniqueRef<CachedPage>>(m_cachedPageMap.take(it));
 
-    RELEASE_LOG(BackForwardCache, "BackForwardCache::take frameItemID: %s, size: %u / %u", identifier.toString().utf8().data(), pageCount(), maxSize());
+    RELEASE_LOG(BackForwardCache, "BackForwardCache::take frameItemID: %s, size: %u / %u", identifier.toString().utf8(), pageCount(), maxSize());
 
     if (cachedPage->hasExpired() || (page && page->isResourceCachingDisabledByWebInspector())) {
         LOG(BackForwardCache, "Not restoring page from back/forward cache because cache entry has expired");
@@ -621,7 +641,7 @@ void BackForwardCache::removeAllItemsForPage(Page& page)
     m_cachedPageMap.removeIf([&](auto& pair) -> bool {
         if (auto* cachedPage = std::get_if<UniqueRef<CachedPage>>(&pair.value)) {
             if (&(*cachedPage)->page() == &page) {
-                RELEASE_LOG(BackForwardCache,  "BackForwardCache::removeAllItemsForPage removing item: %s, size: %u / %u", pair.key.toString().utf8().data(), pageCount() - 1, maxSize());
+                RELEASE_LOG(BackForwardCache,  "BackForwardCache::removeAllItemsForPage removing item: %s, size: %u / %u", pair.key.toString().utf8(), pageCount() - 1, maxSize());
                 m_items.remove(pair.key);
                 return true;
             }
@@ -645,7 +665,7 @@ CachedPage* BackForwardCache::get(HistoryItem& item, Page* page)
         if (page && &cachedPage->page() != page)
             return nullptr;
         if (cachedPage->hasExpired() || (page && page->isResourceCachingDisabledByWebInspector())) {
-            LOG(BackForwardCache, "Not restoring page for %s from back/forward cache because cache entry has expired", item.url().string().ascii().data());
+            LOG(BackForwardCache, "Not restoring page for %s from back/forward cache because cache entry has expired", item.url().string().utf8());
             logBackForwardCacheFailureDiagnosticMessage(page, DiagnosticLoggingKeys::expiredKey());
             remove(item);
             return nullptr;
@@ -654,17 +674,47 @@ CachedPage* BackForwardCache::get(HistoryItem& item, Page* page)
     });
 }
 
-void BackForwardCache::remove(BackForwardFrameItemIdentifier frameItemID)
+CachedPage* BackForwardCache::get(BackForwardFrameItemIdentifier identifier)
+{
+    auto it = m_cachedPageMap.find(identifier);
+    if (it == m_cachedPageMap.end())
+        return nullptr;
+    auto* cachedPage = std::get_if<UniqueRef<CachedPage>>(&it->value);
+    if (!cachedPage || (*cachedPage)->hasExpired())
+        return nullptr;
+    return cachedPage->ptr();
+}
+
+// Notify the LocalFrameLoaderClient before tearing down so the WebKit layer
+// can mirror the eviction to UIProcess (DidEvictBackForwardItem). Only fires
+// for entries that have a bound itemID (set via the addIfCacheable itemID
+// parameter) — the same-site BFCache path. Cross-site / iframe insertions
+// don't carry an item identifier and so are not signaled.
+static void notifyClientOfEviction(CachedPage& cachedPage)
+{
+    auto itemID = cachedPage.itemID();
+    if (!itemID)
+        return;
+    RefPtr localMainFrame = cachedPage.page().localMainFrame();
+    if (!localMainFrame)
+        return;
+    localMainFrame->loader().client().didEvictBackForwardItem(*itemID);
+}
+
+void BackForwardCache::remove(BackForwardFrameItemIdentifier frameItemID, ShouldNotifyClient shouldNotifyClient)
 {
     // Safely ignore attempts to remove items not in the cache.
     auto it = m_cachedPageMap.find(frameItemID);
     if (it == m_cachedPageMap.end() || std::holds_alternative<PruningReason>(it->value))
         return;
 
+    if (shouldNotifyClient == ShouldNotifyClient::Yes)
+        notifyClientOfEviction(protect(std::get<UniqueRef<CachedPage>>(it->value).get()));
+
     m_items.remove(frameItemID);
     m_cachedPageMap.remove(it);
 
-    RELEASE_LOG(BackForwardCache, "BackForwardCache::remove item: %s, size: %u / %u", frameItemID.toString().utf8().data(), pageCount(), maxSize());
+    RELEASE_LOG(BackForwardCache, "BackForwardCache::remove item: %s, size: %u / %u", frameItemID.toString().utf8(), pageCount(), maxSize());
 }
 
 void BackForwardCache::remove(HistoryItem& item)
@@ -680,8 +730,10 @@ void BackForwardCache::prune(PruningReason pruningReason)
 
         // Take the CachedPage before calling set() so ~CachedPage doesn’t find itself in m_cachedPageMap.
         auto cachedPage = m_cachedPageMap.take(oldestItem);
+        if (auto* uniqueRef = std::get_if<UniqueRef<CachedPage>>(&cachedPage))
+            notifyClientOfEviction(protect(uniqueRef->get()));
         m_cachedPageMap.set(oldestItem, pruningReason);
-        RELEASE_LOG(BackForwardCache, "BackForwardCache::prune removing item: %s, size: %u / %u", oldestItem.toString().utf8().data(), pageCount(), maxSize());
+        RELEASE_LOG(BackForwardCache, "BackForwardCache::prune removing item: %s, size: %u / %u", oldestItem.toString().utf8(), pageCount(), maxSize());
     }
 }
 
@@ -690,7 +742,8 @@ void BackForwardCache::clearEntriesForOrigins(const HashSet<Ref<SecurityOrigin>>
     m_cachedPageMap.removeIf([&](auto& pair) -> bool {
         if (auto* cachedPage = std::get_if<UniqueRef<CachedPage>>(&pair.value)) {
             if (origins.contains(SecurityOrigin::create((*cachedPage)->page().mainFrameURL()))) {
-                RELEASE_LOG(BackForwardCache, "BackForwardCache::clearEntriesForOrigins removing item: %s, size: %u / %u", pair.key.toString().utf8().data(), pageCount() - 1, maxSize());
+                RELEASE_LOG(BackForwardCache, "BackForwardCache::clearEntriesForOrigins removing item: %s, size: %u / %u", pair.key.toString().utf8(), pageCount() - 1, maxSize());
+                notifyClientOfEviction(protect(cachedPage->get()));
                 m_items.remove(pair.key);
                 return true;
             }

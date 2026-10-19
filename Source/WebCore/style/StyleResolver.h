@@ -33,6 +33,7 @@
 #include <memory>
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
+#include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomStringHash.h>
@@ -45,7 +46,6 @@ class BlendingKeyframes;
 class CSSStyleSheet;
 class Document;
 class Element;
-class RenderStyle;
 class RuleData;
 class RuleSet;
 class SelectorFilter;
@@ -60,18 +60,14 @@ class StyleSheetList;
 class TimingFunction;
 class ViewportStyleResolver;
 
-// MatchOnlyUserAgentRules is used in media queries, where relative units
-// are interpreted according to the document root element style, and styled only
-// from the User Agent Stylesheet rules.
-
 enum class RuleMatchingBehavior: uint8_t {
     MatchAllRules,
     MatchAllRulesExcludingSMIL,
-    MatchOnlyUserAgentRules,
 };
 
 namespace Style {
 
+class ComputedStyle;
 class CustomFunctionRegistry;
 struct BuilderContext;
 struct CachedMatchResult;
@@ -80,10 +76,13 @@ struct SelectorMatchingState;
 struct UnadjustedStyle;
 
 struct ResolutionContext {
-    const RenderStyle* parentStyle;
-    const RenderStyle* parentBoxStyle { nullptr };
+    const Style::ComputedStyle* parentStyle;
+    // For highlight pseudo-elements: the corresponding highlight pseudo-element style of the
+    // originating element's parent. https://drafts.csswg.org/css-pseudo-4/#highlight-cascade
+    const Style::ComputedStyle* parentHighlightStyle { nullptr };
+    const Style::ComputedStyle* parentBoxStyle { nullptr };
     // This needs to be provided during style resolution when up-to-date document element style is not available via DOM.
-    const RenderStyle* documentElementStyle { nullptr };
+    const Style::ComputedStyle* documentElementStyle { nullptr };
     SelectorMatchingState* selectorMatchingState { nullptr };
     CheckedPtr<TreeResolutionState> treeResolutionState { };
 
@@ -92,29 +91,29 @@ struct ResolutionContext {
 
 using KeyframesRuleMap = HashMap<AtomString, Ref<StyleRuleKeyframes>>;
 
-class Resolver : public RefCounted<Resolver>, public CanMakeSingleThreadWeakPtr<Resolver> {
+class Resolver : public ThreadSafeRefCounted<Resolver>, public CanMakeSingleThreadWeakPtr<Resolver> {
     WTF_MAKE_TZONE_ALLOCATED(Resolver);
 public:
     // Style resolvers are shared between shadow trees with identical styles. That's why we don't simply provide a Style::Scope.
     enum class ScopeType : bool { Document, ShadowTree };
     static Ref<Resolver> create(Document&, ScopeType);
-    ~Resolver();
+    WEBCORE_EXPORT ~Resolver();
 
     UnadjustedStyle unadjustedStyleForElement(Element&, const ResolutionContext&, RuleMatchingBehavior = RuleMatchingBehavior::MatchAllRules);
     UnadjustedStyle unadjustedStyleForCachedMatchResult(Element&, const ResolutionContext&, CachedMatchResult&&);
 
     ResolvedStyle styleForElement(Element&, const ResolutionContext&, RuleMatchingBehavior = RuleMatchingBehavior::MatchAllRules);
 
-    bool keyframeStylesForAnimation(Element&, const RenderStyle& elementStyle, const ResolutionContext&, BlendingKeyframes&, const TimingFunction*) const;
+    bool keyframeStylesForAnimation(Element&, const Style::ComputedStyle& elementStyle, const ResolutionContext&, BlendingKeyframes&, const TimingFunction*) const;
 
     WEBCORE_EXPORT std::optional<ResolvedStyle> styleForPseudoElement(Element&, const PseudoElementRequest&, const ResolutionContext&);
 
-    std::unique_ptr<RenderStyle> styleForPage(int pageIndex);
-    std::unique_ptr<RenderStyle> defaultStyleForElement(const Element*);
+    std::unique_ptr<Style::ComputedStyle> styleForPage(int pageIndex);
+    std::unique_ptr<Style::ComputedStyle> defaultStyleForElement(const Element*);
 
-    Document& NODELETE document();
-    const Document& NODELETE document() const;
-    const Settings& NODELETE settings() const;
+    Document& LEGACY_NODELETE document();
+    const Document& LEGACY_NODELETE document() const;
+    const Settings& LEGACY_NODELETE settings() const;
 
     ScopeType scopeType() const { return m_scopeType; }
 
@@ -127,8 +126,8 @@ public:
 
     void addCurrentSVGFontFaceRules();
 
-    std::unique_ptr<RenderStyle> styleForKeyframe(Element&, const RenderStyle& elementStyle, const ResolutionContext&, const StyleRuleKeyframe&, BlendingKeyframe&) const;
-    bool isAnimationNameValid(const AtomString&) const;
+    std::unique_ptr<Style::ComputedStyle> styleForKeyframe(Element&, const Style::ComputedStyle& elementStyle, const ResolutionContext&, const StyleRuleKeyframe&, BlendingKeyframe&) const;
+    bool LEGACY_NODELETE isAnimationNameValid(const AtomString&) const;
 
     void setViewTransitionStyles(CSSSelector::PseudoElement, const AtomString&, Ref<MutableStyleProperties>);
 
@@ -146,18 +145,19 @@ public:
     bool hasSelectorForId(const AtomString&) const;
     bool hasSelectorForAttribute(const Element&, const AtomString&) const;
 
-    bool NODELETE hasViewportDependentMediaQueries() const;
+    bool LEGACY_NODELETE hasViewportDependentMediaQueries() const;
     std::optional<DynamicMediaQueryEvaluationChanges> evaluateDynamicMediaQueries();
 
-    static KeyframesRuleMap& NODELETE userAgentKeyframes();
+    static KeyframesRuleMap& LEGACY_NODELETE userAgentKeyframes();
     static void addUserAgentKeyframeStyle(Ref<StyleRuleKeyframes>&&);
     void addKeyframeStyle(Ref<StyleRuleKeyframes>&&);
+    RefPtr<StyleRuleKeyframes> keyframesRuleForName(const AtomString&) const;
     Vector<Ref<StyleRuleKeyframe>> keyframeRulesForName(const AtomString&, const TimingFunction*) const;
 
-    const CustomFunctionRegistry* NODELETE customFunctionRegistry() const;
+    const CustomFunctionRegistry* LEGACY_NODELETE customFunctionRegistry() const;
     CustomFunctionRegistry& ensureCustomFunctionRegistry();
 
-    RefPtr<StyleRuleViewTransition> NODELETE viewTransitionRule() const;
+    RefPtr<StyleRuleViewTransition> viewTransitionRule() const;
 
     bool usesFirstLineRules() const { return m_ruleSets.features().usesFirstLineRules; }
     bool usesFirstLetterRules() const { return m_ruleSets.features().usesFirstLetterRules; }
@@ -171,16 +171,14 @@ public:
     bool isSharedBetweenShadowTrees() const { return m_isSharedBetweenShadowTrees; }
     void setSharedBetweenShadowTrees() { m_isSharedBetweenShadowTrees = true; }
 
-    const RenderStyle* rootDefaultStyle() const LIFETIME_BOUND { return m_rootDefaultStyle.get(); }
-
 private:
     Resolver(Document&, ScopeType);
     void initialize();
 
     class State;
 
-    State initializeStateAndStyle(const Element&, const ResolutionContext&, std::unique_ptr<RenderStyle>&& initialStyle = { });
-    BuilderContext NODELETE builderContext(State&) const;
+    State initializeStateAndStyle(const Element&, const ResolutionContext&, std::unique_ptr<Style::ComputedStyle>&& initialStyle = { });
+    BuilderContext LEGACY_NODELETE builderContext(State&) const;
 
     void applyMatchedProperties(State&, const MatchResult&, PropertyCascade::IncludedProperties&&);
     void setGlobalStateAfterApplyingProperties(const BuilderState&);
@@ -192,9 +190,8 @@ private:
 
     KeyframesRuleMap m_keyframesRuleMap;
 
-    std::unique_ptr<Style::CustomFunctionRegistry> m_customFunctionRegistry;
+    const std::unique_ptr<Style::CustomFunctionRegistry> m_customFunctionRegistry;
 
-    std::unique_ptr<RenderStyle> m_rootDefaultStyle;
     MQ::MediaQueryEvaluator m_mediaQueryEvaluator;
 
     InspectorCSSOMWrappers m_inspectorCSSOMWrappers;

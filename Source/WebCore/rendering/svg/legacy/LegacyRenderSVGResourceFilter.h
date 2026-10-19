@@ -57,7 +57,7 @@ class LegacyRenderSVGResourceFilter final : public LegacyRenderSVGResourceContai
     WTF_MAKE_TZONE_ALLOCATED(LegacyRenderSVGResourceFilter);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(LegacyRenderSVGResourceFilter);
 public:
-    LegacyRenderSVGResourceFilter(SVGFilterElement&, RenderStyle&&);
+    LegacyRenderSVGResourceFilter(SVGFilterElement&, Style::ComputedStyle&&);
     virtual ~LegacyRenderSVGResourceFilter();
 
     inline SVGFilterElement& filterElement() const;
@@ -66,7 +66,7 @@ public:
     void removeAllClientsFromCache() override;
     void removeClientFromCache(RenderElement&) override;
 
-    OptionSet<ApplyResult> applyResource(RenderElement&, const RenderStyle&, GraphicsContext*&, OptionSet<RenderSVGResourceMode>) override;
+    OptionSet<ApplyResult> applyResource(RenderElement&, const Style::ComputedStyle&, GraphicsContext*&, OptionSet<RenderSVGResourceMode>) override;
     void postApplyResource(RenderElement&, GraphicsContext*&, OptionSet<RenderSVGResourceMode>, const Path*, const RenderElement*) override;
 
     FloatRect resourceBoundingBox(const RenderObject&, RepaintRectCalculation) override;
@@ -79,7 +79,7 @@ public:
 
     RenderSVGResourceType resourceType() const override { return FilterResourceType; }
 
-    FloatRect NODELETE drawingRegion(RenderObject&) const;
+    FloatRect LEGACY_NODELETE drawingRegion(RenderObject&) const;
 
 private:
     void element() const = delete;

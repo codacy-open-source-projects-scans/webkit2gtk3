@@ -44,7 +44,7 @@ using namespace HTMLNames;
 // reference, and '\0' is a parse error. '\r' and '\n' require special handling
 // for line counting and newline normalization in the input stream preprocessor.
 // Everything else is plain text that can be emitted as-is.
-static bool isDataStateSpecialCharacter(Latin1Character c)
+static bool LEGACY_NODELETE isDataStateSpecialCharacter(Latin1Character c)
 {
     return c == '<' || c == '&' || c == '\r' || c == '\n' || c == '\0';
 }
@@ -64,7 +64,7 @@ static std::span<const Latin1Character> findPlainTextInDataState(std::span<const
 // handling for line counting and newline normalization. Everything else is plain
 // text that can be appended to the attribute value as-is.
 template<Latin1Character quoteCharacter>
-static bool isQuotedAttributeValueSpecialCharacter(Latin1Character c)
+static bool LEGACY_NODELETE isQuotedAttributeValueSpecialCharacter(Latin1Character c)
 {
     return c == quoteCharacter || c == '&' || c == '\r' || c == '\n' || c == '\0';
 }
@@ -76,7 +76,7 @@ static std::span<const Latin1Character> findPlainTextInQuotedAttributeValue(std:
     return span.first(it - span.begin());
 }
 
-static inline Latin1Character NODELETE convertASCIIAlphaToLower(char16_t character)
+static inline Latin1Character LEGACY_NODELETE convertASCIIAlphaToLower(char16_t character)
 {
     ASSERT(isASCIIAlpha(character));
     return toASCIILowerUnchecked(character);
@@ -151,6 +151,21 @@ inline bool HTMLTokenizer::emitEndOfFile(SegmentedString& source)
     source.advance();
     m_token.clear();
     m_token.makeEndOfFile();
+    return true;
+}
+
+static bool LEGACY_NODELETE isReplacedNullCharacter(const SegmentedString& source, char16_t character)
+{
+    return character == replacementCharacter && !source.currentCharacter();
+}
+
+inline bool HTMLTokenizer::emitReplacedNullCharacter(SegmentedString& source, State state)
+{
+    m_state = state;
+    if (haveBufferedCharacterToken())
+        return true;
+    m_token.makeReplacedNullCharacter();
+    source.advancePastNonNewline();
     return true;
 }
 
@@ -234,7 +249,7 @@ bool HTMLTokenizer::processToken(SegmentedString& source)
             return true;
     }
 
-    if (!m_preprocessor.peek(source, isNullCharacterSkippingState(m_state) && !m_forceNullCharacterReplacement))
+    if (!m_preprocessor.peek(source, shouldSkipNullCharacters(m_state)))
         return haveBufferedCharacterToken();
     char16_t character = m_preprocessor.nextInputCharacter();
 
@@ -251,6 +266,8 @@ bool HTMLTokenizer::processToken(SegmentedString& source)
         }
         if (character == kEndOfFileMarker)
             return emitEndOfFile(source);
+        if (isReplacedNullCharacter(source, character)) [[unlikely]]
+            return emitReplacedNullCharacter(source, DataState);
         bufferCharacter(character);
         // Optimization: scan ahead for a run of plain-text characters in the
         // current 8-bit substring and buffer them all at once, avoiding the
@@ -1443,6 +1460,8 @@ bool HTMLTokenizer::processToken(SegmentedString& source)
             ADVANCE_PAST_NON_NEWLINE_TO(CDATASectionRightSquareBracketState);
         if (character == kEndOfFileMarker)
             RECONSUME_IN(DataState);
+        if (isReplacedNullCharacter(source, character)) [[unlikely]]
+            return emitReplacedNullCharacter(source, CDATASectionState);
         bufferCharacter(character);
         ADVANCE_TO(CDATASectionState);
     END_STATE()
@@ -1479,18 +1498,18 @@ String HTMLTokenizer::bufferedCharacters() const
 
 void HTMLTokenizer::updateStateFor(const AtomString& tagName)
 {
-    if (tagName == textareaTag || tagName == titleTag)
+    if (textareaTag->hasLocalName(tagName) || titleTag->hasLocalName(tagName))
         m_state = RCDATAState;
-    else if (tagName == plaintextTag)
+    else if (plaintextTag->hasLocalName(tagName))
         m_state = PLAINTEXTState;
-    else if (tagName == scriptTag)
+    else if (scriptTag->hasLocalName(tagName))
         m_state = ScriptDataState;
-    else if (tagName == styleTag
-        || tagName == iframeTag
-        || tagName == xmpTag
-        || (tagName == noembedTag)
-        || tagName == noframesTag
-        || (tagName == noscriptTag && m_options.scriptingFlag))
+    else if (styleTag->hasLocalName(tagName)
+        || iframeTag->hasLocalName(tagName)
+        || xmpTag->hasLocalName(tagName)
+        || noembedTag->hasLocalName(tagName)
+        || noframesTag->hasLocalName(tagName)
+        || (noscriptTag->hasLocalName(tagName) && m_options.scriptingFlag))
         m_state = RAWTEXTState;
 }
 

@@ -49,6 +49,7 @@
 #import <WebCore/ScrollingTreeScrollingNode.h>
 #import <wtf/BlockObjCExceptions.h>
 #import <wtf/SetForScope.h>
+#import <wtf/SystemTracing.h>
 #import <wtf/TZoneMallocInlines.h>
 
 @interface WKScrollingNodeScrollViewDelegate () <WKBaseScrollViewDelegate>
@@ -82,6 +83,16 @@
     if (RetainPtr baseScrollView = dynamic_objc_cast<WKBaseScrollView>(scrollView))
         [baseScrollView updateInteractiveScrollVelocity];
 
+    if (_scrollPerfIntervalState != ScrollPerfIntervalState::Inactive) {
+        if ([scrollView _wk_isScrolledBeyondExtents]) {
+            if (_scrollPerfIntervalState == ScrollPerfIntervalState::FingerDown)
+                WTFEndSignpostAlways(nullptr, ScrollingPerformanceTestFingerDownInterval, "isAnimation=YES;");
+            else
+                WTFEndSignpostAlways(nullptr, ScrollingPerformanceTestMomentumInterval, "isAnimation=YES;");
+            _scrollPerfIntervalState = ScrollPerfIntervalState::Inactive;
+        }
+    }
+
     scrollingTreeNodeDelegate->scrollViewDidScroll(scrollView.contentOffset, _inUserInteraction);
 }
 
@@ -91,7 +102,20 @@
     if (!scrollingTreeNodeDelegate) [[unlikely]]
         return;
 
+    if (scrollingTreeNodeDelegate->isScrollingPerformanceTestingEnabled()) {
+        if (_scrollPerfIntervalState == ScrollPerfIntervalState::Momentum) {
+            WTFEndSignpostAlways(nullptr, ScrollingPerformanceTestMomentumInterval, "isAnimation=YES;");
+            _scrollPerfIntervalState = ScrollPerfIntervalState::Inactive;
+        }
+        if (_scrollPerfIntervalState == ScrollPerfIntervalState::Inactive) {
+            WTFBeginSignpostAlways(nullptr, ScrollingPerformanceTestFingerDownInterval, "isAnimation=YES;");
+            _scrollPerfIntervalState = ScrollPerfIntervalState::FingerDown;
+        }
+    }
+
     _inUserInteraction = YES;
+    _pendingSnapContentOffset = std::nullopt;
+    _isAnimatingToSnapContentOffset = NO;
 
     if (scrollView.panGestureRecognizer.state == UIGestureRecognizerStateBegan)
         scrollingTreeNodeDelegate->scrollViewWillStartPanGesture();
@@ -118,8 +142,8 @@
     }
 
     Ref scrollingNode = scrollingTreeNodeDelegate->scrollingNode();
-    std::optional<unsigned> originalHorizontalSnapPosition = scrollingNode->currentHorizontalSnapPointIndex();
-    std::optional<unsigned> originalVerticalSnapPosition = scrollingNode->currentVerticalSnapPointIndex();
+    auto originalHorizontalSnapPosition = scrollingNode->currentHorizontalSnapPointIndex();
+    auto originalVerticalSnapPosition = scrollingNode->currentVerticalSnapPointIndex();
 
     WebCore::FloatSize viewportSize(static_cast<float>(CGRectGetWidth([scrollView bounds])), static_cast<float>(CGRectGetHeight([scrollView bounds])));
     const auto& snapOffsetsInfo = scrollingNode->snapOffsetsInfo();
@@ -137,6 +161,15 @@
             targetContentOffset->y = potentialSnapPosition;
     }
 
+    // FIXME: Remove this workaround once UIKit no longer decelerates very slowly towards a target that lies against the
+    // direction of the velocity (rdar://189252768). This happens when flicking past the last snap position. Stop the
+    // momentum here and animate to the snap position once dragging ends.
+    CGPoint currentContentOffset = scrollView.contentOffset;
+    if (!snapOffsetsInfo.isEmpty() && ((targetContentOffset->x - currentContentOffset.x) * velocity.x < 0 || (targetContentOffset->y - currentContentOffset.y) * velocity.y < 0)) {
+        _pendingSnapContentOffset = *targetContentOffset;
+        *targetContentOffset = currentContentOffset;
+    }
+
     if (originalHorizontalSnapPosition != scrollingNode->currentHorizontalSnapPointIndex()
         || originalVerticalSnapPosition != scrollingNode->currentVerticalSnapPointIndex()) {
         scrollingTreeNodeDelegate->currentSnapPointIndicesDidChange(scrollingNode->currentHorizontalSnapPointIndex(), scrollingNode->currentVerticalSnapPointIndex());
@@ -148,6 +181,23 @@
     CheckedPtr scrollingTreeNodeDelegate = _scrollingTreeNodeDelegate.get();
     if (!scrollingTreeNodeDelegate) [[unlikely]]
         return;
+
+    if (scrollingTreeNodeDelegate->isScrollingPerformanceTestingEnabled()) {
+        if (_scrollPerfIntervalState == ScrollPerfIntervalState::FingerDown) {
+            WTFEndSignpostAlways(nullptr, ScrollingPerformanceTestFingerDownInterval, "isAnimation=YES;");
+            _scrollPerfIntervalState = ScrollPerfIntervalState::Inactive;
+        }
+        if (willDecelerate && _scrollPerfIntervalState == ScrollPerfIntervalState::Inactive) {
+            WTFBeginSignpostAlways(nullptr, ScrollingPerformanceTestMomentumInterval, "isAnimation=YES;");
+            _scrollPerfIntervalState = ScrollPerfIntervalState::Momentum;
+        }
+    }
+
+    if (auto pendingSnapContentOffset = std::exchange(_pendingSnapContentOffset, std::nullopt); pendingSnapContentOffset && !willDecelerate) {
+        _isAnimatingToSnapContentOffset = YES;
+        [scrollView setContentOffset:*pendingSnapContentOffset animated:YES];
+        return;
+    }
 
     if (_inUserInteraction && !willDecelerate) {
         _inUserInteraction = NO;
@@ -162,6 +212,13 @@
     if (!scrollingTreeNodeDelegate) [[unlikely]]
         return;
 
+    if (scrollingTreeNodeDelegate->isScrollingPerformanceTestingEnabled()) {
+        if (_scrollPerfIntervalState == ScrollPerfIntervalState::Momentum) {
+            WTFEndSignpostAlways(nullptr, ScrollingPerformanceTestMomentumInterval, "isAnimation=YES;");
+            _scrollPerfIntervalState = ScrollPerfIntervalState::Inactive;
+        }
+    }
+
     if (_inUserInteraction) {
         _inUserInteraction = NO;
         scrollingTreeNodeDelegate->scrollViewDidScroll(scrollView.contentOffset, _inUserInteraction);
@@ -174,6 +231,11 @@
     CheckedPtr scrollingTreeNodeDelegate = _scrollingTreeNodeDelegate.get();
     if (!scrollingTreeNodeDelegate) [[unlikely]]
         return;
+
+    if (std::exchange(_isAnimatingToSnapContentOffset, NO) && _inUserInteraction) {
+        _inUserInteraction = NO;
+        scrollingTreeNodeDelegate->scrollViewDidScroll(scrollView.contentOffset, _inUserInteraction);
+    }
 
     scrollingTreeNodeDelegate->scrollDidEnd();
 }
@@ -337,7 +399,7 @@ void ScrollingTreeScrollingNodeDelegateIOS::commitStateAfterChildren(const Scrol
         RetainPtr scrollView = this->scrollView();
         if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::ScrollContainerLayer)) {
             if (!m_scrollViewDelegate)
-                m_scrollViewDelegate = adoptNS([[WKScrollingNodeScrollViewDelegate alloc] initWithScrollingTreeNodeDelegate:*this]);
+                lazyInitialize(m_scrollViewDelegate, adoptNS([[WKScrollingNodeScrollViewDelegate alloc] initWithScrollingTreeNodeDelegate:*this]));
 
             scrollView.get().scrollsToTop = NO;
             scrollView.get().delegate = m_scrollViewDelegate.get();
@@ -512,6 +574,11 @@ void ScrollingTreeScrollingNodeDelegateIOS::scrollViewWillStartPanGesture() cons
     scrollingTree()->scrollingTreeNodeWillStartPanGesture(scrollingNode()->scrollingNodeID());
 }
 
+bool ScrollingTreeScrollingNodeDelegateIOS::isScrollingPerformanceTestingEnabled() const
+{
+    return scrollingTree()->scrollingPerformanceTestingEnabled();
+}
+
 void ScrollingTreeScrollingNodeDelegateIOS::scrollViewDidScroll(const FloatPoint& scrollOffset, bool inUserInteraction)
 {
     if (m_updatingFromStateNode)
@@ -531,8 +598,7 @@ void ScrollingTreeScrollingNodeDelegateIOS::currentSnapPointIndicesDidChange(std
 
 WKBaseScrollView *ScrollingTreeScrollingNodeDelegateIOS::scrollView() const
 {
-    // FIXME: This is a static analyzer false positive.
-    SUPPRESS_UNRETAINED_LOCAL if (auto* delegate = protect(scrollLayer()).get().delegate) {
+    if (auto* delegate = protect(scrollLayer()).get().delegate) {
         ASSERT(is_objc<WKBaseScrollView>(delegate));
         return dynamic_objc_cast<WKBaseScrollView>(delegate);
     }

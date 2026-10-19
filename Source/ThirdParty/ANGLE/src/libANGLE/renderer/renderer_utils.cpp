@@ -871,7 +871,8 @@ angle::Result IncompleteTextureSet::getIncompleteTexture(
             mutableContext, gl::BufferBinding::Texture, &kBufferInitData, sizeof(kBufferInitData),
             gl::BufferUsage::StaticDraw));
     }
-    else if (createType == gl::TextureType::_2DMultisample)
+    else if (createType == gl::TextureType::_2DMultisample ||
+             createType == gl::TextureType::_2DMultisampleArray)
     {
         ANGLE_TRY(t->setStorageMultisample(mutableContext, createType, 1,
                                            incompleteTextureParam.sizedInternalFormat, colorSize,
@@ -910,15 +911,18 @@ angle::Result IncompleteTextureSet::getIncompleteTexture(
                                  incompleteTextureParam.format, incompleteTextureParam.type,
                                  *incompleteCubeArrayPixels));
     }
-    else if (type == gl::TextureType::_2DMultisample)
+    else if (type == gl::TextureType::_2DMultisample ||
+             type == gl::TextureType::_2DMultisampleArray)
     {
         // Call a specialized clear function to init a multisample texture.
         ANGLE_TRY(multisampleInitializer->initializeMultisampleTextureToBlack(context, t.get()));
+        // The above initialization is invisible to the front-end
+        t->setInitState(gl::InitState::Initialized);
     }
     else if (type == gl::TextureType::Buffer)
     {
         ASSERT(incompleteTextureBufferAttachment != nullptr);
-        ANGLE_TRY(t->setBuffer(context, incompleteTextureBufferAttachment,
+        ANGLE_TRY(t->setBuffer(mutableContext, incompleteTextureBufferAttachment,
                                incompleteTextureParam.sizedInternalFormat));
     }
     else
@@ -1562,6 +1566,57 @@ template void GetUniform<GLfloat>(const gl::ProgramExecutable *executable,
                                   GLenum entryPointType,
                                   const DefaultUniformBlockMap *defaultUniformBlocks);
 
+std::string RemoveArraySubscripts(const std::string &uniformName)
+{
+    std::string strippedName = uniformName;
+
+    auto out = strippedName.begin();
+    for (auto in = strippedName.begin(); in != strippedName.end(); in++)
+    {
+        if (*in == '[')
+        {
+            while (*in != ']')
+            {
+                in++;
+                ASSERT(in != strippedName.end());
+            }
+        }
+        else
+        {
+            *out++ = *in;
+        }
+    }
+
+    strippedName.erase(out, strippedName.end());
+    return strippedName;
+}
+
+std::string GetExtractedStructSamplerName(
+    const std::string uniformNameWithoutIndices,
+    angle::HashMap<std::string, size_t> *extractedSamplerIndices)
+{
+    ASSERT(uniformNameWithoutIndices.find('.') != std::string::npos);
+    ASSERT(uniformNameWithoutIndices.find('[') == std::string::npos);
+
+    // The first time this uniform is visited, the extracted sampler name is generated.  For
+    // arrays, consecutive visits reuse the same extracted sampler name.
+    size_t index = extractedSamplerIndices->size();
+
+    auto extracted = extractedSamplerIndices->find(uniformNameWithoutIndices);
+    if (extracted != extractedSamplerIndices->end())
+    {
+        index = extracted->second;
+    }
+    else
+    {
+        (*extractedSamplerIndices)[uniformNameWithoutIndices] = index;
+    }
+
+    std::ostringstream name;
+    name << sh::kExtractedSamplerNamePrefix << '_' << index;
+    return name.str();
+}
+
 const angle::Format &GetFormatFromFormatType(GLenum format, GLenum type)
 {
     GLenum sizedInternalFormat    = gl::GetInternalFormatInfo(format, type).sizedInternalFormat;
@@ -1611,7 +1666,15 @@ angle::Result GetVertexRangeInfo(const gl::Context *context,
             context->getState().isPrimitiveRestartEnabled(), &indexRange));
         ANGLE_TRY(ComputeStartVertex(context->getImplementation(), indexRange, baseVertex,
                                      startVertexOut));
-        *vertexCountOut = indexRange.vertexCount();
+
+        // Protect against requiring 64-bits to store a draw count. Most math is done in size_t and
+        // not safe on 32-bit systems. This would require a UINT_MAX index when primitive restart is
+        // disabled.
+        uint64_t vertexCount = indexRange.vertexCount();
+        ANGLE_CHECK_GL_MATH(context->getImplementation(),
+                            vertexCount <= std::numeric_limits<GLuint>::max());
+
+        *vertexCountOut = static_cast<size_t>(vertexCount);
     }
     else
     {
@@ -2058,6 +2121,8 @@ angle::FormatID ConvertToSRGB(angle::FormatID formatID)
             return angle::FormatID::R8G8_UNORM_SRGB;
         case angle::FormatID::R8G8B8_UNORM:
             return angle::FormatID::R8G8B8_UNORM_SRGB;
+        case angle::FormatID::R8G8B8X8_UNORM:
+            return angle::FormatID::R8G8B8X8_UNORM_SRGB;
         case angle::FormatID::R8G8B8A8_UNORM:
             return angle::FormatID::R8G8B8A8_UNORM_SRGB;
         case angle::FormatID::B8G8R8A8_UNORM:
@@ -2141,6 +2206,8 @@ angle::FormatID ConvertToLinear(angle::FormatID formatID)
             return angle::FormatID::R8G8_UNORM;
         case angle::FormatID::R8G8B8_UNORM_SRGB:
             return angle::FormatID::R8G8B8_UNORM;
+        case angle::FormatID::R8G8B8X8_UNORM_SRGB:
+            return angle::FormatID::R8G8B8X8_UNORM;
         case angle::FormatID::R8G8B8A8_UNORM_SRGB:
             return angle::FormatID::R8G8B8A8_UNORM;
         case angle::FormatID::B8G8R8A8_UNORM_SRGB:
@@ -2214,9 +2281,10 @@ angle::FormatID ConvertToLinear(angle::FormatID formatID)
     }
 }
 
-bool IsOverridableLinearFormat(angle::FormatID formatID)
+bool IsOverridableLinearOrSRGBFormat(angle::FormatID formatID)
 {
-    return ConvertToSRGB(formatID) != angle::FormatID::NONE;
+    return ConvertToSRGB(formatID) != angle::FormatID::NONE ||
+           ConvertToLinear(formatID) != angle::FormatID::NONE;
 }
 
 template <bool swizzledLuma>
@@ -2372,7 +2440,7 @@ bool TextureHasAnyRedefinedLevels(const gl::CubeFaceArray<gl::TexLevelMask> &red
 
 bool IsTextureLevelRedefined(const gl::CubeFaceArray<gl::TexLevelMask> &redefinedLevels,
                              gl::TextureType textureType,
-                             gl::LevelIndex level)
+                             gl::OwnerLevel level)
 {
     gl::TexLevelMask redefined = redefinedLevels[0];
 
@@ -2391,9 +2459,8 @@ bool TextureRedefineLevel(const TextureLevelAllocation levelAllocation,
                           const TextureLevelDefinition levelDefinition,
                           bool immutableFormat,
                           uint32_t levelCount,
-                          const uint32_t layerIndex,
-                          const gl::ImageIndex &index,
-                          gl::LevelIndex imageFirstAllocatedLevel,
+                          const gl::OwnerImageIndex &index,
+                          gl::OwnerLevel imageFirstAllocatedLevel,
                           gl::CubeFaceArray<gl::TexLevelMask> *redefinedLevels)
 {
     // If the level that's being redefined is outside the level range of the allocated
@@ -2417,7 +2484,7 @@ bool TextureRedefineLevel(const TextureLevelAllocation levelAllocation,
     //   image.
     // - Otherwise keep the image intact (another mip may be the source of a copy), and
     //   make sure any updates to this level are staged.
-    gl::LevelIndex levelIndexGL(index.getLevelIndex());
+    gl::OwnerLevel levelIndexGL = index.getLevelIndex();
     const bool isCompatibleRedefinition =
         levelAllocation == TextureLevelAllocation::WithinAllocatedImage &&
         levelDefinition == TextureLevelDefinition::Compatible;
@@ -2431,7 +2498,7 @@ bool TextureRedefineLevel(const TextureLevelAllocation levelAllocation,
         // Immutable texture should never have levels redefined.
         ASSERT(isCompatibleRedefinition || !immutableFormat);
 
-        const uint32_t redefinedFace = isCubeMap ? layerIndex : 0;
+        const uint32_t redefinedFace = isCubeMap ? index.getLayerIndex().get() : 0;
         (*redefinedLevels)[redefinedFace].set(levelIndexGL.get(), !isCompatibleRedefinition);
     }
 
@@ -2442,15 +2509,26 @@ bool TextureRedefineLevel(const TextureLevelAllocation levelAllocation,
     // so it can be recreated immediately.  This is needed so that the texture can be reallocated
     // with the correct format/size.
     //
-    // This is not done for cubemaps because every face may be separately redefined.  Note
-    // that this is not possible for texture arrays in general.
-    bool shouldReleaseImage = !isCompatibleRedefinition && isUpdateToSingleLevelImage && !isCubeMap;
+    // For cubemaps, every face may be separately redefined, so only release the image if all faces
+    // have been redefined.  Note that this is not possible for texture arrays in general.
+    bool shouldReleaseImage = !isCompatibleRedefinition && isUpdateToSingleLevelImage;
+    if (shouldReleaseImage && isCubeMap)
+    {
+        for (uint32_t face = 0; face < 6; ++face)
+        {
+            if (!(*redefinedLevels)[face][levelIndexGL.get()])
+            {
+                shouldReleaseImage = false;
+                break;
+            }
+        }
+    }
     return shouldReleaseImage;
 }
 
-void TextureRedefineGenerateMipmapLevels(gl::LevelIndex baseLevel,
-                                         gl::LevelIndex maxLevel,
-                                         gl::LevelIndex firstGeneratedLevel,
+void TextureRedefineGenerateMipmapLevels(gl::OwnerLevel baseLevel,
+                                         gl::OwnerLevel maxLevel,
+                                         gl::OwnerLevel firstGeneratedLevel,
                                          gl::CubeFaceArray<gl::TexLevelMask> *redefinedLevels)
 {
     static_assert(gl::IMPLEMENTATION_MAX_TEXTURE_LEVELS < 32,

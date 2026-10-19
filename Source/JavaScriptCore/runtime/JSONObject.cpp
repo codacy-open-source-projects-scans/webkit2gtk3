@@ -40,6 +40,8 @@
 #include "PropertyNameArray.h"
 #include "VMInlines.h"
 #include <charconv>
+#include <wtf/MathExtras.h>
+#include <wtf/UnalignedAccess.h>
 #include <wtf/dragonbox/dragonbox_to_chars.h>
 #include <wtf/text/EscapedFormsForJSON.h>
 #include <wtf/text/MakeString.h>
@@ -111,9 +113,9 @@ private:
         Holder(JSGlobalObject*, JSObject*, Structure*);
         Holder(RootHolderTag, JSObject*);
 
-        JSObject* NODELETE object() const { return m_object; }
-        bool NODELETE isArray() const { return m_isArray; }
-        bool NODELETE hasFastObjectProperties() const { return m_hasFastObjectProperties; }
+        JSObject* LEGACY_NODELETE object() const { return m_object; }
+        bool LEGACY_NODELETE isArray() const { return m_isArray; }
+        bool LEGACY_NODELETE hasFastObjectProperties() const { return m_hasFastObjectProperties; }
 
         bool appendNextProperty(Stringifier&, StringBuilder&);
 
@@ -142,7 +144,7 @@ private:
     void indent();
     void unindent();
     void startNewLine(StringBuilder&) const;
-    bool NODELETE isCallableReplacer() const { return m_replacerCallData.type != CallData::Type::None; }
+    bool LEGACY_NODELETE isCallableReplacer() const { return m_replacerCallData.type != CallData::Type::None; }
 
     JSGlobalObject* const m_globalObject;
     JSValue m_replacer;
@@ -179,29 +181,22 @@ static inline JSValue unwrapBoxedPrimitive(JSGlobalObject* globalObject, JSValue
     return value.isObject() ? unwrapBoxedPrimitive(globalObject, asObject(value)) : value;
 }
 
+static constexpr unsigned maxGapLength = 10;
+
 static inline String gap(JSGlobalObject* globalObject, JSValue space)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    constexpr unsigned maxGapLength = 10;
     space = unwrapBoxedPrimitive(globalObject, space);
     RETURN_IF_EXCEPTION(scope, { });
 
     // If the space value is a number, create a gap string with that number of spaces.
     if (space.isNumber()) {
-        double spaceCount = space.asNumber();
-        size_t count;
-        if (spaceCount > maxGapLength)
-            count = maxGapLength;
-        else if (!(spaceCount > 0))
-            count = 0;
-        else
-            count = static_cast<size_t>(spaceCount);
-        char spaces[maxGapLength];
-        for (size_t i = 0; i < count; ++i)
-            spaces[i] = ' ';
-        return String(std::span { spaces }.first(count));
+        unsigned count = clampTo<unsigned>(space.asNumber(), 0, maxGapLength);
+        constexpr auto spaces = "          "_s;
+        static_assert(spaces.length() == maxGapLength);
+        return String(spaces.span8().first(count));
     }
 
     // If the space value is a string, use it as the gap string, otherwise use no gap string.
@@ -337,10 +332,10 @@ ALWAYS_INLINE JSValue Stringifier::toJSON(JSValue baseValue, const PropertyNameF
     if (callData.type == CallData::Type::None)
         return baseValue;
 
-    MarkedArgumentBuffer args;
-    args.append(propertyName.value(vm));
-    ASSERT(!args.hasOverflowed());
-    RELEASE_AND_RETURN(scope, call(m_globalObject, asObject(toJSONFunction), callData, baseValue, args));
+    auto args = WTF::toArray<EncodedJSValue>({
+        JSValue::encode(propertyName.value(vm)),
+    });
+    RELEASE_AND_RETURN(scope, call(m_globalObject, asObject(toJSONFunction), callData, baseValue, ArgList { args.data(), args.size() }));
 }
 
 // We clamp recursion well beyond anything reasonable.
@@ -366,12 +361,12 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
 
     // Call the replacer function.
     if (isCallableReplacer()) {
-        MarkedArgumentBuffer args;
-        args.append(propertyName.value(vm));
-        args.append(value);
-        ASSERT(!args.hasOverflowed());
+        auto args = WTF::toArray<EncodedJSValue>({
+            JSValue::encode(propertyName.value(vm)),
+            JSValue::encode(value),
+        });
         ASSERT(holder.object());
-        value = call(m_globalObject, m_replacer, m_replacerCallData, holder.object(), args);
+        value = call(m_globalObject, m_replacer, m_replacerCallData, holder.object(), ArgList { args.data(), args.size() });
         RETURN_IF_EXCEPTION(scope, StringifyFailed);
     }
 
@@ -479,7 +474,7 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
     return StringifySucceeded;
 }
 
-inline bool NODELETE Stringifier::willIndent() const
+inline bool LEGACY_NODELETE Stringifier::willIndent() const
 {
     return !m_gap.isEmpty();
 }
@@ -494,7 +489,7 @@ inline void Stringifier::indent()
     m_indent = StringView { m_repeatedGap }.left(newSize);
 }
 
-inline void NODELETE Stringifier::unindent()
+inline void LEGACY_NODELETE Stringifier::unindent()
 {
     ASSERT(m_indent.length() >= m_gap.length());
     m_indent = StringView { m_repeatedGap }.left(m_indent.length() - m_gap.length());
@@ -692,6 +687,8 @@ enum class BufferMode : uint8_t {
     DynamicBuffer,
 };
 
+enum class HasGap : bool { No, Yes };
+
 enum class FailureReason : uint8_t {
     BufferFull,
     Found16BitEarly,
@@ -709,11 +706,13 @@ public:
     static constexpr unsigned staticBufferSize = bufferMode == BufferMode::StaticBuffer ? 8192 : 8;
     static constexpr unsigned dynamicBufferInlineCapacity = bufferMode == BufferMode::StaticBuffer ? 0 : 1024;
 
+    static constexpr bool useShortCopyTier = bufferMode == BufferMode::DynamicBuffer;
+
 private:
     explicit FastStringifier(JSGlobalObject&);
-    void append(JSValue);
+    template<HasGap hasGap> void append(JSValue);
     void appendInt32(int32_t);
-    void appendInt32Array(JSArray&);
+    template<HasGap hasGap> void appendInt32Array(JSArray&);
     String result();
 
     static constexpr unsigned maxInt32StringLength = ("-2147483648"_s).length();
@@ -721,8 +720,11 @@ private:
     // FIXME These should probably just take an ASCIILiteral.
     void append(char, char, char, char);
     void append(char, char, char, char, char);
+    bool setGap(JSValue space);
+    unsigned newLineAndIndentSize() const;
+    void appendNewLineAndIndentUnchecked();
     template<typename T> void recordFailure(FailureReason, T&& reason);
-    template<typename T> void NODELETE recordFailure(T&& reason)
+    template<typename T> void LEGACY_NODELETE recordFailure(T&& reason)
     {
         recordFailure(FailureReason::Unknown, std::forward<T>(reason));
     }
@@ -747,6 +749,9 @@ private:
     VM& m_vm;
     unsigned m_length { 0 }; // length of content already filled into m_buffer.
     unsigned m_capacity { 0 };
+    unsigned m_depth { 0 };
+    unsigned m_gapLength { 0 };
+    std::array<Latin1Character, maxGapLength> m_gap;
     bool m_checkedObjectPrototype { false };
     bool m_checkedArrayPrototype { false };
     std::optional<FailureReason> m_failureReason;
@@ -1080,6 +1085,55 @@ inline void FastStringifier<CharType, bufferMode>::append(char a, char b, char c
     m_length += 5;
 }
 
+// Resolves the space argument into a gap string, mirroring the gap() helper above.
+// Returns false for the cases left to the general Stringifier: boxed primitives
+// (observable unwrap), 16-bit gap strings, and other cells.
+template<typename CharType, BufferMode bufferMode>
+inline bool FastStringifier<CharType, bufferMode>::setGap(JSValue space)
+{
+    ASSERT(!space.isUndefined());
+    if (space.isNumber()) {
+        m_gapLength = clampTo<unsigned>(space.asNumber(), 0, maxGapLength);
+        m_gap.fill(' ');
+        return true;
+    }
+    if (space.isString()) {
+        auto string = asString(space)->tryGetValue();
+        if (string.data.isNull() || !string.data.is8Bit()) [[unlikely]]
+            return false;
+        auto span = string.data.span8();
+        unsigned count = std::min<unsigned>(span.size(), maxGapLength);
+        memcpySpan(std::span { m_gap }.first(count), span.first(count));
+        m_gapLength = count;
+        return true;
+    }
+    if (space.isCell())
+        return false;
+    // Other primitives (booleans, null) mean no gap.
+    m_gapLength = 0;
+    return true;
+}
+
+template<typename CharType, BufferMode bufferMode>
+ALWAYS_INLINE unsigned FastStringifier<CharType, bufferMode>::newLineAndIndentSize() const
+{
+    ASSERT(m_gapLength);
+    return 1 + m_depth * m_gapLength;
+}
+
+template<typename CharType, BufferMode bufferMode>
+ALWAYS_INLINE void FastStringifier<CharType, bufferMode>::appendNewLineAndIndentUnchecked()
+{
+    ASSERT(m_gapLength);
+    auto* cursor = buffer() + m_length;
+    *cursor++ = '\n';
+    for (unsigned i = 0; i < m_depth; ++i) {
+        for (unsigned j = 0; j < m_gapLength; ++j)
+            *cursor++ = m_gap[j];
+    }
+    m_length += 1 + m_depth * m_gapLength;
+}
+
 template<typename CharType, BufferMode bufferMode>
 ALWAYS_INLINE void FastStringifier<CharType, bufferMode>::appendInt32(int32_t number)
 {
@@ -1098,10 +1152,51 @@ ALWAYS_INLINE void FastStringifier<CharType, bufferMode>::appendInt32(int32_t nu
     }
 }
 
+static ALWAYS_INLINE bool eightByteRangeNeedsJSONEscape(uint64_t word)
+{
+    bool hasControl = hasZeroByte(word & 0xE0E0E0E0E0E0E0E0ULL); // any byte in [0x00,0x1F]?
+    bool hasQuote = hasZeroByte(word ^ 0x2222222222222222ULL); // any byte == '"'?
+    bool hasBackslash = hasZeroByte(word ^ 0x5C5C5C5C5C5C5C5CULL); // any byte == '\\'?
+    return hasControl || hasQuote || hasBackslash;
+}
+
 template<typename CharType>
+static ALWAYS_INLINE uint64_t copyEightBytesAndLoad(const CharType* source, CharType* destination)
+{
+    uint64_t word = WTF::unalignedLoad<uint64_t>(source);
+    WTF::unalignedStore<uint64_t>(destination, word);
+    return word;
+}
+
+static ALWAYS_INLINE uint32_t copyFourBytesAndLoad(const Latin1Character* source, Latin1Character* destination)
+{
+    uint32_t word = WTF::unalignedLoad<uint32_t>(source);
+    WTF::unalignedStore<uint32_t>(destination, word);
+    return word;
+}
+
+static ALWAYS_INLINE uint64_t upconvertEightBytesAndLoad(const Latin1Character* source, char16_t* destination)
+{
+    uint64_t word = WTF::unalignedLoad<uint64_t>(source);
+    uint64_t low = zeroExtendBytesToHalfwords(static_cast<uint32_t>(word));
+    uint64_t high = zeroExtendBytesToHalfwords(static_cast<uint32_t>(word >> 32));
+    WTF::unalignedStore<uint64_t>(destination, low);
+    WTF::unalignedStore<uint64_t>(destination + 4, high);
+    return word;
+}
+
+#if (CPU(ARM64) || CPU(X86_64)) && COMPILER(CLANG)
+#define JSON_STRING_COPY_HAS_SIMD 1
+#else
+#define JSON_STRING_COPY_HAS_SIMD 0
+#endif
+
+static constexpr size_t narrowStride = sizeof(uint64_t);
+
+template<typename CharType, bool useShortCopyTier = false>
 static ALWAYS_INLINE bool stringCopySameType(std::span<const CharType> span, CharType* cursor)
 {
-#if (CPU(ARM64) || CPU(X86_64)) && COMPILER(CLANG)
+#if JSON_STRING_COPY_HAS_SIMD
     constexpr size_t stride = SIMD::stride<CharType>;
     if (span.size() >= stride) {
         using UnsignedType = SameSizeUnsignedInteger<CharType>;
@@ -1142,6 +1237,36 @@ static ALWAYS_INLINE bool stringCopySameType(std::span<const CharType> span, Cha
         return SIMD::isNonZero(accumulated);
     }
 #endif
+    if constexpr (sizeof(CharType) == 1) {
+        if (span.size() >= narrowStride) {
+            const auto* ptr = span.data();
+            const auto* end = ptr + span.size();
+            auto* cursorEnd = cursor + span.size();
+            uint64_t accumulated = 0;
+#if JSON_STRING_COPY_HAS_SIMD
+            static_assert(stride <= 2 * narrowStride);
+            ASSERT(span.size() < 2 * narrowStride);
+            accumulated = eightByteRangeNeedsJSONEscape(copyEightBytesAndLoad(ptr, cursor));
+            accumulated |= eightByteRangeNeedsJSONEscape(copyEightBytesAndLoad(end - narrowStride, cursorEnd - narrowStride));
+#else
+            for (; ptr + narrowStride <= end; ptr += narrowStride, cursor += narrowStride)
+                accumulated |= eightByteRangeNeedsJSONEscape(copyEightBytesAndLoad(ptr, cursor));
+            if (ptr < end)
+                accumulated |= eightByteRangeNeedsJSONEscape(copyEightBytesAndLoad(end - narrowStride, cursorEnd - narrowStride));
+#endif
+            return accumulated;
+        }
+        if constexpr (useShortCopyTier) {
+            if (span.size() >= 4) {
+                const auto* ptr = span.data();
+                const auto* end = ptr + span.size();
+                auto* cursorEnd = cursor + span.size();
+                uint64_t low = copyFourBytesAndLoad(ptr, cursor);
+                uint64_t high = copyFourBytesAndLoad(end - 4, cursorEnd - 4);
+                return eightByteRangeNeedsJSONEscape(low | (high << 32));
+            }
+        }
+    }
     for (auto character : span) {
         if constexpr (sizeof(CharType) != 1) {
             if (U16_IS_SURROGATE(character)) [[unlikely]]
@@ -1156,7 +1281,7 @@ static ALWAYS_INLINE bool stringCopySameType(std::span<const CharType> span, Cha
 
 static ALWAYS_INLINE bool stringCopyUpconvert(std::span<const Latin1Character> span, char16_t* cursor)
 {
-#if (CPU(ARM64) || CPU(X86_64)) && COMPILER(CLANG)
+#if JSON_STRING_COPY_HAS_SIMD
     constexpr size_t stride = SIMD::stride<Latin1Character>;
     if (span.size() >= stride) {
         using UnsignedType = uint8_t;
@@ -1188,6 +1313,24 @@ static ALWAYS_INLINE bool stringCopyUpconvert(std::span<const Latin1Character> s
         return SIMD::isNonZero(accumulated);
     }
 #endif
+    if (span.size() >= narrowStride) {
+        const auto* ptr = span.data();
+        const auto* end = ptr + span.size();
+        auto* cursorEnd = cursor + span.size();
+        uint64_t accumulated = 0;
+#if JSON_STRING_COPY_HAS_SIMD
+        static_assert(stride <= 2 * narrowStride);
+        ASSERT(span.size() < 2 * narrowStride);
+        accumulated = eightByteRangeNeedsJSONEscape(upconvertEightBytesAndLoad(ptr, cursor));
+        accumulated |= eightByteRangeNeedsJSONEscape(upconvertEightBytesAndLoad(end - narrowStride, cursorEnd - narrowStride));
+#else
+        for (; ptr + narrowStride <= end; ptr += narrowStride, cursor += narrowStride)
+            accumulated |= eightByteRangeNeedsJSONEscape(upconvertEightBytesAndLoad(ptr, cursor));
+        if (ptr < end)
+            accumulated |= eightByteRangeNeedsJSONEscape(upconvertEightBytesAndLoad(end - narrowStride, cursorEnd - narrowStride));
+#endif
+        return accumulated;
+    }
     for (auto character : span) {
         if (WTF::escapedFormsForJSON[character]) [[unlikely]]
             return true;
@@ -1196,7 +1339,10 @@ static ALWAYS_INLINE bool stringCopyUpconvert(std::span<const Latin1Character> s
     return false;
 }
 
+#undef JSON_STRING_COPY_HAS_SIMD
+
 template<typename CharType, BufferMode bufferMode>
+template<HasGap hasGap>
 void FastStringifier<CharType, bufferMode>::append(JSValue value)
 {
     if constexpr (bufferMode == BufferMode::DynamicBuffer) {
@@ -1261,7 +1407,7 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
 
     switch (cell.type()) {
     case StringType: {
-        auto string = asString(&cell)->tryGetValue();
+        auto string = asString(&cell)->tryGetView();
         if (string.data.isNull()) [[unlikely]] {
             recordFailure("String::tryGetValue"_s);
             return;
@@ -1275,7 +1421,7 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
 
         if constexpr (std::same_as<CharType, Latin1Character>) {
             if (string.data.is8Bit()) [[likely]] {
-                if (!stringCopySameType(string.data.span8(), buffer() + m_length + 1)) [[likely]] {
+                if (!stringCopySameType<CharType, useShortCopyTier>(string.data.span8(), buffer() + m_length + 1)) [[likely]] {
                     buffer()[m_length + 1 + stringLength] = '"';
                     m_length += 1 + stringLength + 1;
                     return;
@@ -1348,11 +1494,16 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
             recordFailure("hasPolyProto"_s);
             return;
         }
-        if (structure.storedPrototype() != m_globalObject.objectPrototype()) [[unlikely]] {
-            recordFailure("non-standard object prototype"_s);
-            return;
-        }
-        if (!m_checkedObjectPrototype) {
+        if (structure.storedPrototype() != m_globalObject.objectPrototype()) {
+            if (cell.type() != FinalObjectType) [[unlikely]] {
+                recordFailure("non-final object with non-standard prototype"_s);
+                return;
+            }
+            if (mayHaveToJSON(object)) [[unlikely]] {
+                recordFailure("object may have toJSON"_s);
+                return;
+            }
+        } else if (!m_checkedObjectPrototype) {
             if (mayHaveToJSON(*m_globalObject.objectPrototype())) [[unlikely]] {
                 recordFailure("object prototype may have toJSON"_s);
                 return;
@@ -1368,9 +1519,28 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
             recordFastPropertyEnumerationFailure(object);
             return;
         }
+        // A non-reified static table can hold a toJSON that is not in the property table yet.
+        if (structure.hasNonReifiedStaticProperties()) [[unlikely]] {
+            recordFailure("object has non-reified static properties"_s);
+            return;
+        }
+        if constexpr (hasGap == HasGap::Yes)
+            ++m_depth;
+        const unsigned newLineAndIndent = hasGap == HasGap::Yes ? newLineAndIndentSize() : 0;
         structure.forEachProperty(m_vm, [&](const auto& entry) -> bool {
-            if (entry.attributes() & PropertyAttribute::DontEnum)
+            if (entry.attributes() & PropertyAttribute::DontEnum) [[unlikely]] {
+                // https://tc39.es/ecma262/#sec-serializejsonproperty
+                // Step 2.a's GetV finds an own toJSON regardless of enumerability, so a
+                // non-enumerable one still applies even though this loop skips the entry.
+                // An enumerable toJSON needs no check.
+                // 1. If it is callable, appending its value below fails the fast path.
+                // 2. If it is not callable the spec serializes it as an ordinary property.
+                if (entry.key() == m_vm.propertyNames->toJSON) [[unlikely]] {
+                    recordFailure("object has non-enumerable toJSON"_s);
+                    return false;
+                }
                 return true;
+            }
             auto& name = *entry.key();
             if (name.isSymbol()) [[unlikely]] {
                 recordFailure("symbol"_s);
@@ -1385,48 +1555,113 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
             }
             auto span = name.span8();
 
-            if (object.structure() != &structure) [[unlikely]] {
-                ASSERT_NOT_REACHED();
-                recordFailure("unexpected structure transition"_s);
-                return false;
-            }
+            // The structure cannot transition mid-iteration on FastStringifier's case.
+            // canPerformFastPropertyEnumeration ruled out getters/setters and
+            // mayHaveToJSON ruled out a toJSON / getter / Proxy on the prototype chain,
+            // so there is no JS observable to mutate the structure.
+            ASSERT(object.structure() == &structure);
+
             JSValue value = object.getDirect(entry.offset());
             if (value.isUndefined())
                 return true;
 
             bool needComma = buffer()[m_length - 1] != '{';
-            if (!hasRemainingCapacity(needComma + 1 + span.size() + 2)) [[unlikely]] {
+            if (!hasRemainingCapacity(needComma + newLineAndIndent + 1 + span.size() + 2 + (hasGap == HasGap::Yes))) [[unlikely]] {
                 recordBufferFull();
                 return false;
             }
-            if (needComma)
-                buffer()[m_length++] = ',';
-            buffer()[m_length] = '"';
 
-            if constexpr (std::same_as<CharType, char16_t>) {
-                if (stringCopyUpconvert(span, buffer() + m_length + 1)) [[unlikely]] {
-                    recordFailure("property name character needs escaping"_s);
-                    return false;
+            {
+                // m_dynamicBuffer has inline capacity, so buffer() can point inside this object
+                // next to m_length: stores through it may-alias the members, forcing the compiler
+                // to reload both after every store. Cache them instead. Scoped because the pointer
+                // dies at the next hasRemainingCapacity(), which can reallocate.
+                CharType* out = buffer();
+                unsigned length = m_length;
+
+                if (needComma)
+                    out[length++] = ',';
+
+                if constexpr (hasGap == HasGap::Yes) {
+                    // The callee reads m_length and advances it.
+                    m_length = length;
+                    appendNewLineAndIndentUnchecked();
+                    out = buffer();
+                    length = m_length;
                 }
-            } else {
-                if (stringCopySameType(span, buffer() + m_length + 1)) [[unlikely]] {
-                    recordFailure("property name character needs escaping"_s);
-                    return false;
+
+                out[length] = '"';
+
+                // Publish m_length before every bail-out.
+                if constexpr (std::same_as<CharType, char16_t>) {
+                    if (stringCopyUpconvert(span, out + length + 1)) [[unlikely]] {
+                        m_length = length;
+                        recordFailure("property name character needs escaping"_s);
+                        return false;
+                    }
+                } else {
+                    if (stringCopySameType<CharType, useShortCopyTier>(span, out + length + 1)) [[unlikely]] {
+                        m_length = length;
+                        recordFailure("property name character needs escaping"_s);
+                        return false;
+                    }
+                }
+
+                out[length + 1 + span.size()] = '"';
+                out[length + 1 + span.size() + 1] = ':';
+                length += 1 + span.size() + 2;
+                if constexpr (hasGap == HasGap::Yes)
+                    out[length++] = ' ';
+
+                // Mandatory, not bookkeeping: the next hasRemainingCapacity() sizes itself from
+                // m_length, so leaving a stale value here would under-count the space needed.
+                m_length = length;
+            }
+
+            if constexpr (std::same_as<CharType, Latin1Character>) {
+                // Inlining String case here since it is too common.
+                if (value.isCell() && value.asCell()->type() == StringType) [[likely]] {
+                    auto valueString = asString(value.asCell())->tryGetView();
+                    if (!valueString.data.isNull() && valueString.data.is8Bit()) [[likely]] {
+                        unsigned valueLength = valueString.data.length();
+                        if (!hasRemainingCapacity(1 + valueLength + 1)) [[unlikely]] {
+                            recordBufferFull();
+                            return false;
+                        }
+                        buffer()[m_length] = '"';
+                        if (!stringCopySameType<CharType, useShortCopyTier>(valueString.data.span8(), buffer() + m_length + 1)) [[likely]] {
+                            buffer()[m_length + 1 + valueLength] = '"';
+                            m_length += 1 + valueLength + 1;
+                            return true;
+                        }
+                    }
                 }
             }
 
-            buffer()[m_length + 1 + span.size()] = '"';
-            buffer()[m_length + 1 + span.size() + 1] = ':';
-            m_length += 1 + span.size() + 2;
-            append(value);
+            // Also Int32 case is too common.
+            if (value.isInt32()) {
+                if (!hasRemainingCapacity(maxInt32StringLength)) [[unlikely]] {
+                    recordBufferFull();
+                    return false;
+                }
+                appendInt32(value.asInt32());
+                return true;
+            }
+
+            append<hasGap>(value);
             return !haveFailure();
         });
         if (haveFailure()) [[unlikely]]
             return;
-        if (!hasRemainingCapacity()) [[unlikely]] {
+        if constexpr (hasGap == HasGap::Yes)
+            --m_depth;
+        bool needNewLine = hasGap == HasGap::Yes && buffer()[m_length - 1] != '{';
+        if (!hasRemainingCapacity(needNewLine ? 1 + newLineAndIndentSize() : 1)) [[unlikely]] {
             recordBufferFull();
             return;
         }
+        if (needNewLine)
+            appendNewLineAndIndentUnchecked();
         buffer()[m_length++] = '}';
         return;
     }
@@ -1442,6 +1677,14 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
         }
         auto& structure = *array.structure();
         if (!m_globalObject.isOriginalArrayStructure(&structure)) [[unlikely]] {
+            if (structure.hasPolyProto()) [[unlikely]] {
+                recordFailure("hasPolyProto"_s);
+                return;
+            }
+            if (structure.storedPrototype() != m_globalObject.arrayPrototype()) [[unlikely]] {
+                recordFailure("non-standard array prototype"_s);
+                return;
+            }
             structure.forEachProperty(m_vm, [&](const PropertyTableEntry& entry) -> bool {
                 if (entry.key() == m_vm.propertyNames->toJSON) [[unlikely]] {
                     recordFailure("array has toJSON"_s);
@@ -1457,38 +1700,84 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
             return;
         }
         buffer()[m_length++] = '[';
-        if (hasInt32(array.indexingType())) {
-            appendInt32Array(array);
-            if (haveFailure()) [[unlikely]]
-                return;
-            if (!hasRemainingCapacity()) [[unlikely]] {
+        if constexpr (hasGap == HasGap::Yes)
+            ++m_depth;
+
+        auto closeArray = [&] {
+            if constexpr (hasGap == HasGap::Yes)
+                --m_depth;
+            bool needNewLine = hasGap == HasGap::Yes && buffer()[m_length - 1] != '[';
+            if (!hasRemainingCapacity(needNewLine ? 1 + newLineAndIndentSize() : 1)) [[unlikely]] {
                 recordBufferFull();
                 return;
             }
+            if (needNewLine)
+                appendNewLineAndIndentUnchecked();
             buffer()[m_length++] = ']';
+        };
+
+        IndexingType indexingType = array.indexingType();
+        if (hasInt32(indexingType)) {
+            appendInt32Array<hasGap>(array);
+            if (haveFailure()) [[unlikely]]
+                return;
+            closeArray();
             return;
         }
+
+        if (hasContiguous(indexingType)) {
+            auto* butterfly = array.butterfly();
+            unsigned length = butterfly->publicLength();
+            if (length > butterfly->vectorLength()) [[unlikely]] {
+                recordFailure("!lengthBeyondVector"_s);
+                return;
+            }
+            auto data = butterfly->contiguous();
+            const unsigned newLineAndIndent = hasGap == HasGap::Yes ? newLineAndIndentSize() : 0;
+            for (unsigned i = 0; i < length; ++i) {
+                if (i || hasGap == HasGap::Yes) {
+                    if (!hasRemainingCapacity(!!i + newLineAndIndent)) [[unlikely]] {
+                        recordBufferFull();
+                        return;
+                    }
+                    if (i)
+                        buffer()[m_length++] = ',';
+                    if constexpr (hasGap == HasGap::Yes)
+                        appendNewLineAndIndentUnchecked();
+                }
+                JSValue element = data.at(&array, i).get();
+                if (!element) [[unlikely]] {
+                    recordFailure("!canGetIndexQuickly"_s);
+                    return;
+                }
+                append<hasGap>(element);
+                if (haveFailure()) [[unlikely]]
+                    return;
+            }
+            closeArray();
+            return;
+        }
+        const unsigned newLineAndIndent = hasGap == HasGap::Yes ? newLineAndIndentSize() : 0;
         for (unsigned i = 0, length = array.length(); i < length; ++i) {
-            if (i) {
-                if (!hasRemainingCapacity()) [[unlikely]] {
+            if (i || hasGap == HasGap::Yes) {
+                if (!hasRemainingCapacity(!!i + newLineAndIndent)) [[unlikely]] {
                     recordBufferFull();
                     return;
                 }
-                buffer()[m_length++] = ',';
+                if (i)
+                    buffer()[m_length++] = ',';
+                if constexpr (hasGap == HasGap::Yes)
+                    appendNewLineAndIndentUnchecked();
             }
             if (!array.canGetIndexQuickly(i)) [[unlikely]] {
                 recordFailure("!canGetIndexQuickly"_s);
                 return;
             }
-            append(array.getIndexQuickly(i));
+            append<hasGap>(array.getIndexQuickly(i));
             if (haveFailure()) [[unlikely]]
                 return;
         }
-        if (!hasRemainingCapacity()) [[unlikely]] {
-            recordBufferFull();
-            return;
-        }
-        buffer()[m_length++] = ']';
+        closeArray();
         return;
     }
 
@@ -1502,27 +1791,31 @@ void FastStringifier<CharType, bufferMode>::append(JSValue value)
 }
 
 template<typename CharType, BufferMode bufferMode>
+template<HasGap hasGap>
 NEVER_INLINE void FastStringifier<CharType, bufferMode>::appendInt32Array(JSArray& array)
 {
     auto* butterfly = array.butterfly();
     unsigned length = butterfly->publicLength();
     if (length > butterfly->vectorLength()) [[unlikely]] {
-        recordFailure("!canGetIndexQuickly"_s);
+        recordFailure("!lengthBeyondVector"_s);
         return;
     }
     auto data = butterfly->contiguousInt32();
+    const unsigned newLineAndIndent = hasGap == HasGap::Yes ? newLineAndIndentSize() : 0;
     for (unsigned i = 0; i < length; ++i) {
         JSValue element = data.at(&array, i).get();
         if (!element) [[unlikely]] {
             recordFailure("!canGetIndexQuickly"_s);
             return;
         }
-        if (!hasRemainingCapacity(1 + maxInt32StringLength)) [[unlikely]] {
+        if (!hasRemainingCapacity(1 + newLineAndIndent + maxInt32StringLength)) [[unlikely]] {
             recordBufferFull();
             return;
         }
         if (i)
             buffer()[m_length++] = ',';
+        if constexpr (hasGap == HasGap::Yes)
+            appendNewLineAndIndentUnchecked();
         appendInt32(element.asInt32());
     }
 }
@@ -1534,12 +1827,17 @@ inline String FastStringifier<CharType, bufferMode>::stringify(JSGlobalObject& g
         logOutcome("replacer"_s);
         return { };
     }
-    if (!space.isUndefined()) {
-        logOutcome("space"_s);
-        return { };
-    }
     FastStringifier stringifier(globalObject);
-    stringifier.append(value);
+    if (!space.isUndefined()) {
+        if (!stringifier.setGap(space)) [[unlikely]] {
+            logOutcome("space"_s);
+            return { };
+        }
+    }
+    if (stringifier.m_gapLength)
+        stringifier.append<HasGap::Yes>(value);
+    else
+        stringifier.append<HasGap::No>(value);
     failureReason = stringifier.m_failureReason;
     return stringifier.result();
 }
@@ -1619,13 +1917,12 @@ private:
             }
         }
 
-        MarkedArgumentBuffer args;
-        args.append(property);
-        args.append(unfiltered);
-        if (context)
-            args.append(context);
-        ASSERT(!args.hasOverflowed());
-        RELEASE_AND_RETURN(scope, call(m_globalObject, m_function, m_callData, thisObj, args));
+        auto args = WTF::toArray<EncodedJSValue>({
+            JSValue::encode(property),
+            JSValue::encode(unfiltered),
+            JSValue::encode(context),
+        });
+        RELEASE_AND_RETURN(scope, call(m_globalObject, m_function, m_callData, thisObj, ArgList { args.data(), context ? 3u : 2u }));
     }
 
     friend class Holder;

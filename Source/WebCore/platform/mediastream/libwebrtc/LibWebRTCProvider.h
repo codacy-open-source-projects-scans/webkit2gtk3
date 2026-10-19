@@ -95,8 +95,8 @@ public:
     // FIXME: Make these methods not static.
     static void callOnWebRTCNetworkThread(Function<void()>&&);
     static void callOnWebRTCSignalingThread(Function<void()>&&);
-    static bool hasWebRTCThreads();
-    static webrtc::Thread& signalingThread();
+    static bool LEGACY_NODELETE hasWebRTCThreads();
+    static webrtc::Thread& LEGACY_NODELETE signalingThread();
 
     // Used for mock testing
     void setPeerConnectionFactory(webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>&&);
@@ -109,10 +109,12 @@ public:
     WEBCORE_EXPORT virtual void setVP9HardwareSupportForTesting(std::optional<bool> value) { m_supportsVP9VTBForTesting = value; }
     virtual bool isSupportingVP9HardwareDecoder() const { return m_supportsVP9VTBForTesting.value_or(false); }
 
-    WEBCORE_EXPORT void NODELETE disableEnumeratingAllNetworkInterfaces();
-    WEBCORE_EXPORT void NODELETE enableEnumeratingAllNetworkInterfaces();
-    bool NODELETE isEnumeratingAllNetworkInterfacesEnabled() const;
-    WEBCORE_EXPORT void NODELETE enableEnumeratingVisibleNetworkInterfaces();
+    virtual bool isSupportingAV1HardwareDecoder() const { return false; }
+
+    WEBCORE_EXPORT void LEGACY_NODELETE disableEnumeratingAllNetworkInterfaces();
+    WEBCORE_EXPORT void LEGACY_NODELETE enableEnumeratingAllNetworkInterfaces();
+    bool LEGACY_NODELETE isEnumeratingAllNetworkInterfacesEnabled() const;
+    WEBCORE_EXPORT void LEGACY_NODELETE enableEnumeratingVisibleNetworkInterfaces();
     bool isEnumeratingVisibleNetworkInterfacesEnabled() const { return m_enableEnumeratingVisibleNetworkInterfaces; }
 
     class SuspendableSocketFactory : public webrtc::PacketSocketFactory {

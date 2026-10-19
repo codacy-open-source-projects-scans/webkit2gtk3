@@ -31,6 +31,7 @@
 #import "Helpers/ios/IOSMouseEventTestHarness.h"
 #import "InstanceMethodSwizzler.h"
 #import "Helpers/PlatformUtilities.h"
+#import "Helpers/Test.h"
 #import "ScreenWakeLock.h"
 #import "Helpers/cocoa/TestCocoa.h"
 #import "Helpers/cocoa/TestNavigationDelegate.h"
@@ -74,6 +75,7 @@
 #import <wtf/Vector.h>
 
 #if PLATFORM(MAC)
+#import "Helpers/mac/LocalEventMonitorSwizzler.h"
 #import <Carbon/Carbon.h>
 #endif
 
@@ -82,7 +84,7 @@
 #import "UIKitUtilities.h"
 #endif
 
-static bool didReceiveMessage;
+static bool uiDelegateDidReceiveMessage;
 
 @interface AudioObserver : NSObject
 @end
@@ -284,7 +286,7 @@ TEST(WebKit, GeolocationPermission)
 @implementation GeolocationPermissionMessageHandler
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message
 {
-    didReceiveMessage = true;
+    uiDelegateDidReceiveMessage = true;
 }
 @end
 
@@ -350,9 +352,9 @@ TEST(WebKit, GeolocationPermissionInIFrame)
     }];
 
     done = false;
-    didReceiveMessage = false;
+    uiDelegateDidReceiveMessage = false;
     [webView loadRequest:server1.request()];
-    TestWebKitAPI::Util::run(&didReceiveMessage);
+    TestWebKitAPI::Util::run(&uiDelegateDidReceiveMessage);
     EXPECT_TRUE(done);
 }
 
@@ -416,11 +418,11 @@ TEST(WebKit, GeolocationPermissionInIFrameExampleWebArchive)
     NSString *getCurrentPosition = @"navigator.geolocation.getCurrentPosition(() => { webkit.messageHandlers.testHandler.postMessage(\"ok\") }, () => { webkit.messageHandlers.testHandler.postMessage(\"ko\") });";
 
     done = false;
-    didReceiveMessage = false;
+    uiDelegateDidReceiveMessage = false;
     [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://example.com/"]]];
     [navigationDelegate waitForDidFinishNavigation];
     [webView evaluateJavaScript:getCurrentPosition completionHandler:nil];
-    TestWebKitAPI::Util::run(&didReceiveMessage);
+    TestWebKitAPI::Util::run(&uiDelegateDidReceiveMessage);
     TestWebKitAPI::Util::run(&done);
 
 #if ENABLE(WEB_ARCHIVE)
@@ -437,9 +439,9 @@ TEST(WebKit, GeolocationPermissionInIFrameExampleWebArchive)
     TestWebKitAPI::Util::run(&doneEvaluatingJavaScript);
 
     done = false;
-    didReceiveMessage = false;
+    uiDelegateDidReceiveMessage = false;
     [webView evaluateJavaScript:getCurrentPosition completionHandler:nil];
-    TestWebKitAPI::Util::run(&didReceiveMessage);
+    TestWebKitAPI::Util::run(&uiDelegateDidReceiveMessage);
     TestWebKitAPI::Util::run(&done);
 
     // Reset web process state.
@@ -449,7 +451,7 @@ TEST(WebKit, GeolocationPermissionInIFrameExampleWebArchive)
     [navigationDelegate waitForDidFinishNavigation];
 
     done = false;
-    didReceiveMessage = false;
+    uiDelegateDidReceiveMessage = false;
     doneEvaluatingJavaScript = false;
     [webView callAsyncJavaScript:@"return (await new Promise(function (resolve, reject) {"
         "navigator.geolocation.getCurrentPosition((position) => { resolve(JSON.stringify(position.toJSON())) }, (error) => { reject(error.message) });"
@@ -460,7 +462,7 @@ TEST(WebKit, GeolocationPermissionInIFrameExampleWebArchive)
         doneEvaluatingJavaScript = true;
     }];
     TestWebKitAPI::Util::run(&doneEvaluatingJavaScript);
-    EXPECT_FALSE(didReceiveMessage);
+    EXPECT_FALSE(uiDelegateDidReceiveMessage);
     EXPECT_TRUE(done);
 #endif
 }
@@ -510,9 +512,9 @@ TEST(WebKit, GeolocationPermissionInDisallowedIFrame)
     webView.get().navigationDelegate = navigationDelegate.get();
 
     done = false;
-    didReceiveMessage = false;
+    uiDelegateDidReceiveMessage = false;
     [webView loadRequest:server1.request()];
-    TestWebKitAPI::Util::run(&didReceiveMessage);
+    TestWebKitAPI::Util::run(&uiDelegateDidReceiveMessage);
     EXPECT_FALSE(done);
 }
 
@@ -573,8 +575,9 @@ TEST(WebKit, LockdownModeDefaultFirstUseMessage)
     [webView addToTestWindow];
 
     EXPECT_EQ(presentViewControllerCallCount, 0);
-    [webView waitForNextPresentationUpdate];
-    EXPECT_EQ(presentViewControllerCallCount, 1);
+    TestWebKitAPI::Util::waitFor([&] {
+        return presentViewControllerCallCount == 1;
+    });
 
     EXPECT_TRUE([[NSUserDefaults standardUserDefaults] boolForKey:WebKitLockdownModeAlertShownKey]);
     
@@ -684,8 +687,9 @@ TEST(WebKit, LockdownModeAskAgainFirstUseMessage)
     [secondWebView addToTestWindow];
 
     EXPECT_EQ(presentViewControllerCallCount, 0);
-    [secondWebView waitForNextPresentationUpdate];
-    EXPECT_EQ(presentViewControllerCallCount, 1);
+    TestWebKitAPI::Util::waitFor([&] {
+        return presentViewControllerCallCount == 1;
+    });
 
     EXPECT_FALSE(showedCustomFirstUseMessage);
     EXPECT_FALSE(requestFutureFirstUseMessage);
@@ -707,7 +711,7 @@ INSTANTIATE_TEST_SUITE_P(WebKit, ScreenWakeLockTests, testing::Values(
 @class UITestDelegate;
 
 static RetainPtr<WKWebView> webViewFromDelegateCallback;
-static RetainPtr<WKWebView> createdWebView;
+static RetainPtr<WKWebView> uiDelegateCreatedWebView;
 static RetainPtr<UITestDelegate> delegate;
 
 @interface UITestDelegate : NSObject <WKUIDelegatePrivate, WKURLSchemeHandler>
@@ -717,9 +721,9 @@ static RetainPtr<UITestDelegate> delegate;
 
 - (WKWebView *)webView:(WKWebView *)webView createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration forNavigationAction:(WKNavigationAction *)navigationAction windowFeatures:(WKWindowFeatures *)windowFeatures
 {
-    createdWebView = adoptNS([[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration]);
-    [createdWebView setUIDelegate:delegate.get()];
-    return createdWebView.get();
+    uiDelegateCreatedWebView = adoptNS([[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration]);
+    [uiDelegateCreatedWebView setUIDelegate:delegate.get()];
+    return uiDelegateCreatedWebView.get();
 }
 
 - (void)_showWebView:(WKWebView *)webView
@@ -752,7 +756,7 @@ TEST(WebKit, ShowWebView)
     [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"test:///first"]]];
     TestWebKitAPI::Util::run(&done);
     
-    ASSERT_EQ(webViewFromDelegateCallback, createdWebView);
+    ASSERT_EQ(webViewFromDelegateCallback, uiDelegateCreatedWebView);
 }
 
 static bool receivedWindowFrame;
@@ -794,6 +798,84 @@ TEST(WebKit, WindowFrame)
     TestWebKitAPI::Util::run(&receivedWindowFrame);
     TestWebKitAPI::Util::run(&done);
 }
+
+#if PLATFORM(MAC)
+
+// The getWindowFrameWithCompletionHandler delegate is optional. When a client does not implement
+// it we should report the frame of the window actually hosting the view, not zero: window.outerWidth
+// of 0 alongside a non-zero innerWidth is a well-known headless-browser signature.
+TEST(WebKit, WindowFrameFallsBackToHostingWindowWithoutUIDelegate)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 320, 240)]);
+    RetainPtr window = [webView hostWindow];
+    EXPECT_NOT_NULL(window.get());
+
+    // Size the window differently from the view on purpose. Were the window to match the view, these
+    // assertions would also be satisfied by returning the view's frame, or by returning
+    // innerWidth/innerHeight.
+    [window setFrame:NSMakeRect(0, 0, 500, 400) display:YES];
+    [webView synchronouslyLoadHTMLString:@"<body></body>"];
+    [webView waitForNextPresentationUpdate];
+
+    EXPECT_EQ(500, [[webView objectByEvaluatingJavaScript:@"outerWidth"] intValue]);
+    EXPECT_EQ(400, [[webView objectByEvaluatingJavaScript:@"outerHeight"] intValue]);
+
+    // The view is still 320x240, so outer must not merely be echoing inner.
+    EXPECT_EQ(320, [[webView objectByEvaluatingJavaScript:@"innerWidth"] intValue]);
+    EXPECT_EQ(240, [[webView objectByEvaluatingJavaScript:@"innerHeight"] intValue]);
+}
+
+// A client that implements the delegate method is taken at its word, including when it deliberately
+// reports an empty rect.
+TEST(WebKit, WindowFrameHonorsDelegateReturningEmptyRect)
+{
+    RetainPtr delegate = adoptNS([[TestUIDelegate alloc] init]);
+    [delegate setGetWindowFrameWithCompletionHandler:^(WKWebView *, void (^completionHandler)(CGRect)) {
+        completionHandler(CGRectZero);
+    }];
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 320, 240)]);
+    [webView setUIDelegate:delegate.get()];
+    EXPECT_NOT_NULL([webView hostWindow]);
+    [webView synchronouslyLoadHTMLString:@"<body></body>"];
+
+    EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"outerWidth"] intValue]);
+    EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"outerHeight"] intValue]);
+}
+
+// CSSOM View: "If there is no client window this attribute must return zero." A WKWebView that was
+// never added to a window has no client window, so zero remains correct there.
+TEST(WebKit, WindowFrameIsZeroWhenNotInAWindow)
+{
+    RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 320, 240)]);
+    [webView loadHTMLString:@"<body></body>" baseURL:nil];
+    [webView _test_waitForDidFinishNavigation];
+
+    EXPECT_NULL([webView window]);
+    EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"outerWidth"] intValue]);
+    EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"outerHeight"] intValue]);
+}
+
+// Removing the view from its window must invalidate the WebProcess-side cached window frame.
+// Otherwise WebChromeClient::windowRect() keeps answering from the cache -- it consults it before
+// issuing GetWindowFrame -- and outerWidth/outerHeight report the window the view used to live in.
+TEST(WebKit, WindowFrameIsZeroAfterRemovalFromWindow)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 320, 240)]);
+    [[webView hostWindow] setFrame:NSMakeRect(0, 0, 500, 400) display:YES];
+    [webView synchronouslyLoadHTMLString:@"<body></body>"];
+    [webView waitForNextPresentationUpdate];
+    EXPECT_EQ(500, [[webView objectByEvaluatingJavaScript:@"outerWidth"] intValue]);
+
+    [webView removeFromTestWindow];
+    [webView waitForNextPresentationUpdate];
+
+    EXPECT_NULL([webView window]);
+    EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"outerWidth"] intValue]);
+    EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"outerHeight"] intValue]);
+}
+
+#endif // PLATFORM(MAC)
 
 static bool headerHeightCalled;
 static bool footerHeightCalled;
@@ -1060,66 +1142,11 @@ TEST(WebKit, MouseMoveOverElement)
     TestWebKitAPI::Util::run(&done);
 }
 
-static BlockPtr<NSEvent*(NSEvent*)> gEventMonitorHandler;
-
-@interface TestLocalEventObserver : NSObject {
-    NSEventMask _mask;
-    id _block;
-    BOOL _isAdditive;
-}
-+ (void)initialize;
-- (instancetype)initMatchingEvents:(NSEventMask)mask handler:(NSEvent *(^)(NSEvent *))block;
-- (void)invalidate;
-- (void)dealloc;
-- (void)recomputeObserverMask;
-@end
-
-@implementation TestLocalEventObserver
-+ (void)initialize
-{
-}
-
-- (instancetype)initMatchingEvents:(NSEventMask)mask handler:(NSEvent *(^)(NSEvent *))block
-{
-    self = [super init];
-    return self;
-}
-
-- (void)dealloc
-{
-    [super dealloc];
-}
-
-- (void)invalidate
-{
-}
-
-- (void)recomputeObserverMask
-{
-}
-@end
-
-@interface TestEventMonitor : NSObject
-
-+ (id)addLocalMonitorForEventsMatchingMask:(NSEventMask)mask handler:(NSEvent* (^)(NSEvent *event))block;
-
-@end
-
-@implementation TestEventMonitor
-
-+ (id)addLocalMonitorForEventsMatchingMask:(NSEventMask)mask handler:(NSEvent* (^)(NSEvent *event))block
-{
-    gEventMonitorHandler = makeBlockPtr(block);
-    return adoptNS([[TestLocalEventObserver alloc] initMatchingEvents:mask handler:block]).leakRef();
-}
-
-@end
-
 TEST(WebKit, MouseMoveOverElementWithClosedWebView)
 {
     auto linkLocation = NSMakePoint(200, 150);
 
-    ClassMethodSwizzler localMonitorSwizzler(NSEvent.class, @selector(addLocalMonitorForEventsMatchingMask:handler:), [TestEventMonitor methodForSelector:@selector(addLocalMonitorForEventsMatchingMask:handler:)]);
+    TestWebKitAPI::LocalEventMonitorSwizzler localMonitorSwizzler;
 
     // We swizzle `NSWindow.mouseLocationOutsideOfEventStream` because manually calling the handler intercepted
     // from the swizzled `+[NSEvent addLocalMonitorForEventsMatchingMask:handler:]` with a fake event means we
@@ -1154,7 +1181,7 @@ TEST(WebKit, MouseMoveOverElementWithClosedWebView)
         [webView waitForNextPresentationUpdate];
         // This test just verifies that attempting to asynchronously dispatch a mouseDidMoveOverElement
         // update when the WKWebView and its page client have been destructed does not trigger a crash.
-        gEventMonitorHandler([NSEvent mouseEventWithType:NSEventTypeMouseMoved location:linkLocation modifierFlags:0 timestamp:0 windowNumber:[[webView hostWindow] windowNumber] context:nil eventNumber:0 clickCount:0 pressure:0]);
+        localMonitorSwizzler.sendEventToMonitor([NSEvent mouseEventWithType:NSEventTypeMouseMoved location:linkLocation modifierFlags:0 timestamp:0 windowNumber:[[webView hostWindow] windowNumber] context:nil eventNumber:0 clickCount:0 pressure:0]);
         [webView removeFromSuperview];
 
         EXPECT_FALSE([webView _hasFlagsChangedEventMonitorForTesting]);
@@ -1230,31 +1257,6 @@ static bool readytoResign;
 }
 
 @end
-
-@interface AutoFillAvailableDelegate : NSObject <WKUIDelegatePrivate>
-@end
-
-@implementation AutoFillAvailableDelegate
-
-- (void)webView:(WKWebView *)webView runJavaScriptAlertPanelWithMessage:(NSString *)message initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)())completionHandler
-{
-    completionHandler();
-    done = true;
-    ASSERT_STREQ(message.UTF8String, "autofill available");
-}
-
-@end
-
-TEST(WebKit, AutoFillAvailable)
-{
-    WKWebViewConfiguration *configuration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"AutoFillAvailable"];
-
-    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration]);
-    RetainPtr delegate = adoptNS([[AutoFillAvailableDelegate alloc] init]);
-    [webView setUIDelegate:delegate.get()];
-    [webView evaluateJavaScript:@"" completionHandler: nil]; // Ensure the WebProcess and injected bundle are running.
-    TestWebKitAPI::Util::run(&done);
-}
 
 @interface InjectedBundleNodeHandleIsTextFieldDelegate : NSObject <WKUIDelegatePrivate>
 @end
@@ -1477,6 +1479,115 @@ TEST(WebKit, SaveDataToFile)
     [webView loadRequest:[NSURLRequest requestWithURL:pdfURL]];
     TestWebKitAPI::Util::run(&done);
 }
+
+@interface OpenPDFWithPreviewDelegate : NSObject <WKUIDelegatePrivate>
+@property (nonatomic, readonly) RetainPtr<NSURL> capturedFileURL;
+@property (nonatomic, readonly) BOOL receivedCallback;
+@end
+
+@implementation OpenPDFWithPreviewDelegate
+
+- (void)_webView:(WKWebView *)webView shouldAllowPDFAtURL:(NSURL *)fileURL toOpenFromFrame:(WKFrameInfo *)frame completionHandler:(void (^)(BOOL))completionHandler
+{
+    _capturedFileURL = fileURL;
+    _receivedCallback = YES;
+    completionHandler(NO);
+}
+
+@end
+
+#if ENABLE(IPC_TESTING_API)
+
+static void runOpenPDFWithPreviewTraversalTest(NSString *injectedFilename, NSString *traversalTargetPath)
+{
+    [[NSFileManager defaultManager] removeItemAtPath:traversalTargetPath error:nil];
+
+    RetainPtr pdfURL = [NSBundle.test_resourcesBundle URLForResource:@"test" withExtension:@"pdf"];
+
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    for (_WKFeature *feature in [WKPreferences _features]) {
+        if ([feature.key isEqualToString:@"PDFPluginHUDEnabled"] || [feature.key isEqualToString:@"IPCTestingAPIEnabled"])
+            [[configuration preferences] _setEnabled:YES forFeature:feature];
+    }
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration.get()]);
+    [webView _setWindowOcclusionDetectionEnabled:NO];
+
+    RetainPtr delegate = adoptNS([OpenPDFWithPreviewDelegate new]);
+    [webView setUIDelegate:delegate.get()];
+
+    [webView loadRequest:[NSURLRequest requestWithURL:pdfURL.get()]];
+    [webView _test_waitForDidFinishNavigation];
+
+    EXPECT_TRUE(TestWebKitAPI::Util::waitFor([webView] {
+        return !![webView _pdfHUDs].count;
+    }));
+
+    RetainPtr listenerScript = [NSString stringWithFormat:@R"JS(
+        IPC.addIncomingMessageListener('UI', (message) => {
+            const replyMsgInfo = IPC.messages.WebPage_OpenPDFWithPreviewReply;
+            if (!replyMsgInfo)
+                return;
+            const requestMsgInfo = IPC.messages.WebPage_OpenPDFWithPreview;
+            if (!requestMsgInfo || message.name !== requestMsgInfo.name)
+                return;
+            if (typeof message.listenerID === 'undefined')
+                return;
+
+            IPC.sendMessage('UI', message.listenerID, replyMsgInfo.name, [
+                {type: 'String', value: '%@'},
+                {type: 'bool', value: 1},
+                {type: 'FrameInfoData', value: IPC},
+                {type: 'uint64_t', value: 4},
+                new Uint8Array([0x25, 0x50, 0x44, 0x46])
+            ]);
+        });
+        'listener installed';
+    )JS", injectedFilename];
+
+    bool listenerInstalled = false;
+    [webView evaluateJavaScript:listenerScript.get() completionHandler:[&listenerInstalled](id, NSError *error) {
+        EXPECT_NULL(error);
+        listenerInstalled = true;
+    }];
+    TestWebKitAPI::Util::run(&listenerInstalled);
+
+    [[webView _pdfHUDs].anyObject performSelector:NSSelectorFromString(@"_performActionForControl:") withObject:@"preview"];
+
+    EXPECT_TRUE(TestWebKitAPI::Util::waitFor([delegate] {
+        return [delegate receivedCallback];
+    }));
+
+    EXPECT_FALSE([[NSFileManager defaultManager] fileExistsAtPath:traversalTargetPath]);
+
+    RetainPtr writtenPath = [[[delegate capturedFileURL] path] stringByStandardizingPath];
+    RetainPtr temporaryDirectory = [NSTemporaryDirectory() stringByStandardizingPath];
+
+    EXPECT_TRUE([writtenPath hasPrefix:temporaryDirectory.get()]);
+    EXPECT_TRUE([writtenPath containsString:@"/WebKitPDFs-"]);
+    EXPECT_FALSE([writtenPath containsString:@"/../"]);
+
+    [[NSFileManager defaultManager] removeItemAtURL:[delegate capturedFileURL].get() error:nil];
+    [[NSFileManager defaultManager] removeItemAtPath:traversalTargetPath error:nil];
+}
+
+TEST(WebKit, OpenPDFWithPreviewIPCTraversalEncodedFilename)
+{
+    int pid = [[NSProcessInfo processInfo] processIdentifier];
+    RetainPtr traversalTarget = [NSString stringWithFormat:@"/tmp/DEEP-TRAVERSAL-%d-encoded.pdf", pid];
+    RetainPtr injectedFilename = [NSString stringWithFormat:@"..%%2F..%%2F..%%2F..%%2F..%%2F..%%2F..%%2Ftmp%%2FDEEP-TRAVERSAL-%d-encoded.pdf", pid];
+    runOpenPDFWithPreviewTraversalTest(injectedFilename.get(), traversalTarget.get());
+}
+
+TEST(WebKit, OpenPDFWithPreviewIPCTraversalUnencodedFilename)
+{
+    int pid = [[NSProcessInfo processInfo] processIdentifier];
+    RetainPtr traversalTarget = [NSString stringWithFormat:@"/tmp/DEEP-TRAVERSAL-%d-unencoded.pdf", pid];
+    RetainPtr injectedFilename = [NSString stringWithFormat:@"../../../../../../../tmp/DEEP-TRAVERSAL-%d-unencoded.pdf", pid];
+    runOpenPDFWithPreviewTraversalTest(injectedFilename.get(), traversalTarget.get());
+}
+
+#endif // ENABLE(IPC_TESTING_API)
 
 #endif // ENABLE(PDF_HUD)
 

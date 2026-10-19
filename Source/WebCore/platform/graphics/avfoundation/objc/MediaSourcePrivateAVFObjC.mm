@@ -56,7 +56,7 @@ WorkQueue& MediaSourcePrivateAVFObjC::queueSingleton()
     static std::once_flag onceKey;
     static LazyNeverDestroyed<Ref<WorkQueue>> workQueue;
     std::call_once(onceKey, [] {
-        workQueue.construct(hasPlatformStrategies() && platformStrategies()->mediaStrategy()->hasRemoteRendererFor(MediaPlayerMediaEngineIdentifier::AVFoundationMSE) ? WorkQueue::create("MediaSourcePrivateAVFObjC"_s) : Ref { WorkQueue::mainSingleton() });
+        workQueue.construct(hasPlatformStrategies() && platformStrategies()->mediaStrategy()->hasThreadSafeMediaSourceSupport() ? WorkQueue::create("MediaSourcePrivateAVFObjC"_s) : Ref { WorkQueue::mainSingleton() });
     });
     return workQueue.get();
 }
@@ -98,7 +98,19 @@ void MediaSourcePrivateAVFObjC::setPlayer(MediaPlayerPrivateInterface* player)
     m_renderer = renderer.get();
     ensureOnDispatcher([protectedThis = Ref { *this }, renderer = WTF::move(renderer)] {
         for (Ref sourceBuffer : protectedThis->sourceBuffers())
-            downcast<SourceBufferPrivateAVFObjC>(sourceBuffer)->setAudioVideoRenderer(renderer);
+            downcast<SourceBufferPrivateAVFObjC>(sourceBuffer).setAudioVideoRenderer(renderer);
+    });
+}
+
+void MediaSourcePrivateAVFObjC::willShutdown()
+{
+    ALWAYS_LOG(LOGIDENTIFIER);
+
+    RefPtr renderer = m_renderer.get();
+    if (!renderer)
+        return;
+    ensureOnDispatcher([renderer = renderer.releaseNonNull()] {
+        renderer->shutdown();
     });
 }
 
@@ -228,13 +240,13 @@ bool MediaSourcePrivateAVFObjC::needsVideoLayer() const
 {
     assertIsMainThread();
     return std::ranges::any_of(sourceBuffers(), [](auto& sourceBuffer) {
-        return downcast<SourceBufferPrivateAVFObjC>(sourceBuffer)->needsVideoLayer();
+        return downcast<SourceBufferPrivateAVFObjC>(sourceBuffer).needsVideoLayer();
     });
 }
 
-void MediaSourcePrivateAVFObjC::bufferedChanged(const PlatformTimeRanges& buffered)
+void MediaSourcePrivateAVFObjC::bufferedChanged(PlatformTimeRanges&& buffered)
 {
-    MediaSourcePrivate::bufferedChanged(buffered);
+    MediaSourcePrivate::bufferedChanged(WTF::move(buffered));
     callOnMainThreadWithPlayer([](auto& player) {
         player.bufferedChanged();
     });
@@ -246,7 +258,7 @@ RefPtr<MediaPlayerPrivateMediaSourceAVFObjC> MediaSourcePrivateAVFObjC::platform
     return m_player.get();
 }
 
-MediaTime MediaSourcePrivateAVFObjC::currentTime() const
+MediaTime MediaSourcePrivateAVFObjC::platformCurrentTime() const
 {
     RefPtr renderer = m_renderer.get();
     return renderer ? renderer->currentTime() : MediaTime::zeroTime();

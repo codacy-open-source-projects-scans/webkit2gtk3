@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2025 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2026 Apple Inc. All rights reserved.
  * Copyright (C) 2007-2009 Torch Mobile, Inc.
  * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
  *
@@ -70,6 +70,10 @@
 #define USE_GLIB 1
 #endif
 
+#if OS(DARWIN) || USE(GLIB)
+#define USE_TIME_ZONE_CHANGE_NOTIFICATIONS 1
+#endif
+
 #if PLATFORM(GTK) || PLATFORM(WPE)
 #define USE_HARFBUZZ 1
 #define USE_FONT_VARIANT_VIA_FEATURES 1
@@ -123,12 +127,6 @@
 #define USE_ACCELERATE 1
 #endif
 
-#if CPU(REGISTER64)
-#define USE_JSVALUE64 1
-#else
-#define USE_JSVALUE32_64 1
-#endif
-
 // FIXME: this should instead be based on SIZE_MAX == UINT64_MAX
 // But this requires including <cstdint> and Platform.h is included in all kind of weird places, including non-cpp files
 // And in practice CPU(ADDRESS64) is equivalent on all platforms we support (verified by static_asserts in ArrayBuffer.h)
@@ -138,17 +136,9 @@
 #define USE_LARGE_TYPED_ARRAYS 0
 #endif
 
-#if USE(JSVALUE64)
 /* FIXME: Enable BIGINT32 optimization again after we ensure Speedometer2 and JetStream2 regressions are fixed. */
 /* https://bugs.webkit.org/show_bug.cgi?id=214777 */
 #define USE_BIGINT32 0
-#endif
-
-/* FIXME: This name should be more specific if it is only for use with CallFrame* */
-/* Use __builtin_frame_address(1) to get CallFrame* */
-#if CPU(ARM64) || CPU(X86_64)
-#define USE_BUILTIN_FRAME_ADDRESS 1
-#endif
 
 #if OS(DARWIN) && CPU(ARM64) && HAVE(REMAP_JIT)
 #define USE_EXECUTE_ONLY_JIT_WRITE_FUNCTION 1
@@ -182,7 +172,7 @@
 #define USE_IMLANG_FONT_LINK2 1
 #endif
 
-#if PLATFORM(COCOA) || PLATFORM(GTK)
+#if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
 #define USE_UNIFIED_TEXT_CHECKING 1
 #endif
 
@@ -244,7 +234,10 @@
 #endif
 
 #if !defined(USE_SYSTEM_MALLOC)
-#if OS(DARWIN) && !CPU(ADDRESS64)
+#if TSAN_ENABLED
+// bmalloc falls back to the system allocator under ThreadSanitizer.
+#define USE_SYSTEM_MALLOC 1
+#elif OS(DARWIN) && !CPU(ADDRESS64)
 #define USE_SYSTEM_MALLOC 1
 #else
 #define USE_SYSTEM_MALLOC 0
@@ -292,19 +285,17 @@
 
 #if PLATFORM(COCOA)
 #define USE_FONT_VARIANT_VIA_FEATURES 1
-#define USE_OPENXR 0
-#if !defined(HAVE_WEBXR_INTERNALS) && !HAVE(WEBXR_INTERNALS)
+#endif
+
+#if PLATFORM(COCOA)
+#define USE_EMPTYXR 1
+#if PLATFORM(VISION) && HAVE(COMPOSITOR_SERVICES)
+#undef USE_EMPTYXR
+#define USE_COMPOSITORXR 1
+#endif
 #if PLATFORM(IOS) && HAVE(ARKIT)
+#undef USE_EMPTYXR
 #define USE_ARKITXR_IOS 1
-#else
-#define USE_EMPTYXR 1
-#endif
-#endif
-#else
-#if !defined(HAVE_WEBXR_INTERNALS) && !HAVE(WEBXR_INTERNALS)
-#if !USE(OPENXR)
-#define USE_EMPTYXR 1
-#endif
 #endif
 #endif
 
@@ -400,4 +391,8 @@
 
 #if !defined(USE_SANDBOX_PARAMS) && PLATFORM(MAC)
 #define USE_SANDBOX_PARAMS 1
+#endif
+
+#if PLATFORM(IOS) || PLATFORM(VISION)
+#define USE_ITP_TCC_CHECK 1
 #endif

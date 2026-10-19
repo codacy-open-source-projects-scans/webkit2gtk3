@@ -28,10 +28,11 @@
 #include "GCReachableRef.h"
 #include "ResizeObservation.h"
 #include "ResizeObserverCallback.h"
-#include <wtf/ListHashSet.h>
 #include <wtf/Lock.h>
+#include <wtf/OrderedHashSet.h>
 #include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/WeakHashMap.h>
+#include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 
 namespace JSC {
@@ -48,7 +49,7 @@ struct ResizeObserverOptions;
 
 struct ResizeObserverData {
     WTF_DEPRECATED_MAKE_STRUCT_FAST_ALLOCATED(ResizeObserverData);
-    Vector<WeakPtr<ResizeObserver>> observers;
+    WeakHashSet<ResizeObserver> observers;
 };
 
 using NativeResizeObserverCallback = void (*)(const Vector<Ref<ResizeObserverEntry>>&, ResizeObserver&);
@@ -57,8 +58,8 @@ using JSOrNativeResizeObserverCallback = Variant<Ref<ResizeObserverCallback>, Na
 class ResizeObserver : public RefCountedAndCanMakeWeakPtr<ResizeObserver> {
     WTF_MAKE_TZONE_ALLOCATED(ResizeObserver);
 public:
-    static Ref<ResizeObserver> create(Document&, Ref<ResizeObserverCallback>&&);
-    static Ref<ResizeObserver> createNativeObserver(Document&, NativeResizeObserverCallback&&);
+    static Ref<ResizeObserver> LEGACY_NODELETE create(Document&, Ref<ResizeObserverCallback>&&);
+    static Ref<ResizeObserver> LEGACY_NODELETE createNativeObserver(Document&, NativeResizeObserverCallback&&);
     ~ResizeObserver();
 
     bool hasObservations() const { return m_observations.size(); }
@@ -92,8 +93,8 @@ private:
     void removeAllTargets();
     bool removeObservation(const Element&);
     void observeInternal(Element&, const ResizeObserverBoxOptions);
-    bool NODELETE isNativeCallback();
-    bool NODELETE isJSCallback();
+    bool LEGACY_NODELETE isNativeCallback();
+    bool LEGACY_NODELETE isJSCallback();
 
     struct ResizeObservationHashFunctions {
         using T = Ref<ResizeObservation>;
@@ -111,7 +112,7 @@ private:
 
     WeakPtr<Document, WeakPtrImplWithEventTargetData> m_document;
     const JSOrNativeResizeObserverCallback m_JSOrNativeCallback;
-    ListHashSet<Ref<ResizeObservation>, ResizeObservationHashFunctions> m_observations;
+    OrderedHashSet<Ref<ResizeObservation>, ResizeObservationHashFunctions> m_observations;
     WeakHashMap<Element, Ref<ResizeObservation>, WeakPtrImplWithEventTargetData> m_observationMap;
 
     Vector<Ref<ResizeObservation>> m_activeObservations;

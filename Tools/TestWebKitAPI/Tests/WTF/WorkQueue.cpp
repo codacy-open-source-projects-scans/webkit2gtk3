@@ -26,15 +26,16 @@
 #include "config.h"
 
 #include "Helpers/Test.h"
-#include <wtf/Condition.h>
-#include <wtf/Lock.h>
-#include <wtf/RunLoop.h>
-#include <wtf/Vector.h>
-#include <wtf/WorkQueue.h>
 #include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
+#include <wtf/Condition.h>
+#include <wtf/Lock.h>
+#include <wtf/RunLoop.h>
+#include <wtf/Threading.h>
+#include <wtf/Vector.h>
+#include <wtf/WorkQueue.h>
 
 namespace TestWebKitAPI {
 
@@ -332,10 +333,12 @@ struct AssertionTestHolder {
     {
         result = ++counter;
     }
+IGNORE_CLANG_WARNINGS_BEGIN("unused-template")
     template<typename T> void testTaskThatFailsToCompile()
     {
         ++counter;
     }
+IGNORE_CLANG_WARNINGS_END
 };
 }
 

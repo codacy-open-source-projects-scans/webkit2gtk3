@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Samuel Weinig <sam@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,7 +46,7 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(CSSScale);
 
-static bool NODELETE isValidScaleCoord(const CSSNumericValue& coord)
+static bool LEGACY_NODELETE isValidScaleCoord(const CSSNumericValue& coord)
 {
     return coord.type().matchesNumber();
 }
@@ -54,7 +55,7 @@ ExceptionOr<Ref<CSSScale>> CSSScale::create(CSSNumberish x, CSSNumberish y, std:
 {
     auto rectifiedX = CSSNumericValue::rectifyNumberish(WTF::move(x));
     auto rectifiedY = CSSNumericValue::rectifyNumberish(WTF::move(y));
-    auto rectifiedZ = z ? CSSNumericValue::rectifyNumberish(WTF::move(*z)) : Ref<CSSNumericValue> { CSSUnitValue::create(1.0, CSSUnitType::CSS_NUMBER) };
+    auto rectifiedZ = z ? CSSNumericValue::rectifyNumberish(WTF::move(*z)) : Ref<CSSNumericValue> { CSSUnitValue::create(1.0, CSSUnitType::Number) };
 
     // https://drafts.css-houdini.org/css-typed-om/#dom-cssscale-cssscale
     if (!isValidScaleCoord(rectifiedX) || !isValidScaleCoord(rectifiedY) || !isValidScaleCoord(rectifiedZ))
@@ -68,13 +69,10 @@ ExceptionOr<Ref<CSSScale>> CSSScale::create(Ref<const CSSFunctionValue> cssFunct
     auto makeScale = [&](NOESCAPE const Function<ExceptionOr<Ref<CSSScale>>(Vector<Ref<CSSNumericValue>>&&)>& create, size_t minNumberOfComponents, std::optional<size_t> maxNumberOfComponents = std::nullopt) -> ExceptionOr<Ref<CSSScale>> {
         Vector<Ref<CSSNumericValue>> components;
         for (Ref componentCSSValue : cssFunctionValue.get()) {
-            auto valueOrException = CSSStyleValueFactory::reifyValue(document, componentCSSValue, std::nullopt);
+            auto valueOrException = CSSNumericValue::reifyValue(document, componentCSSValue.get());
             if (valueOrException.hasException())
                 return valueOrException.releaseException();
-            RefPtr numericValue = dynamicDowncast<CSSNumericValue>(valueOrException.releaseReturnValue());
-            if (!numericValue)
-                return Exception { ExceptionCode::TypeError, "Expected a CSSNumericValue."_s };
-            components.append(numericValue.releaseNonNull());
+            components.append(valueOrException.releaseReturnValue());
         }
         if (!maxNumberOfComponents)
             maxNumberOfComponents = minNumberOfComponents;
@@ -87,25 +85,25 @@ ExceptionOr<Ref<CSSScale>> CSSScale::create(Ref<const CSSFunctionValue> cssFunct
     };
 
     switch (cssFunctionValue->name()) {
-    case CSSValueScaleX:
+    case CSSValueID::ScaleX:
         return makeScale([](Vector<Ref<CSSNumericValue>>&& components) {
             return CSSScale::create(WTF::move(components[0]), CSSNumericFactory::number(1), std::nullopt);
         }, 1);
-    case CSSValueScaleY:
+    case CSSValueID::ScaleY:
         return makeScale([](Vector<Ref<CSSNumericValue>>&& components) {
             return CSSScale::create(CSSNumericFactory::number(1), WTF::move(components[0]), std::nullopt);
         }, 1);
-    case CSSValueScaleZ:
+    case CSSValueID::ScaleZ:
         return makeScale([](Vector<Ref<CSSNumericValue>>&& components) {
             return CSSScale::create(CSSNumericFactory::number(1), CSSNumericFactory::number(1), WTF::move(components[0]));
         }, 1);
-    case CSSValueScale:
+    case CSSValueID::Scale:
         return makeScale([](Vector<Ref<CSSNumericValue>>&& components) {
             return components.size() == 2
                 ? CSSScale::create(WTF::move(components[0]), WTF::move(components[1]), std::nullopt)
                 : CSSScale::create(components[0], components[0], std::nullopt);
         }, 1, 2);
-    case CSSValueScale3d:
+    case CSSValueID::Scale3d:
         return makeScale([](Vector<Ref<CSSNumericValue>>&& components) {
             return CSSScale::create(WTF::move(components[0]), WTF::move(components[1]), WTF::move(components[2]));
         }, 3);
@@ -142,12 +140,12 @@ void CSSScale::serialize(StringBuilder& builder) const
 {
     // https://drafts.css-houdini.org/css-typed-om/#serialize-a-cssscale
     builder.append(is2D() ? "scale("_s : "scale3d("_s);
-    m_x->serialize(builder);
+    protect(m_x)->serialize(builder);
     builder.append(", "_s);
-    m_y->serialize(builder);
+    protect(m_y)->serialize(builder);
     if (!is2D()) {
         builder.append(", "_s);
-        m_z->serialize(builder);
+        protect(m_z)->serialize(builder);
     }
     builder.append(')');
 }
@@ -176,19 +174,19 @@ ExceptionOr<Ref<DOMMatrix>> CSSScale::toMatrix()
 
 RefPtr<CSSValue> CSSScale::toCSSValue() const
 {
-    auto x = m_x->toCSSValue();
-    auto y = m_y->toCSSValue();
+    auto x = protect(m_x)->toCSSValue();
+    auto y = protect(m_y)->toCSSValue();
     if (!x || !y)
         return nullptr;
 
     if (is2D())
-        return CSSFunctionValue::create(CSSValueScale, x.releaseNonNull(), y.releaseNonNull());
+        return CSSFunctionValue::create(CSSValueID::Scale, x.releaseNonNull(), y.releaseNonNull());
 
-    auto z = m_z->toCSSValue();
+    auto z = protect(m_z)->toCSSValue();
     if (!z)
         return nullptr;
 
-    return CSSFunctionValue::create(CSSValueScale3d, x.releaseNonNull(), y.releaseNonNull(), z.releaseNonNull());
+    return CSSFunctionValue::create(CSSValueID::Scale3d, x.releaseNonNull(), y.releaseNonNull(), z.releaseNonNull());
 }
 
 } // namespace WebCore

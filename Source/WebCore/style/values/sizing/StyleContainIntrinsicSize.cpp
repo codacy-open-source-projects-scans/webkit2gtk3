@@ -29,6 +29,7 @@
 #include "CSSPrimitiveValue.h"
 #include "StyleBuilderChecking.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
+#include "StylePrimitiveNumericTypes+CSSValueConversion.h"
 
 namespace WebCore {
 namespace Style {
@@ -37,7 +38,7 @@ auto CSSValueConversion<ContainIntrinsicSize>::operator()(BuilderState& state, c
 {
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return CSS::Keyword::None { };
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -45,24 +46,21 @@ auto CSSValueConversion<ContainIntrinsicSize>::operator()(BuilderState& state, c
         }
     }
 
-    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
-        return ContainIntrinsicSize::Length {
-            primitiveValue->resolveAsLength<float>(state.cssToLengthConversionData().copyWithAdjustedZoom(1.0f))
-        };
-    }
+    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value))
+        return toStyleFromCSSValue<ContainIntrinsicSize::Length>(state, *primitiveValue);
 
     auto pair = requiredPairDowncast<CSSKeywordValue, CSSValue>(state, value);
     if (!pair)
         return CSS::Keyword::None { };
 
-    if (pair->first->valueID() != CSSValueAuto) {
+    if (pair->first->valueID() != CSSValueID::Auto) {
         state.setCurrentPropertyInvalidAtComputedValueTime();
         return CSS::Keyword::None { };
     }
 
     if (RefPtr identSecondValue = dynamicDowncast<CSSKeywordValue>(pair->second)) {
         switch (identSecondValue->valueID()) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return { CSS::Keyword::Auto { }, CSS::Keyword::None { } };
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -73,9 +71,7 @@ auto CSSValueConversion<ContainIntrinsicSize>::operator()(BuilderState& state, c
     if (RefPtr primitiveSecondValue = dynamicDowncast<CSSPrimitiveValue>(pair->second)) {
         return {
             CSS::Keyword::Auto { },
-            ContainIntrinsicSize::Length {
-                primitiveSecondValue->resolveAsLength<float>(state.cssToLengthConversionData().copyWithAdjustedZoom(1.0f))
-            }
+            toStyleFromCSSValue<ContainIntrinsicSize::Length>(state, *primitiveSecondValue),
         };
     }
 

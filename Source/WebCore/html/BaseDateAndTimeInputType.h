@@ -55,6 +55,9 @@ public:
     bool typeMismatch() const final;
     bool hasBadInput() const final;
 
+    void ref() const final { InputType::ref(); }
+    void deref() const final { InputType::deref(); }
+
 protected:
     enum class DateTimeFormatValidationResults : uint8_t {
         HasYear = 1 << 0,
@@ -87,7 +90,7 @@ private:
     public:
         DateTimeFormatValidator() { }
 
-        void NODELETE visitField(DateTimeFormat::FieldType, int);
+        void LEGACY_NODELETE visitField(DateTimeFormat::FieldType, int);
         void visitLiteral(const String&) { }
 
         bool validateFormat(const String& format, const BaseDateAndTimeInputType&);
@@ -123,7 +126,7 @@ private:
     void createShadowSubtree() final;
     void removeShadowSubtree() final;
     void updateInnerTextValue() final;
-    bool NODELETE hasCustomFocusLogic() const final;
+    bool LEGACY_NODELETE hasCustomFocusLogic() const final;
     void attributeChanged(const QualifiedName&) final;
     bool isPresentingAttachedView() const final { return m_popupIsVisible; }
     void elementDidBlur() final;

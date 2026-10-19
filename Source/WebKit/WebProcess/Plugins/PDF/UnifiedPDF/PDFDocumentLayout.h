@@ -61,16 +61,16 @@ public:
     size_t rowCount() const;
     PDFLayoutRow rowForPageIndex(PageIndex) const;
     Vector<PDFLayoutRow> rows() const;
-    unsigned NODELETE rowIndexForPageIndex(PageIndex) const;
+    unsigned LEGACY_NODELETE rowIndexForPageIndex(PageIndex) const;
 
     static constexpr WebCore::FloatSize documentMargin { 16, 18 };
     static constexpr WebCore::FloatSize pageMargin { 14, 16 };
 
-    bool NODELETE isLeftPageIndex(PageIndex) const;
-    bool NODELETE isRightPageIndex(PageIndex) const;
+    bool LEGACY_NODELETE isLeftPageIndex(PageIndex) const;
+    bool LEGACY_NODELETE isRightPageIndex(PageIndex) const;
     bool isLastPageIndex(PageIndex) const;
     PageIndex lastPageIndex() const;
-    bool NODELETE isFirstPageOfRow(PageIndex) const;
+    bool LEGACY_NODELETE isFirstPageOfRow(PageIndex) const;
 
     RetainPtr<PDFPage> pageAtIndex(PageIndex) const;
     std::optional<PageIndex> indexForPage(RetainPtr<PDFPage>) const;
@@ -83,12 +83,12 @@ public:
     std::pair<PageIndex, WebCore::FloatPoint> pageIndexAndPagePointForDocumentYOffset(float) const;
 
     // This is not scaled by scale().
-    WebCore::FloatRect NODELETE layoutBoundsForPageAtIndex(PageIndex) const;
+    WebCore::FloatRect LEGACY_NODELETE layoutBoundsForPageAtIndex(PageIndex) const;
     // Bounds of the pages in the row, including document margins. Not scaled.
     WebCore::FloatRect layoutBoundsForRow(PDFLayoutRow) const;
 
     // Returns 0, 90, 180, 270.
-    WebCore::IntDegrees NODELETE rotationForPageAtIndex(PageIndex) const;
+    WebCore::IntDegrees LEGACY_NODELETE rotationForPageAtIndex(PageIndex) const;
 
     WebCore::FloatPoint documentToPDFPage(WebCore::FloatPoint documentPoint, PageIndex) const;
     WebCore::FloatRect documentToPDFPage(WebCore::FloatRect documentRect, PageIndex) const;
@@ -105,11 +105,14 @@ public:
     };
 
     OptionSet<LayoutUpdateChange> updateLayout(WebCore::IntSize pluginSize, ShouldUpdateAutoSizeScale);
-    WebCore::FloatSize NODELETE contentsSize() const;
-    WebCore::FloatSize NODELETE scaledContentsSize() const;
+    WebCore::FloatSize LEGACY_NODELETE contentsSize() const;
+    WebCore::FloatSize LEGACY_NODELETE scaledContentsSize() const;
 
-    void setDisplayMode(PDFDisplayMode displayMode) { m_displayMode = displayMode; }
-    PDFDisplayMode displayMode() const { return m_displayMode; }
+    void setDisplayMode(PDFPluginDisplayMode displayMode) { m_displayMode = displayMode; }
+    PDFPluginDisplayMode displayMode() const { return m_displayMode; }
+
+    void setShouldLeftAlignTrailingTwoUpPage(bool value) { m_shouldLeftAlignTrailingTwoUpPage = value; }
+    bool shouldLeftAlignTrailingTwoUpPage() const { return m_shouldLeftAlignTrailingTwoUpPage; }
 
     bool isSinglePageDisplayMode() const { return isSinglePagePDFDisplayMode(m_displayMode); }
     bool isTwoUpDisplayMode() const { return isTwoUpPDFDisplayMode(m_displayMode); }
@@ -145,7 +148,8 @@ private:
     Vector<PageGeometry> m_pageGeometry;
     WebCore::FloatRect m_documentBounds;
     float m_scale { 1 };
-    PDFDisplayMode m_displayMode { PDFDisplayMode::SinglePageContinuous };
+    PDFPluginDisplayMode m_displayMode { PDFPluginDisplayMode::SinglePageContinuous };
+    bool m_shouldLeftAlignTrailingTwoUpPage { false };
 };
 
 struct PDFLayoutRow {

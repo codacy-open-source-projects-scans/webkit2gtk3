@@ -35,11 +35,17 @@ namespace WebCore {
 
 class ShareableCVPixelBuffer;
 
-RetainPtr<CVPixelBufferRef> createScratchCVPixelBuffer(unsigned width, unsigned height, OSType pixelFormat, CFDictionaryRef = nullptr, CGColorSpaceRef = nullptr);
+RetainPtr<CVPixelBufferRef> createScratchCVPixelBuffer(unsigned width, unsigned height, OSType pixelFormat, CFDictionaryRef = nullptr, CGColorSpaceRef = nullptr, float headroom = 1.0);
 
 RetainPtr<CVPixelBufferRef> createScratchMetalCompatibleCVPixelBuffer(unsigned width, unsigned height, OSType pixelFormat, CGColorSpaceRef = nullptr);
 
+RetainPtr<CVPixelBufferRef> createScratchMetalCompatibleCVPixelBuffer(CVPixelBufferRef, CGColorSpaceRef = nullptr);
+
 RetainPtr<CVPixelBufferRef> createScratchMetalCompatibleCVPixelBuffer(const ShareableCVPixelBuffer&, CGColorSpaceRef = nullptr);
+
+RetainPtr<CVPixelBufferRef> createMetalCompatibleCVPixelBufferFromImage(PlatformImagePtr);
+
+RetainPtr<CVPixelBufferRef> createCVPixelBufferFromImage(PlatformImagePtr);
 
 #if ENABLE(DUMP_GAIN_MAP_IMAGES)
 void CVPixelBufferDumpToFile(CVPixelBufferRef, const String& name);

@@ -29,7 +29,6 @@
 #include "AXObjectCache.h"
 #include "ElementInlines.h"
 #include "Event.h"
-#include "EventTargetInlines.h"
 #include "EventNames.h"
 #include "HTMLNames.h"
 #include "InspectorInstrumentation.h"
@@ -200,11 +199,12 @@ void HTMLSlotElement::assign(FixedVector<ElementOrText>&& nodes)
     if (RefPtr shadowRoot = containingShadowRoot(); shadowRoot && shadowRoot->slotAssignmentMode() == SlotAssignmentMode::Manual)
         shadowRoot->slotManualAssignmentDidChange(*this, previous, m_manuallyAssignedNodes);
     else {
-        for (auto& node : m_manuallyAssignedNodes) {
+        for (auto& weakNode : m_manuallyAssignedNodes) {
+            Ref node = *weakNode;
             if (RefPtr previousSlot = node->manuallyAssignedSlot()) {
-                previousSlot->removeManuallyAssignedNode(*node);
+                previousSlot->removeManuallyAssignedNode(node);
                 if (RefPtr shadowRootOfPreviousSlot = previousSlot->containingShadowRoot(); shadowRootOfPreviousSlot && node->parentNode() == shadowRootOfPreviousSlot->host())
-                    shadowRootOfPreviousSlot->didRemoveManuallyAssignedNode(*previousSlot, *node);
+                    shadowRootOfPreviousSlot->didRemoveManuallyAssignedNode(*previousSlot, node);
             }
             node->setManuallyAssignedSlot(this);
         }

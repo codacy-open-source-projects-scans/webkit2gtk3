@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2023-2026 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,8 +22,10 @@
 #include <WebCore/DocumentPage.h>
 #include <WebCore/FloatQuad.h>
 #include <WebCore/FrameDestructionObserverInlines.h>
+#include <WebCore/InspectorInstrumentationPublic.h>
 #include <WebCore/LocalFrameInlines.h>
 #include <WebCore/LocalFrameView.h>
+#include <WebCore/LocalFrameViewInlines.h>
 #include <WebCore/RenderElement.h>
 #include <WebCore/RenderIFrame.h>
 #include <WebCore/RenderObject.h>
@@ -31,8 +33,8 @@
 #include <WebCore/RenderObjectNode.h>
 #include <WebCore/RenderObjectStyle.h>
 #include <WebCore/RenderReplaced.h>
-#include <WebCore/RenderStyle+GettersInlines.h>
 #include <WebCore/RenderView.h>
+#include <WebCore/StyleComputedStyle+GettersInlines.h>
 #include <WebCore/VisibleRectContext.h>
 
 namespace WebCore {
@@ -64,16 +66,11 @@ inline TreeScope& RenderObject::treeScopeForSVGReferences() const
     return m_node->treeScopeForSVGReferences();
 }
 
-inline CheckedRef<const RenderStyle> RenderObject::firstLineStyle() const
+inline CheckedRef<const Style::ComputedStyle> RenderObject::firstLineStyle() const
 {
     if (isRenderText())
         return protect(parent())->firstLineStyle();
     return downcast<RenderElement>(*this).firstLineStyle();
-}
-
-inline LocalFrame& RenderObject::frame() const
-{
-    return *document().frame();
 }
 
 inline Page& RenderObject::page() const
@@ -94,6 +91,8 @@ inline void RenderObject::setNeedsLayout(MarkingBehavior markParents)
     ASSERT(!isSetNeedsLayoutForbidden());
     if (selfNeedsLayout())
         return;
+    if (InspectorInstrumentationPublic::hasFrontends()) [[unlikely]]
+        notifyInspectorOfLayoutInvalidate();
     m_stateBitfields.setFlag(StateFlag::NeedsLayout);
     if (markParents == MarkingBehavior::MarkContainingBlockChain)
         scheduleLayout(CheckedPtr { markContainingBlocksForLayout() });
@@ -101,10 +100,10 @@ inline void RenderObject::setNeedsLayout(MarkingBehavior markParents)
         setLayerNeedsFullRepaint();
 }
 
-inline void RenderObject::setNeedsLayoutAndPreferredWidthsUpdate()
+inline void RenderObject::setNeedsLayoutAndInvalidateContentLogicalWidths()
 {
     setNeedsLayout();
-    setNeedsPreferredWidthsUpdate();
+    invalidateContentLogicalWidths();
 }
 
 inline bool RenderObject::isNonReplacedAtomicInlineLevelBox() const
@@ -116,45 +115,33 @@ inline bool RenderObject::isNonReplacedAtomicInlineLevelBox() const
 inline auto RenderObject::visibleRectContextForRepaint() -> VisibleRectContext
 {
     return {
-        .hasPositionFixedDescendant = false,
-        .dirtyRectIsFlipped = false,
-        .descendantNeedsEnclosingIntRect = false,
         .options = {
             VisibleRectContext::Option::ApplyContainerClip,
             VisibleRectContext::Option::ApplyCompositedContainerScrolls
         },
-        .scrollMargin = { },
     };
 }
 
 inline auto RenderObject::visibleRectContextForSpatialNavigation() -> VisibleRectContext
 {
     return {
-        .hasPositionFixedDescendant = false,
-        .dirtyRectIsFlipped = false,
-        .descendantNeedsEnclosingIntRect = false,
         .options = {
             VisibleRectContext::Option::ApplyContainerClip,
             VisibleRectContext::Option::ApplyCompositedContainerScrolls,
             VisibleRectContext::Option::ApplyCompositedClips
         },
-        .scrollMargin = { },
     };
 }
 
-inline auto RenderObject::visibleRectContextForRenderTreeAsText() -> VisibleRectContext
+inline auto RenderObject::visibleRectContextForTextRepresentation() -> VisibleRectContext
 {
     return {
-        .hasPositionFixedDescendant = false,
-        .dirtyRectIsFlipped = false,
-        .descendantNeedsEnclosingIntRect = false,
         .options = {
             VisibleRectContext::Option::ApplyContainerClip,
             VisibleRectContext::Option::ApplyCompositedContainerScrolls,
             VisibleRectContext::Option::ApplyCompositedClips,
             VisibleRectContext::Option::CalculateAccurateRepaintRect
         },
-        .scrollMargin = { },
     };
 }
 
@@ -168,9 +155,9 @@ inline LayoutRect RenderObject::absoluteClippedOverflowRectForSpatialNavigation(
     return clippedOverflowRect(nullptr, visibleRectContextForSpatialNavigation());
 }
 
-inline LayoutRect RenderObject::absoluteClippedOverflowRectForRenderTreeAsText() const
+inline LayoutRect RenderObject::absoluteClippedOverflowRectForTextRepresentation() const
 {
-    return clippedOverflowRect(nullptr, visibleRectContextForRenderTreeAsText());
+    return clippedOverflowRect(nullptr, visibleRectContextForTextRepresentation());
 }
 
 inline LayoutRect RenderObject::clippedOverflowRectForRepaint(const RenderLayerModelObject* repaintContainer) const

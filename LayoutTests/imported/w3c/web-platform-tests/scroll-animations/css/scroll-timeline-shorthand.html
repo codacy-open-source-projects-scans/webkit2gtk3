@@ -67,7 +67,7 @@ test_shorthand_value('scroll-timeline', '--abc, --def',
 });
 
 function test_shorthand_contraction(shorthand, longhands, expected) {
-  let longhands_fmt = Object.entries(longhands).map((e) => `${e[0]}:${e[1]}`).join(';');
+  let longhands_fmt = Object.entries(longhands).map((e) => `${e[0]}:${e[1]}:${e[2]}`).join(';');
   test((t) => {
     t.add_cleanup(() => {
       for (let shorthand of Object.keys(longhands))
@@ -95,7 +95,17 @@ test_shorthand_contraction('scroll-timeline', {
   'scroll-timeline-axis': 'block, block',
 }, 'none, none');
 
-// Longhands with different lengths will cause the shorthand to serialize as the empty string due to no longer being able to round trip.
+// Longhands with different lengths:
+// https://drafts.csswg.org/css-values-4/#linked-properties
+// When the longhand sizes are different, the amount of created elements
+// should be equal to the "base" longhand attribute, which in this case
+// is the timeline name. If a coordinating list property has too few
+// values specified, its value list is repeated to add more used values.
+// If it has too many values, the list will be truncated to match the
+// base property's length. However, the computed style for the shorthand
+// property should serialized to an empty string since round-tripping
+// wouldn't work otherwise.
+// https://github.com/w3c/csswg-drafts/issues/13500
 
 test_shorthand_contraction('scroll-timeline', {
   'scroll-timeline-name': '--a, --b, --c',
@@ -103,15 +113,12 @@ test_shorthand_contraction('scroll-timeline', {
 }, '');
 
 test_shorthand_contraction('scroll-timeline', {
+  'scroll-timeline-name': '--a, --b, --c, --d, --e, --f',
+  'scroll-timeline-axis': 'inline, x',
+}, '');
+
+test_shorthand_contraction('scroll-timeline', {
   'scroll-timeline-name': '--a, --b',
   'scroll-timeline-axis': 'inline, inline, inline',
-}, '');
-
-test_shorthand_contraction('scroll-timeline', {
-  'scroll-timeline-name': '--a, --b',
-}, '');
-
-test_shorthand_contraction('scroll-timeline', {
-  'scroll-timeline-axis': 'inline, inline',
 }, '');
 </script>

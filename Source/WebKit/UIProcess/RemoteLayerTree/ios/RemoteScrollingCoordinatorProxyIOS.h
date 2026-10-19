@@ -61,9 +61,11 @@ public:
     bool shouldSetScrollViewDecelerationRateFast() const;
     void setRootNodeIsInUserScroll(bool) override;
 
-    void adjustTargetContentOffsetForSnapping(CGSize maxScrollDimensions, CGPoint velocity, CGFloat topInset, CGPoint currentContentOffset, CGPoint* targetContentOffset);
+    CGPoint adjustTargetScrollOffsetForSnapping(CGSize maxScrollOffset, CGFloat zoomScale, CGPoint velocity, CGPoint currentScrollOffset, CGPoint targetScrollOffset);
     bool hasActiveSnapPoint() const;
-    CGPoint nearestActiveContentInsetAdjustedSnapOffset(CGFloat topInset, const CGPoint&) const;
+    CGPoint scrollOffsetSnappedToNearestSnapPoint(CGPoint scrollOffset, CGFloat zoomScale) const;
+
+    void updateSnapIndicesForMainFrameOffset(CGPoint scrollOffset, CGFloat zoomScale);
 
 #if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
     void updateOverlayRegions(const Vector<WebCore::PlatformLayerIdentifier>& destroyedLayers = { }) override;
@@ -74,8 +76,10 @@ public:
     void animationsWereAddedToNode(RemoteLayerTreeNode&) override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
     void animationsWereRemovedFromNode(RemoteLayerTreeNode&) override;
     void updateTimelinesRegistration(WebCore::ProcessIdentifier, const WebCore::AcceleratedTimelinesUpdate&, MonotonicTime) override;
+    void removeTimelines(WebCore::ProcessIdentifier) override;
     RefPtr<const RemoteAnimationTimeline> timeline(const TimelineID&) const override;
     HashSet<Ref<RemoteProgressBasedTimeline>> timelinesForScrollingNodeIDForTesting(WebCore::ScrollingNodeID) const override;
+    HashSet<Ref<RemoteMonotonicTimeline>> monotonicTimelinesForProcessForTesting(WebCore::ProcessIdentifier) const override;
     void progressBasedTimelinesWereUpdatedForNode(const WebCore::ScrollingTreeScrollingNode&) override;
     bool hasHighImpactMonotonicAnimations() const override;
 #endif
@@ -108,8 +112,7 @@ private:
 
     WebCore::FloatRect currentLayoutViewport() const;
 
-    bool shouldSnapForMainFrameScrolling(WebCore::ScrollEventAxis) const;
-    std::pair<float, std::optional<unsigned>> closestSnapOffsetForMainFrameScrolling(WebCore::ScrollEventAxis, float currentScrollOffset, WebCore::FloatPoint scrollDestination, float velocity) const;
+    std::pair<float, std::optional<unsigned>> closestSnapOffsetForMainFrameScrolling(WebCore::ScrollEventAxis, CGFloat zoomScale, CGFloat currentScrollOffset, WebCore::FloatPoint scrollDestination, float velocity) const;
 
 #if ENABLE(THREADED_ANIMATIONS)
     void updateTimeDependentAnimationStacks();
@@ -129,6 +132,7 @@ private:
 #endif
 
     bool m_needsOverlayRegionScrollViewSelection { false };
+    bool m_needsOverlayRegionBehaviorUpdate { false };
     RetainPtr<WKBaseScrollView> m_selectedOverlayRegionScrollView;
 #endif
 

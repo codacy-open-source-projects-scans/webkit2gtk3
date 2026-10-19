@@ -67,7 +67,7 @@ private:
     void removeNode(Node&, ShouldAssumeContentIsAlwaysEditable = DoNotAssumeContentIsAlwaysEditable) override;
     void deleteTextFromNode(Text&, unsigned, unsigned) override;
     void removeRedundantBlocks();
-    bool NODELETE shouldSmartDeleteParagraphSpacers();
+    bool LEGACY_NODELETE shouldSmartDeleteParagraphSpacers();
     void smartDeleteParagraphSpacers();
 
     // This function provides access to original string after the correction has been deleted.
@@ -103,7 +103,6 @@ private:
     RefPtr<Node> m_endRoot;
     RefPtr<Node> m_startTableRow;
     RefPtr<Node> m_endTableRow;
-    RefPtr<Node> m_temporaryPlaceholder;
 };
 
 } // namespace WebCore

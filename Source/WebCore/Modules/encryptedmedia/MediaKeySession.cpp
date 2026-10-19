@@ -40,7 +40,6 @@
 #include "DocumentPage.h"
 #include "EventLoop.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "JSDOMConvertBoolean.h"
 #include "JSMediaKeyStatusMap.h"
 #include "Logging.h"
@@ -337,7 +336,7 @@ void MediaKeySession::load(const String& sessionId, Ref<DeferredPromise>&& promi
             origin = protect(document->securityOrigin())->toString();
 
         // 8.3. If there is a MediaKeySession object that is not closed in this object's Document whose sessionId attribute is sanitized session ID, reject promise with a QuotaExceededError.
-        if (session.m_keys && session.m_keys->hasOpenSessionWithIdForOrigin(sanitizedSessionId.value(), WTF::move(origin))) {
+        if (RefPtr keys = session.m_keys; keys && keys->hasOpenSessionWithIdForOrigin(sanitizedSessionId.value(), WTF::move(origin))) {
             ERROR_LOG_WITH_THIS(&session, identifier, "Rejected: Another open MediaKeySession with the same session ID already exists for this security origin");
             promise->reject(ExceptionCode::QuotaExceededError);
             return;
@@ -397,7 +396,7 @@ void MediaKeySession::load(const String& sessionId, Ref<DeferredPromise>&& promi
                 // compared before were empty at the moment of comparison because they were in the middle of a
                 // session loading that completed asynchronously. Their ids should have settled now, so let's
                 // check again.
-                if (session.m_keys && session.m_keys->hasOpenSessionWithIdForOrigin(sanitizedSessionId, origin)) {
+                if (RefPtr keys = session.m_keys; keys && keys->hasOpenSessionWithIdForOrigin(sanitizedSessionId, origin)) {
                     ERROR_LOG_WITH_THIS(&session, identifier, "Rejected (later): Another open MediaKeySession with the same session ID already exists for this security origin");
                     promise->reject(ExceptionCode::QuotaExceededError);
                     return;
@@ -581,7 +580,7 @@ void MediaKeySession::close(Ref<DeferredPromise>&& promise)
 
     // 1. Let session be the associated MediaKeySession object.
     // 2. If session is closed, return a resolved promise.
-    ALWAYS_LOG(identifier, "EME - closing session ", m_sessionId.utf8().data());
+    ALWAYS_LOG(identifier, "EME - closing session ", m_sessionId);
 
     if (m_closed) {
         ALWAYS_LOG(identifier, "Resolved: already closed");
@@ -805,9 +804,15 @@ PlatformDisplayID MediaKeySession::displayID()
     return 0;
 }
 
-void MediaKeySession::updateExpiration(double)
+void MediaKeySession::updateExpiration(double newExpiration)
 {
-    notImplemented();
+    // https://w3c.github.io/encrypted-media/#update-expiration
+    // 1. Let the session be the associated MediaKeySession object.
+    // 2. Let expiration time be NaN.
+    // 3. If the license(s) and/or key(s) associated with the session expire at a specific time,
+    //    let expiration time be the expiration time in milliseconds since 01 January 1970 UTC.
+    // 4. Set the session's expiration attribute to expiration time.
+    m_expiration = newExpiration;
 }
 
 void MediaKeySession::sessionClosed()
@@ -815,6 +820,12 @@ void MediaKeySession::sessionClosed()
     // https://w3c.github.io/encrypted-media/#session-closed
     // W3C Editor's Draft 09 November 2016
     ALWAYS_LOG(LOGIDENTIFIER);
+
+    // close(), stop(), and a CDM-reported close during update() each queue a task that lands here. They guard on
+    // m_closed before enqueuing, but it is only set when the task runs, so more than one task can already be queued.
+    // Update m_closed here to ensure the promise is only resolved once, and avoid an assertion in DOMPromiseProxy.
+    if (std::exchange(m_closed, true))
+        return;
 
     // 1. Let session be the associated MediaKeySession object.
     // 2. If session's session type is "persistent-usage-record", execute the following steps in parallel:
@@ -830,11 +841,16 @@ void MediaKeySession::sessionClosed()
     // 4. Run the Update Expiration algorithm on the session, providing NaN.
     updateExpiration(std::numeric_limits<double>::quiet_NaN());
 
-    // Let's consider the session closed before any promise on the 'closed' attribute is resolved.
-    m_closed = true;
-
     // 5. Let promise be the closed attribute of the session.
     // 6. Resolve promise.
+    // Skip if the context is stopping (e.g. a back/forward-cached page being pruned); otherwise resolving the
+    // promise trips DeferredPromise's suspended-context assertion.
+    RefPtr context = scriptExecutionContext();
+    if (!context || context->activeDOMObjectsAreStopped()) {
+        ALWAYS_LOG(LOGIDENTIFIER, "Context is stopping; not resolving closed promise");
+        return;
+    }
+
     m_closedPromise->resolve();
 }
 
@@ -878,6 +894,8 @@ void MediaKeySession::stop()
         if (!protectedThis)
             return;
 
+        // Run Session Closed synchronously to avoid the CDM session outliving the page and leaking into the next
+        // navigation.
         ALWAYS_LOG_WITH_THIS(protectedThis, logIdentifier, "::lambda, closed");
         protectedThis->sessionClosed();
     });

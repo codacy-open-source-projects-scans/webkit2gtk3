@@ -29,6 +29,7 @@
 
 #if PLATFORM(COCOA)
 
+#include "WebEvent.h"
 #include <WebCore/IntPoint.h>
 #include <WebCore/SelectionGeometry.h>
 #include <WebCore/ShareableBitmap.h>
@@ -43,10 +44,13 @@ struct InteractionInformationRequest {
     bool includeSnapshot { false };
     bool includeLinkIndicator { false };
     bool includeCursorContext { false };
+    bool includeHasDoubleClickHandler { true };
     bool includeImageData { false };
 
     bool gatherAnimations { false };
     bool linkIndicatorShouldHaveLegacyMargins { false };
+
+    WebEventInputSource inputSource { WebEventInputSource::UserDriven };
 
     InteractionInformationRequest() { }
     explicit InteractionInformationRequest(WebCore::IntPoint point)
@@ -54,19 +58,21 @@ struct InteractionInformationRequest {
     {
     }
 
-    explicit InteractionInformationRequest(WebCore::IntPoint point, bool includeSnapshot, bool includeLinkIndicator, bool includeCursorContext, bool includeImageData, bool gatherAnimations, bool linkIndicatorShouldHaveLegacyMargins)
+    explicit InteractionInformationRequest(WebCore::IntPoint point, bool includeSnapshot, bool includeLinkIndicator, bool includeCursorContext, bool includeHasDoubleClickHandler, bool includeImageData, bool gatherAnimations, bool linkIndicatorShouldHaveLegacyMargins, WebEventInputSource inputSource)
         : point(point)
         , includeSnapshot(includeSnapshot)
         , includeLinkIndicator(includeLinkIndicator)
         , includeCursorContext(includeCursorContext)
+        , includeHasDoubleClickHandler(includeHasDoubleClickHandler)
         , includeImageData(includeImageData)
         , gatherAnimations(gatherAnimations)
         , linkIndicatorShouldHaveLegacyMargins(linkIndicatorShouldHaveLegacyMargins)
+        , inputSource(inputSource)
     {
     }
 
-    bool NODELETE isValidForRequest(const InteractionInformationRequest&, int radius = 0) const;
-    bool NODELETE isApproximatelyValidForRequest(const InteractionInformationRequest&, int radius) const;
+    bool LEGACY_NODELETE isValidForRequest(const InteractionInformationRequest&, int radius = 0) const;
+    bool LEGACY_NODELETE isApproximatelyValidForRequest(const InteractionInformationRequest&, int radius) const;
 };
 
 }

@@ -32,15 +32,17 @@
 #import "WKSLinearMediaPlayer.h"
 #import "WKSLinearMediaTypes.h"
 #import <WebCore/ExceptionOr.h>
+#import <WebCore/Image.h>
+#import <WebCore/ImageAdapter.h>
 #import <WebCore/ImmersiveVideoMetadata.h>
 #import <WebCore/MediaSelectionOption.h>
 #import <WebCore/NowPlayingInfo.h>
 #import <WebCore/PlaybackSessionModel.h>
-#import <WebCore/SharedBuffer.h>
 #import <WebCore/TimeRanges.h>
 #import <wtf/OSObjectPtr.h>
 #import <wtf/TZoneMallocInlines.h>
 #import <wtf/WeakPtr.h>
+#import <wtf/cocoa/TypeCastsCocoa.h>
 
 #import "WebKitSwiftSoftLink.h"
 
@@ -275,7 +277,7 @@ static Ref<WebCore::NowPlayingMetadataObserver> nowPlayingMetadataObserver(Playb
 }
 
 PlaybackSessionInterfaceLMK::PlaybackSessionInterfaceLMK(WebCore::PlaybackSessionModel& model)
-    : PlaybackSessionInterfaceIOS { model }
+    : PlaybackSessionInterfaceCocoa { model }
     , m_player { adoptNS([allocWKSLinearMediaPlayerInstance() init]) }
     , m_playerDelegate { adoptNS([[WKLinearMediaPlayerDelegate alloc] initWithModel:model]) }
     , m_nowPlayingMetadataObserver { nowPlayingMetadataObserver(*this) }
@@ -295,7 +297,7 @@ WKSLinearMediaPlayer *PlaybackSessionInterfaceLMK::linearMediaPlayer() const
 
 void PlaybackSessionInterfaceLMK::setPlayerIdentifier(std::optional<WebCore::MediaPlayerIdentifier> identifier)
 {
-    PlaybackSessionInterfaceIOS::setPlayerIdentifier(identifier);
+    PlaybackSessionInterfaceCocoa::setPlayerIdentifier(identifier);
 
     if (RefPtr videoPresentationInterface = m_videoPresentationInterface.get())
         videoPresentationInterface->didSetPlayerIdentifier();
@@ -326,8 +328,8 @@ void PlaybackSessionInterfaceLMK::rateChanged(OptionSet<WebCore::PlaybackSession
 void PlaybackSessionInterfaceLMK::seekableRangesChanged(const WebCore::PlatformTimeRanges& timeRanges, double, double)
 {
     RetainPtr seekableRanges = adoptNS([[NSMutableArray alloc] initWithCapacity:timeRanges.length()]);
-    for (unsigned i = 0; i < timeRanges.length(); ++i) {
-        RetainPtr timeRange = adoptNS([allocWKSLinearMediaTimeRangeInstance() initWithLowerBound:timeRanges.start(i).toDouble() upperBound:timeRanges.end(i).toDouble()]);
+    for (auto& range : timeRanges.span()) {
+        RetainPtr timeRange = adoptNS([allocWKSLinearMediaTimeRangeInstance() initWithLowerBound:range.start.toDouble() upperBound:range.end.toDouble()]);
         [seekableRanges addObject:timeRange.get()];
     }
 
@@ -447,16 +449,7 @@ static RetainPtr<NSData> artworkData(const WebCore::NowPlayingMetadata& metadata
     if (!image)
         return nil;
 
-    RefPtr fragmentedData = image->data();
-    if (!fragmentedData || fragmentedData->isEmpty())
-        return nil;
-
-    RetainPtr artworkData = adoptNS([[NSMutableData alloc] initWithCapacity:fragmentedData->size()]);
-    fragmentedData->forEachSegment([&](auto segment) {
-        [artworkData appendBytes:segment.data() length:segment.size()];
-    });
-
-    return adoptNS([artworkData copy]);
+    return bridge_cast(WebCore::ImageAdapter::tiffRepresentation({ *image }));
 }
 
 void PlaybackSessionInterfaceLMK::nowPlayingMetadataChanged(const WebCore::NowPlayingMetadata& metadata)
@@ -466,7 +459,7 @@ void PlaybackSessionInterfaceLMK::nowPlayingMetadataChanged(const WebCore::NowPl
     [m_player setArtwork:artworkData(metadata).get()];
 }
 
-void PlaybackSessionInterfaceLMK::swapFullscreenModesWith(PlaybackSessionInterfaceIOS& otherInterfaceIOS)
+void PlaybackSessionInterfaceLMK::swapFullscreenModesWith(PlaybackSessionInterfaceCocoa& otherInterfaceIOS)
 {
     auto& otherInterface = static_cast<PlaybackSessionInterfaceLMK&>(otherInterfaceIOS);
     std::swap(m_player, otherInterface.m_player);

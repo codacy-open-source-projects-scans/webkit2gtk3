@@ -95,6 +95,8 @@ WK_EXPORT void WKPageSetAllowsRemoteInspection(WKPageRef page, bool allow);
 
 WK_EXPORT void WKPageShowWebInspectorForTesting(WKPageRef page);
 
+WK_EXPORT void WKPageDisconnectInspectorFrameTargetForTesting(WKPageRef page, WKFrameHandleRef frame);
+
 WK_EXPORT void WKPageSetMediaVolume(WKPageRef page, float volume);
 WK_EXPORT void WKPageSetMayStartMediaWhenInWindow(WKPageRef page, bool mayStartMedia);
 
@@ -172,10 +174,13 @@ WK_EXPORT void WKPageSetIgnoresViewportScaleLimits(WKPageRef page, bool ignoresV
 
 WK_EXPORT void WKPageSetUseDarkAppearanceForTesting(WKPageRef pageRef, bool useDarkAppearance);
 
+// Test-only virtual wallet actuation (action: "respond"|"decline"|"wait"|"clear"); webkit.org/b/306292.
+WK_EXPORT void WKPageSetVirtualWalletBehaviorForTesting(WKPageRef page, WKStringRef action, WKStringRef protocol, WKStringRef responseJSON);
+
 WK_EXPORT WKProcessID WKPageGetProcessIdentifier(WKPageRef page);
 WK_EXPORT WKProcessID WKPageGetGPUProcessIdentifier(WKPageRef page);
 
-typedef void (*WKPageGetApplicationManifestFunction)(void* functionContext);
+typedef void (*WKPageGetApplicationManifestFunction)(void* functionContext, bool success);
 WK_EXPORT void WKPageGetApplicationManifest(WKPageRef page, void* context, WKPageGetApplicationManifestFunction block);
 
 typedef void (*WKPageDumpPrivateClickMeasurementFunction)(WKStringRef privateClickMeasurementRepresentation, void* functionContext);
@@ -220,6 +225,8 @@ WK_EXPORT void WKPagePermissionChanged(WKStringRef permissionName, WKStringRef o
 
 WK_EXPORT void WKPageExecuteCommandForTesting(WKPageRef pageRef, WKStringRef command, WKStringRef value);
 WK_EXPORT bool WKPageIsEditingCommandEnabledForTesting(WKPageRef page, WKStringRef command);
+typedef void (*WKPageGetStorageAreaMapCountForTestingFunction)(uint64_t count, void* functionContext);
+WK_EXPORT void WKPageGetStorageAreaMapCountForTesting(WKPageRef page, void* context, WKPageGetStorageAreaMapCountForTestingFunction callback);
 WK_EXPORT void WKPageSetPermissionLevelForTesting(WKPageRef page, WKStringRef origin, bool allowed);
 WK_EXPORT void WKPageResetStateBetweenTests(WKPageRef pageRef);
 
@@ -242,6 +249,12 @@ WK_EXPORT void WKPageDoAfterProcessingAllPendingMouseEvents(WKPageRef page, void
 #if !defined(__APPLE__)
 typedef void (*WKPageDoAfterProcessingAllPendingKeyEventsFunction)(void* functionContext);
 WK_EXPORT void WKPageDoAfterProcessingAllPendingKeyEvents(WKPageRef page, void* context, WKPageDoAfterProcessingAllPendingKeyEventsFunction function);
+
+typedef void (*WKPageDoAfterProcessingAllPendingWheelEventsFunction)(void* functionContext);
+WK_EXPORT void WKPageDoAfterProcessingAllPendingWheelEvents(WKPageRef page, void* context, WKPageDoAfterProcessingAllPendingWheelEventsFunction function);
+
+typedef void (*WKPageDoAfterProcessingAllPendingTouchEventsFunction)(void* functionContext);
+WK_EXPORT void WKPageDoAfterProcessingAllPendingTouchEvents(WKPageRef page, void* context, WKPageDoAfterProcessingAllPendingTouchEventsFunction function);
 #endif
 
 typedef void (*WKPageCursorDidChangeCallbackForTesting)(WKStringRef cursorInfo, const void* clientInfo);

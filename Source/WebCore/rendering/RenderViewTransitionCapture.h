@@ -34,7 +34,7 @@ class RenderViewTransitionCapture final : public RenderReplaced {
     WTF_MAKE_TZONE_ALLOCATED(RenderViewTransitionCapture);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderViewTransitionCapture);
 public:
-    RenderViewTransitionCapture(Type, Document&, RenderStyle&&, bool isRootElement);
+    RenderViewTransitionCapture(Type, Document&, Style::ComputedStyle&&, bool isRootElement);
     virtual ~RenderViewTransitionCapture();
 
     void setImage(RefPtr<ImageBuffer>);
@@ -43,7 +43,7 @@ public:
     void paintReplaced(PaintInfo&, const LayoutPoint& paintOffset) override;
     void intrinsicSizeChanged() override;
 
-    void styleDidChange(Style::Difference, const RenderStyle*) override;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle*) override;
 
     void layout() override;
 
@@ -55,18 +55,21 @@ public:
     LayoutRect captureLocalOverflowRect() const { return m_localOverflowRect; }
 
     // Inset of the scaled capture from the visualOverflowRect()
-    LayoutPoint NODELETE captureContentInset() const;
+    LayoutPoint captureContentInset() const;
 
-    bool canUseExistingLayers() const { return !hasNonVisibleOverflow(); }
+    bool LEGACY_NODELETE canUseExistingLayers() const;
 
-    bool NODELETE paintsContent() const final;
+    bool LEGACY_NODELETE paintsContent() const final;
 
     bool isRootElementCapture() const { return m_isRootElementCapture; }
 
-    RefPtr<ImageBuffer> image() { return m_oldImage; }
+    RefPtr<ImageBuffer> LEGACY_NODELETE image();
 
 private:
     ASCIILiteral renderName() const override { return "RenderViewTransitionCapture"_s; }
+
+    NaturalDimensions zoomedNaturalDimensions() const final;
+
     String debugDescription() const override;
 
     void updateFromStyle() override;

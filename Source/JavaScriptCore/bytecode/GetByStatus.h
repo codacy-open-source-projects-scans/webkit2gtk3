@@ -76,6 +76,13 @@ public:
         ObservedSlowPathAndMakesCalls,
     };
 
+    enum class LookupMode : bool {
+        // Normal property lookups can traverse the prototype chain
+        Normal,
+        // Direct property lookups only work for own properties (see getByIdDirect)
+        Direct
+    };
+
     GetByStatus()
         : m_state(NoInformation)
     {
@@ -97,7 +104,8 @@ public:
     }
 
     static GetByStatus computeFor(CodeBlock* baselineBlock, ICStatusMap& baselineMap, ICStatusContextStack& dfgContextStack, CodeOrigin);
-    static GetByStatus computeFor(JSGlobalObject*, const StructureSet&, CacheableIdentifier);
+    static GetByStatus computeFor(JSGlobalObject*, const StructureSet&, CacheableIdentifier, LookupMode);
+    static GetByStatus computeFor(CodeBlock* profiledBlock, BytecodeIndex, JSGlobalObject*, const StructureSet&, CacheableIdentifier, LookupMode);
 
     State state() const { return m_state; }
     
@@ -119,9 +127,9 @@ public:
         return m_state == LikelyTakesSlowPath || m_state == ObservedTakesSlowPath || m_state == MakesCalls || m_state == ObservedSlowPathAndMakesCalls || m_state == CustomAccessor || m_state == ModuleNamespace || m_state == Megamorphic;
     }
     bool observedPropertyInlineCacheSlowPath() const { return m_state == ObservedTakesSlowPath || m_state == ObservedSlowPathAndMakesCalls; }
-    bool NODELETE makesCalls() const;
+    bool LEGACY_NODELETE makesCalls() const;
     
-    GetByStatus NODELETE slowVersion() const;
+    GetByStatus LEGACY_NODELETE slowVersion() const;
     
     bool wasSeenInJIT() const { return m_wasSeenInJIT; }
     
@@ -135,14 +143,14 @@ public:
     
     DECLARE_VISIT_AGGREGATE;
     template<typename Visitor> void markIfCheap(Visitor&);
-    bool finalize(VM&); // Return true if this gets to live.
+    bool isStillLive(VM&);
 
     bool appendVariant(const GetByVariant&);
     void shrinkToFit();
 
     void dump(PrintStream&) const;
 
-    CacheableIdentifier NODELETE singleIdentifier() const;
+    CacheableIdentifier LEGACY_NODELETE singleIdentifier() const;
 
     bool viaGlobalProxy() const
     {
@@ -152,7 +160,7 @@ public:
     }
 
 #if ENABLE(JIT)
-    CacheType NODELETE preferredCacheType() const;
+    CacheType LEGACY_NODELETE preferredCacheType() const;
 #endif
     
 private:

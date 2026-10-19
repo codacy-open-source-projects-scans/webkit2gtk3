@@ -158,6 +158,9 @@ public:
     bool usesInsertBits() const { return m_usesInsertBits; }
     void setUsesInsertBits() { m_usesInsertBits = true; }
 
+    bool usesZeroWorkgroupVar() const { return m_usesZeroWorkgroupVar; }
+    void setUsesZeroWorkgroupVar() { m_usesZeroWorkgroupVar = true; }
+
     template<typename T>
     std::enable_if_t<std::is_base_of_v<AST::Node, T>, void> replace(T* current, T&& replacement)
     {
@@ -278,7 +281,7 @@ public:
     }
 
     OptionSet<Extension>& enabledExtensions() LIFETIME_BOUND { return m_enabledExtensions; }
-    OptionSet<LanguageFeature> requiredFeatures() { return m_requiredFeatures; }
+    OptionSet<LanguageFeature>& requiredFeatures() LIFETIME_BOUND { return m_requiredFeatures; }
     bool containsOverrideID(uint32_t idValue) const
     {
         return m_pipelineOverrideIds.contains(idValue);
@@ -289,17 +292,33 @@ public:
     }
     bool hasFeature(const String& featureName) const { return m_configuration.supportedFeatures.contains(featureName); }
 
+    using OverrideValidator = Function<std::optional<Error>(const HashMap<String, ConstantValue>&)>;
+
     template<typename Validator>
     void addOverrideValidation(Validator&& validator)
     {
         m_overrideValidations.append(WTF::move(validator));
     }
 
+    size_t currentOverrideValidationsSize() const
+    {
+        return m_overrideValidations.size();
+    }
+
+    void revertOverrideValidations(size_t size)
+    {
+        m_overrideValidations.shrink(size);
+    }
+
     std::optional<Error> validateOverrides(const PrepareResult&, HashMap<String, ConstantValue>&);
 
     const OverloadedDeclaration* lookupOverload(const String&) const;
+    // Only the type checker resolves overloads. Later passes look builtins up only for their
+    // constant and validation functions, which this keeps.
+    void releaseOverloadCandidates();
 
     void addOverride(AST::Variable& variable) { m_overrides.append(&variable); }
+    bool containsOverride(const String& key) const;
 
     Result<ConstantValue> ensureOverrideValue(const AST::Expression&, const HashMap<String, ConstantValue>&) const;
 
@@ -334,6 +353,7 @@ private:
     bool m_usesMin { false };
     bool m_usesFtoi { false };
     bool m_usesInsertBits { false };
+    bool m_usesZeroWorkgroupVar { false };
     OptionSet<Extension> m_enabledExtensions;
     OptionSet<LanguageFeature> m_requiredFeatures;
     Configuration m_configuration;
@@ -344,7 +364,7 @@ private:
     std::optional<CallGraph> m_callGraph;
     Vector<std::function<void()>> m_replacements;
     HashSet<uint32_t, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>> m_pipelineOverrideIds;
-    Vector<Function<std::optional<Error>(const HashMap<String, ConstantValue>&)>> m_overrideValidations;
+    Vector<OverrideValidator> m_overrideValidations;
     HashMap<String, OverloadedDeclaration> m_overloadedOperations;
     Vector<AST::Variable*> m_overrides;
 };

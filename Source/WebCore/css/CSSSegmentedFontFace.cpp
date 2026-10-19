@@ -68,7 +68,7 @@ public:
     {
         if (!m_result || (policy == ExternalResourceDownloadPolicy::Allow
             && (m_fontFace->status() == CSSFontFace::Status::Pending || m_fontFace->status() == CSSFontFace::Status::Loading || m_fontFace->status() == CSSFontFace::Status::TimedOut))) {
-            const auto result = Ref { m_fontFace }->font(m_fontDescription, m_syntheticBold, m_syntheticItalic, policy, m_fontPaletteValues, m_fontFeatureValues);
+            const auto result = protect(m_fontFace)->font(m_fontDescription, m_syntheticBold, m_syntheticItalic, policy, m_fontPaletteValues, m_fontFeatureValues);
             if (!m_result)
                 m_result = result;
         }
@@ -86,7 +86,7 @@ private:
     {
     }
 
-    bool NODELETE isLoading() const final
+    bool LEGACY_NODELETE isLoading() const final
     {
         return m_result && m_result.value() && m_result.value()->isInterstitial();
     }
@@ -94,7 +94,7 @@ private:
     mutable std::optional<RefPtr<Font>> m_result; // Caches nullptr too
     mutable Ref<CSSFontFace> m_fontFace;
     FontDescription m_fontDescription;
-    RefPtr<FontFeatureValues> m_fontFeatureValues;
+    const RefPtr<FontFeatureValues> m_fontFeatureValues;
     FontPaletteValues m_fontPaletteValues;
     bool m_syntheticBold;
     bool m_syntheticItalic;

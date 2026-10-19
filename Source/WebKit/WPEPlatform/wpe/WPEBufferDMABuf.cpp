@@ -45,6 +45,12 @@
 /**
  * WPEBufferDMABuf:
  *
+ * A [class@Buffer] backed by a DMA-BUF.
+ *
+ * [class@BufferDMABuf] is a [class@Buffer] that wraps one or more DMA-BUF file
+ * descriptors, identified by a DRM format (FourCC) and a modifier. This is the
+ * buffer type used for hardware-accelerated rendering and, where supported,
+ * direct scanout.
  */
 struct _WPEBufferDMABufPrivate {
     uint32_t format;
@@ -323,6 +329,7 @@ WPEBufferDMABuf* wpe_buffer_dma_buf_new(WPEDisplay* display, int width, int heig
 
     buffer->priv->format = format;
     buffer->priv->fds.reserveInitialCapacity(planeCount);
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     for (guint32 i = 0; i < planeCount; ++i)
         buffer->priv->fds.append(UnixFileDescriptor { fds[i], UnixFileDescriptor::Adopt });
     buffer->priv->offsets.grow(planeCount);
@@ -330,6 +337,7 @@ WPEBufferDMABuf* wpe_buffer_dma_buf_new(WPEDisplay* display, int width, int heig
     buffer->priv->strides.grow(planeCount);
     memcpy(buffer->priv->strides.mutableSpan().data(), strides, planeCount * sizeof(guint32));
     buffer->priv->modifier = modifier;
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     return buffer;
 }
@@ -353,7 +361,7 @@ guint32 wpe_buffer_dma_buf_get_format(WPEBufferDMABuf* buffer)
  * wpe_buffer_dma_buf_get_n_planes:
  * @buffer: a #WPEBufferDMABuf
  *
- * Get the numbers of planes of @buffer
+ * Get the number of planes of @buffer
  *
  * Returns: the number of planes
  */
@@ -371,7 +379,7 @@ guint32 wpe_buffer_dma_buf_get_n_planes(WPEBufferDMABuf* buffer)
  *
  * Get the @buffer file descriptor of @plane
  *
- * Return: a file descriptor, or -1
+ * Returns: a file descriptor, or -1
  */
 int wpe_buffer_dma_buf_get_fd(WPEBufferDMABuf* buffer, guint32 plane)
 {
@@ -388,7 +396,7 @@ int wpe_buffer_dma_buf_get_fd(WPEBufferDMABuf* buffer, guint32 plane)
  *
  * Get the @buffer offset of @plane
  *
- * Return: the buffer offset
+ * Returns: the buffer offset
  */
 guint32 wpe_buffer_dma_buf_get_offset(WPEBufferDMABuf* buffer, guint32 plane)
 {
@@ -405,7 +413,7 @@ guint32 wpe_buffer_dma_buf_get_offset(WPEBufferDMABuf* buffer, guint32 plane)
  *
  * Get the @buffer stride of @plane
  *
- * Return: the buffer stride
+ * Returns: the buffer stride
  */
 guint32 wpe_buffer_dma_buf_get_stride(WPEBufferDMABuf* buffer, guint32 plane)
 {
@@ -421,7 +429,7 @@ guint32 wpe_buffer_dma_buf_get_stride(WPEBufferDMABuf* buffer, guint32 plane)
  *
  * Get the @buffer modifier
  *
- * Return: the buffer modifier
+ * Returns: the buffer modifier
  */
 guint64 wpe_buffer_dma_buf_get_modifier(WPEBufferDMABuf* buffer)
 {

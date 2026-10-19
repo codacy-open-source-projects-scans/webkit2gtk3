@@ -25,15 +25,16 @@
 
 #pragma once
 
+#include <WebCore/ElementInlines.h>
 #include <WebCore/RenderElementInlines.h>
-#include <WebCore/RenderStyle+GettersInlines.h>
+#include <WebCore/StyleComputedStyle+GettersInlines.h>
 #include <WebCore/StyleContainmentCheckerInlines.h>
 
 namespace WebCore {
 
 inline bool RenderElement::hasBackdropFilter() const { return !style().backdropFilter().isNone(); }
 inline bool RenderElement::hasBackground() const { return style().hasBackground(); }
-inline bool RenderElement::hasBlendMode() const { return style().blendMode() != BlendMode::Normal; }
+inline bool RenderElement::hasBlendMode() const { return style().usedBlendMode() != BlendMode::Normal; }
 inline bool RenderElement::hasClip() const { return isOutOfFlowPositioned() && !style().clip().isAuto(); }
 inline bool RenderElement::hasClipOrNonVisibleOverflow() const { return hasClip() || hasNonVisibleOverflow(); }
 inline bool RenderElement::hasClipPath() const { return !style().clipPath().isNone(); }
@@ -43,16 +44,28 @@ inline bool RenderElement::hasMask() const { return Style::hasImageInAnyLayer(st
 inline bool RenderElement::hasOutline() const { return style().hasOutline() || hasOutlineAnnotation(); }
 inline bool RenderElement::hasShapeOutside() const { return !style().shapeOutside().isNone(); }
 inline bool RenderElement::isTransparent() const { return !style().opacity().isOpaque(); }
-inline float RenderElement::opacity() const { return style().opacity().value.value; }
+inline float RenderElement::opacity() const { return style().opacity().value.value.value; }
 inline FloatRect RenderElement::transformReferenceBoxRect() const { return transformReferenceBoxRect(style()); }
-inline FloatRect RenderElement::transformReferenceBoxRect(const RenderStyle& style) const { return referenceBoxRect(transformBoxToCSSBoxType(style.transformBox())); }
+inline FloatRect RenderElement::transformReferenceBoxRect(const Style::ComputedStyle& style) const { return referenceBoxRect(transformBoxToCSSBoxType(style.transformBox())); }
 
 #if HAVE(CORE_MATERIAL)
 inline bool RenderElement::hasAppleVisualEffect() const { return style().appleVisualEffect() != AppleVisualEffect::None; }
 inline bool RenderElement::hasAppleVisualEffectRequiringBackdropFilter() const { return appleVisualEffectNeedsBackdrop(style().appleVisualEffect()); }
 #endif
 
-inline bool RenderElement::mayContainOutOfFlowPositionedObjects(const RenderStyle* styleToUse) const
+inline bool RenderElement::isCanvasDrawable() const
+{
+    RefPtr element = this->element();
+    return element && element->isCanvasDrawable();
+}
+
+inline bool RenderElement::isInsideDrawableCanvas() const
+{
+    RefPtr element = this->element();
+    return element && element->isInsideDrawableCanvas();
+}
+
+inline bool RenderElement::mayContainOutOfFlowPositionedObjects(const Style::ComputedStyle* styleToUse) const
 {
     auto shouldApplyLayoutOrPaintContainment = [this](const auto& style) {
         RefPtr element = this->element();
@@ -78,7 +91,7 @@ inline bool RenderElement::mayContainOutOfFlowPositionedObjects(const RenderStyl
         || isViewTransitionContainingBlock();
 }
 
-inline bool RenderElement::canContainAbsolutelyPositionedObjects(const RenderStyle* styleToUse) const
+inline bool RenderElement::canContainAbsolutelyPositionedObjects(const Style::ComputedStyle* styleToUse) const
 {
     auto& style = styleToUse ? *styleToUse : this->style();
     return mayContainOutOfFlowPositionedObjects(styleToUse)
@@ -86,25 +99,34 @@ inline bool RenderElement::canContainAbsolutelyPositionedObjects(const RenderSty
         || (isRenderBlock() && style.willChange().createsContainingBlockForAbsolutelyPositioned(isDocumentElementRenderer()));
 }
 
-inline bool RenderElement::canContainFixedPositionObjects(const RenderStyle* styleToUse) const
+inline bool RenderElement::canContainFixedPositionObjects(const Style::ComputedStyle* styleToUse) const
 {
     auto& style = styleToUse ? *styleToUse : this->style();
     return mayContainOutOfFlowPositionedObjects(styleToUse)
         || (isRenderBlock() && style.willChange().createsContainingBlockForOutOfFlowPositioned(isDocumentElementRenderer()));
 }
 
-inline bool RenderElement::createsGroupForStyle(const RenderStyle& style)
+inline bool RenderElement::createsGroupForStyleExcludingClipPathAndMask(const Style::ComputedStyle& style)
 {
     return !style.opacity().isOpaque()
-        || Style::hasImageInAnyLayer(style.maskLayers())
-        || !style.maskBorderSource().isNone()
-        || !style.clipPath().isNone()
         || !style.filter().isNone()
         || !style.backdropFilter().isNone()
 #if HAVE(CORE_MATERIAL)
         || style.appleVisualEffect() != AppleVisualEffect::None
 #endif
-        || style.blendMode() != BlendMode::Normal;
+        || style.usedBlendMode() != BlendMode::Normal;
+}
+
+inline bool RenderElement::createsGroupForStyle(const Style::ComputedStyle& style)
+{
+    return createsGroupForStyleExcludingClipPathAndMask(style)
+        || style.hasMask()
+        || !style.clipPath().isNone();
+}
+
+inline bool RenderElement::createsGroup() const
+{
+    return createsGroupForStyle(style());
 }
 
 inline bool RenderElement::shouldApplyAnyContainment() const
@@ -161,10 +183,30 @@ inline bool RenderElement::shouldApplyPaintContainment() const
 
 inline bool RenderElement::visibleToHitTesting(const std::optional<HitTestRequest>& request) const
 {
-    auto visibility = !request || request->userTriggered() ? style().usedVisibility() : style().visibility();
-    return visibility == Visibility::Visible
+    auto isVisible = !request || request->userTriggered() ? usedStyle().visibility() == UsedVisibility::Visible : style().visibility() == Visibility::Visible;
+    return isVisible
         && !isSkippedContent()
         && ((request && request->ignoreCSSPointerEventsProperty()) || usedPointerEvents() != PointerEvents::None);
+}
+
+inline bool RenderElement::isViewTransitionContainer() const
+{
+    return style().pseudoElementType() == PseudoElementType::ViewTransition
+        || style().pseudoElementType() == PseudoElementType::ViewTransitionGroup
+        || style().pseudoElementType() == PseudoElementType::ViewTransitionImagePair;
+}
+
+inline bool RenderElement::isViewTransitionPseudo() const
+{
+    return isRenderViewTransitionCapture()
+        || isViewTransitionContainer();
+}
+
+inline bool RenderElement::shouldSkipForPercentageResolution() const
+{
+    return isAnonymous()
+        && !isViewTransitionPseudo()
+        && !isRenderView();
 }
 
 } // namespace WebCore

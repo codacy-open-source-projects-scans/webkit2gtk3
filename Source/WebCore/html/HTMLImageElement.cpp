@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2026 Apple Inc. All rights reserved.
  * Copyright (C) 2010-2015 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -33,6 +33,7 @@
 #include "ContainerNodeInlines.h"
 #include "Editor.h"
 #include "ElementChildIteratorInlines.h"
+#include "ElementInlinesLight.h"
 #include "ElementRareData.h"
 #include "EventLoop.h"
 #include "EventNames.h"
@@ -40,20 +41,22 @@
 #include "HTMLAttachmentElement.h"
 #include "HTMLDocument.h"
 #include "HTMLFormElement.h"
+#include "HTMLImageDensityCorrectedSizing.h"
 #include "HTMLImageLoader.h"
 #include "HTMLMapElement.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLPictureElement.h"
 #include "HTMLSourceElement.h"
 #include "HTMLSrcsetParser.h"
+#include "ImageOrientation.h"
+#include "ImageRequestState.h"
 #include "JSRequestPriority.h"
-#include "LazyLoadImageObserver.h"
+#include "LazyLoadElementObserver.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
 #include "MIMETypeRegistry.h"
 #include "MediaQueryEvaluator.h"
 #include "MouseEvent.h"
-#include "NodeInlines.h"
 #include "NodeName.h"
 #include "NodeTraversal.h"
 #include "Page.h"
@@ -61,12 +64,15 @@
 #include "RenderBoxInlines.h"
 #include "RenderElementStyleInlines.h"
 #include "RenderImage.h"
+#include "RenderImageResource.h"
 #include "RenderView.h"
 #include "RequestPriority.h"
 #include "ScriptController.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
 #include "SizesAttributeParser.h"
+#include "StyleComputedStyle.h"
+#include "StyleImageOrientation.h"
 #include "StyleZoomPrimitivesInlines.h"
 #include <wtf/TZoneMallocInlines.h>
 #include "DocumentPage.h"
@@ -87,26 +93,25 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(HTMLImageElement);
 
 using namespace HTMLNames;
 
-HTMLImageElement::HTMLImageElement(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
+HTMLImageElement::HTMLImageElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document, { TypeFlag::HasCustomStyleResolveCallbacks, TypeFlag::HasDidMoveToNewDocument })
-    , FormAssociatedElement(form)
     , ActiveDOMObject(document)
     , m_imageLoader(makeUniqueWithoutRefCountedCheck<HTMLImageLoader>(*this))
-    , m_imageDevicePixelRatio(1.0f)
+    , m_currentPixelDensity(1.0f)
 {
     ASSERT(hasTagName(imgTag));
 }
 
 Ref<HTMLImageElement> HTMLImageElement::create(Document& document)
 {
-    auto image = adoptRef(*new HTMLImageElement(imgTag, document));
+    Ref image = adoptRef(*new HTMLImageElement(imgTag, document));
     image->suspendIfNeeded();
     return image;
 }
 
-Ref<HTMLImageElement> HTMLImageElement::create(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
+Ref<HTMLImageElement> HTMLImageElement::create(const QualifiedName& tagName, Document& document)
 {
-    auto image = adoptRef(*new HTMLImageElement(tagName, document, form));
+    Ref image = adoptRef(*new HTMLImageElement(tagName, document));
     image->suspendIfNeeded();
     return image;
 }
@@ -175,29 +180,29 @@ void HTMLImageElement::collectPresentationalHintsForAttribute(const QualifiedNam
 {
     switch (name.nodeName()) {
     case AttributeNames::widthAttr:
-        addHTMLMultiLengthToStyle(style, CSSPropertyWidth, value);
+        addHTMLMultiLengthToStyle(style, CSSPropertyID::Width, value);
         applyAspectRatioFromWidthAndHeightAttributesToStyle(value, attributeWithoutSynchronization(heightAttr), style);
         break;
     case AttributeNames::heightAttr:
-        addHTMLMultiLengthToStyle(style, CSSPropertyHeight, value);
+        addHTMLMultiLengthToStyle(style, CSSPropertyID::Height, value);
         applyAspectRatioFromWidthAndHeightAttributesToStyle(attributeWithoutSynchronization(widthAttr), value, style);
         break;
     case AttributeNames::borderAttr:
         applyBorderAttributeToStyle(value, style);
         break;
     case AttributeNames::vspaceAttr:
-        addHTMLLengthToStyle(style, CSSPropertyMarginTop, value);
-        addHTMLLengthToStyle(style, CSSPropertyMarginBottom, value);
+        addHTMLLengthToStyle(style, CSSPropertyID::MarginTop, value);
+        addHTMLLengthToStyle(style, CSSPropertyID::MarginBottom, value);
         break;
     case AttributeNames::hspaceAttr:
-        addHTMLLengthToStyle(style, CSSPropertyMarginLeft, value);
-        addHTMLLengthToStyle(style, CSSPropertyMarginRight, value);
+        addHTMLLengthToStyle(style, CSSPropertyID::MarginLeft, value);
+        addHTMLLengthToStyle(style, CSSPropertyID::MarginRight, value);
         break;
     case AttributeNames::alignAttr:
         applyAlignmentAttributeToStyle(value, style);
         break;
     case AttributeNames::valignAttr:
-        addPropertyToPresentationalHintStyle(style, CSSPropertyVerticalAlign, value);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyID::VerticalAlign, value);
         break;
     default:
         HTMLElement::collectPresentationalHintsForAttribute(name, value, style);
@@ -219,19 +224,19 @@ void HTMLImageElement::collectExtraStyleForPresentationalHints(MutableStylePrope
         return;
 
     if (!widthAttrFromSource.isNull())
-        addHTMLLengthToStyle(style, CSSPropertyWidth, widthAttrFromSource);
+        addHTMLLengthToStyle(style, CSSPropertyID::Width, widthAttrFromSource);
     else
-        addPropertyToPresentationalHintStyle(style, CSSPropertyWidth, CSSValueAuto);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyID::Width, CSSValueID::Auto);
 
     if (!heightAttrFromSource.isNull())
-        addHTMLLengthToStyle(style, CSSPropertyHeight, heightAttrFromSource);
+        addHTMLLengthToStyle(style, CSSPropertyID::Height, heightAttrFromSource);
     else
-        addPropertyToPresentationalHintStyle(style, CSSPropertyHeight, CSSValueAuto);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyID::Height, CSSValueID::Auto);
 
     if (!widthAttrFromSource.isNull() && !heightAttrFromSource.isNull())
         applyAspectRatioFromWidthAndHeightAttributesToStyle(widthAttrFromSource, heightAttrFromSource, style);
     else
-        addPropertyToPresentationalHintStyle(style, CSSPropertyAspectRatio, CSSValueAuto);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyID::AspectRatio, CSSValueID::Auto);
 }
 
 String HTMLImageElement::imageSourceURL() const
@@ -254,13 +259,13 @@ void HTMLImageElement::setBestFitURLAndDPRFromImageCandidate(const ImageCandidat
 
     auto sourceURL = imageSourceURL();
     // Only complete the URL if it's non-empty to avoid resolving "" to the document base URL.
-    m_currentURL = sourceURL.isEmpty() ? URL() : protect(document())->completeURL(sourceURL);
+    m_currentURL = sourceURL.isEmpty() ? URL() : protect(document())->encodingParseURL(sourceURL);
 
     m_currentSrc = { };
     if (candidate.density >= 0)
-        m_imageDevicePixelRatio = 1 / candidate.density;
+        m_currentPixelDensity = candidate.density;
     if (CheckedPtr renderImage = dynamicDowncast<RenderImage>(renderer()))
-        renderImage->setImageDevicePixelRatio(m_imageDevicePixelRatio);
+        renderImage->setCurrentPixelDensity(m_currentPixelDensity);
 }
 
 static String extractMIMETypeFromTypeAttributeForLookup(const String& typeAttribute)
@@ -303,8 +308,7 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
         }
 
         Ref document = this->document();
-        RefPtr documentElement = document->documentElement();
-        MQ::MediaQueryEvaluator evaluator { document->printing() ? printAtom() : screenAtom(), document.get(), documentElement ? documentElement->computedStyle() : nullptr };
+        MQ::MediaQueryEvaluator evaluator { document->printing() ? printAtom() : screenAtom(), document };
         auto& queries = source->parsedMediaAttribute(document.get());
         LOG(MediaQueries, "HTMLImageElement %p bestFitSourceFromPictureElement evaluating media queries", this);
 
@@ -349,8 +353,8 @@ void HTMLImageElement::setIsUserAgentShadowRootResource()
 
 void HTMLImageElement::evaluateDynamicMediaQueryDependencies()
 {
-    RefPtr documentElement = document().documentElement();
-    MQ::MediaQueryEvaluator evaluator { protect(document())->printing() ? printAtom() : screenAtom(), document(), documentElement ? documentElement->computedStyle() : nullptr };
+    Ref document = this->document();
+    MQ::MediaQueryEvaluator evaluator { document->printing() ? printAtom() : screenAtom(), document };
 
     auto hasChanges = [&] {
         for (auto& results : m_dynamicMediaQueryResults) {
@@ -465,9 +469,13 @@ void HTMLImageElement::attributeChanged(const QualifiedName& name, const AtomStr
         break;
     }
     case AttributeNames::loadingAttr:
-        // No action needed for eager to lazy transition.
         if (!hasLazyLoadableAttributeValue(newValue))
             loadDeferredImage();
+        else if (!isConnected() && !m_imageLoader->image()) {
+            // An eager-to-lazy transition before the element is connected may need to defer a
+            // pending error queued for an empty/whitespace source. Re-run to re-evaluate deferral.
+            m_imageLoader->updateFromElementIgnoringPreviousError();
+        }
         break;
     case AttributeNames::referrerpolicyAttr: {
         auto oldReferrerPolicy = parseReferrerPolicy(oldValue, ReferrerPolicySource::ReferrerPolicyAttribute).value_or(ReferrerPolicy::EmptyString);
@@ -524,6 +532,14 @@ std::optional<float> HTMLImageElement::autoSizesLayoutWidth() const
     return box->contentBoxWidth().toFloat();
 }
 
+void HTMLImageElement::lazyLoadIntersectionCallbackInvoked(bool isIntersecting)
+{
+    if (!isIntersecting)
+        return;
+    loadDeferredImage();
+    LazyLoadElementObserver::unobserve(*this, protect(document()));
+}
+
 const AtomString& HTMLImageElement::altText() const
 {
     // lets figure out the alt text.. magic stuff
@@ -536,15 +552,15 @@ const AtomString& HTMLImageElement::altText() const
     return attributeWithoutSynchronization(titleAttr);
 }
 
-RenderPtr<RenderElement> HTMLImageElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
+RenderPtr<RenderElement> HTMLImageElement::createElementRenderer(Style::ComputedStyle&& style, const RenderTreePosition&)
 {
     if (style.content().isData())
         return RenderElement::createFor(*this, WTF::move(style));
 
-    return createRenderer<RenderImage>(RenderObject::Type::Image, *this, WTF::move(style), nullptr, m_imageDevicePixelRatio);
+    return createRenderer<RenderImage>(RenderObject::Type::Image, *this, WTF::move(style), nullptr, m_currentPixelDensity);
 }
 
-bool HTMLImageElement::isReplaced(const RenderStyle* style) const
+bool HTMLImageElement::isReplaced(const Style::ComputedStyle* style) const
 {
     return !style || !style->content().isData();
 }
@@ -634,16 +650,51 @@ void HTMLImageElement::removingSteps(RemovalType removalType, ContainerNode& old
     FormAssociatedElement::elementRemovedFromAncestor(*this, removalType);
 }
 
+void HTMLImageElement::movingSteps(MovingType movingType, ContainerNode& oldParent)
+{
+    HTMLElement::movingSteps(movingType, oldParent);
+
+    if (!m_parsedUsemap.isNull()) {
+        if (movingType.didRemoveFromOldTreeScope)
+            protect(oldParent.treeScope())->removeImageElementByUsemap(m_parsedUsemap, *this);
+        if (movingType.didInsertIntoNewTreeScope)
+            protect(treeScope())->addImageElementByUsemap(m_parsedUsemap, *this);
+    }
+
+    if (!movingType.isSubtreeRoot)
+        return;
+
+    if (RefPtr parentPicture = dynamicDowncast<HTMLPictureElement>(parentElement())) {
+        setPictureElement(parentPicture.get());
+        selectImageSource(RelevantMutation::Yes);
+    } else if (RefPtr oldParentPicture = dynamicDowncast<HTMLPictureElement>(oldParent)) {
+        setPictureElement(nullptr);
+        selectImageSource(RelevantMutation::Yes);
+    }
+}
+
 HTMLPictureElement* HTMLImageElement::pictureElement() const
 {
     return m_pictureElement.get();
 }
-    
+
 void HTMLImageElement::setPictureElement(HTMLPictureElement* pictureElement)
 {
     m_pictureElement = pictureElement;
 }
-    
+
+LayoutSize HTMLImageElement::densityCorrectedNaturalSize() const
+{
+    // https://html.spec.whatwg.org/multipage/images.html#density-corrected-intrinsic-width-and-height
+
+    RefPtr image = m_imageLoader->image();
+    if (!image || !image->hasImage())
+        return { };
+
+    auto naturalDimensions = image->naturalDimensions(ImageOrientation::Orientation::FromImage);
+    return LayoutSize(HTMLImageDensityCorrectedSizing { m_currentPixelDensity }.resolve(naturalDimensions).size());
+}
+
 unsigned HTMLImageElement::width()
 {
     if (inRenderedDocument())
@@ -651,20 +702,18 @@ unsigned HTMLImageElement::width()
 
     if (!renderer()) {
         // check the attribute first for an explicit pixel value
-        auto optionalWidth = parseHTMLNonNegativeInteger(attributeWithoutSynchronization(widthAttr));
-        if (optionalWidth)
+        if (auto optionalWidth = parseHTMLNonNegativeInteger(attributeWithoutSynchronization(widthAttr)))
             return optionalWidth.value();
 
-        // if the image is available, use its width
-        if (RefPtr image = m_imageLoader->image())
-            return image->imageSizeForRenderer(nullptr, 1.0f).width().toUnsigned();
+        // otherwise fall back to what naturalWidth returns
+        return densityCorrectedNaturalSize().width().toUnsigned();
     }
 
     CheckedPtr box = renderBox();
     if (!box)
         return 0;
     LayoutRect contentRect = box->contentBoxRect();
-    return Style::adjustLayoutUnitForAbsoluteZoom(contentRect.width(), *box).round();
+    return Style::unapplyingZoom<LayoutUnit>(contentRect.width(), *box).round();
 }
 
 unsigned HTMLImageElement::height()
@@ -674,45 +723,28 @@ unsigned HTMLImageElement::height()
 
     if (!renderer()) {
         // check the attribute first for an explicit pixel value
-        auto optionalHeight = parseHTMLNonNegativeInteger(attributeWithoutSynchronization(heightAttr));
-        if (optionalHeight)
+        if (auto optionalHeight = parseHTMLNonNegativeInteger(attributeWithoutSynchronization(heightAttr)))
             return optionalHeight.value();
 
-        // if the image is available, use its height
-        if (RefPtr image = m_imageLoader->image())
-            return image->imageSizeForRenderer(nullptr, 1.0f).height().toUnsigned();
+        // otherwise fall back to what naturalHeight returns
+        return densityCorrectedNaturalSize().height().toUnsigned();
     }
 
     CheckedPtr box = renderBox();
     if (!box)
         return 0;
     LayoutRect contentRect = box->contentBoxRect();
-    return Style::adjustLayoutUnitForAbsoluteZoom(contentRect.height(), *box).round();
-}
-
-float HTMLImageElement::effectiveImageDevicePixelRatio() const
-{
-    RefPtr cachedImage = m_imageLoader->image();
-    if (!cachedImage)
-        return 1.0f;
-
-    RefPtr image = cachedImage->image();
-    if (image && image->drawsSVGImage())
-        return 1.0f;
-
-    return m_imageDevicePixelRatio;
+    return Style::unapplyingZoom<LayoutUnit>(contentRect.height(), *box).round();
 }
 
 unsigned HTMLImageElement::naturalWidth() const
 {
-    RefPtr image = m_imageLoader->image();
-    return image ? image->unclampedImageSizeForRenderer(protect(renderer()).get(), effectiveImageDevicePixelRatio()).width().toUnsigned() : 0;
+    return densityCorrectedNaturalSize().width().toUnsigned();
 }
 
 unsigned HTMLImageElement::naturalHeight() const
 {
-    RefPtr image = m_imageLoader->image();
-    return image ? image->unclampedImageSizeForRenderer(protect(renderer()).get(), effectiveImageDevicePixelRatio()).height().toUnsigned() : 0;
+    return densityCorrectedNaturalSize().height().toUnsigned();
 }
 
 bool HTMLImageElement::isURLAttribute(const Attribute& attribute) const
@@ -743,7 +775,7 @@ String HTMLImageElement::completeURLsInAttributeValue(const URL& base, const Att
             for (const auto& candidate : imageCandidates) {
                 auto urlString = candidate.string.toString();
                 Ref document = this->document();
-                auto completeURL = base.isNull() ? document->completeURL(urlString) : URL(base, urlString);
+                auto completeURL = base.isNull() ? document->encodingParseURL(urlString) : URL(base, urlString);
                 if (document->shouldMaskURLForBindings(completeURL)) {
                     needsToResolveURLs = true;
                     break;
@@ -847,17 +879,17 @@ void HTMLImageElement::decode(Ref<DeferredPromise>&& promise)
     return m_imageLoader->decode(WTF::move(promise));
 }
 
-void HTMLImageElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) const
+void HTMLImageElement::addSubresourceAttributeURLs(OrderedHashSet<URL>& urls) const
 {
     HTMLElement::addSubresourceAttributeURLs(urls);
 
     Ref document = this->document();
-    addSubresourceURL(urls, document->completeURL(imageSourceURL()));
+    addSubresourceURL(urls, document->encodingParseURL(imageSourceURL()));
     // FIXME: What about when the usemap attribute begins with "#"?
-    addSubresourceURL(urls, document->completeURL(attributeWithoutSynchronization(usemapAttr)));
+    addSubresourceURL(urls, document->encodingParseURL(attributeWithoutSynchronization(usemapAttr)));
 }
 
-void HTMLImageElement::addCandidateSubresourceURLs(ListHashSet<URL>& urls) const
+void HTMLImageElement::addCandidateSubresourceURLs(OrderedHashSet<URL>& urls) const
 {
     auto src = attributeWithoutSynchronization(srcAttr);
     if (!src.isEmpty()) {
@@ -902,6 +934,27 @@ bool HTMLImageElement::allowsOrientationOverride() const
     if (auto* cachedImage = this->cachedImage())
         return cachedImage->allowsOrientationOverride();
     return true;
+}
+
+ImageOrientation HTMLImageElement::orientationForSourceImage()
+{
+    if (!allowsOrientationOverride())
+        return ImageOrientation::Orientation::FromImage;
+    if (CheckedPtr renderer = this->renderer())
+        return Style::toPlatform(renderer->style().imageOrientationOutOfLine()).orientation();
+    if (CheckedPtr computedStyle = this->computedStyle())
+        return Style::toPlatform(computedStyle->imageOrientationOutOfLine()).orientation();
+    return ImageOrientation::Orientation::FromImage;
+}
+
+ImageRequestState HTMLImageElement::currentRequestState() const
+{
+    return m_imageLoader->currentRequestState();
+}
+
+RefPtr<Image> HTMLImageElement::sourceImage() const
+{
+    return image();
 }
 
 Image* HTMLImageElement::image() const
@@ -988,10 +1041,10 @@ bool HTMLImageElement::isSystemPreviewImage() const
     if (!document().settings().systemPreviewEnabled())
         return false;
 
-    auto* parent = parentElement();
-    if (auto* anchorElement = dynamicDowncast<HTMLAnchorElement>(parent))
+    RefPtr parent = parentElement();
+    if (RefPtr anchorElement = dynamicDowncast<HTMLAnchorElement>(parent))
         return anchorElement->isSystemPreviewLink();
-    if (auto* pictureElement = dynamicDowncast<HTMLPictureElement>(parent))
+    if (RefPtr pictureElement = dynamicDowncast<HTMLPictureElement>(parent))
         return pictureElement->isSystemPreviewImage();
     return false;
 }
@@ -1136,7 +1189,7 @@ bool HTMLImageElement::originClean(const SecurityOrigin& origin) const
 IntersectionObserverData& HTMLImageElement::ensureIntersectionObserverData()
 {
     if (!m_intersectionObserverData)
-        m_intersectionObserverData = makeUnique<IntersectionObserverData>();
+        lazyInitialize(m_intersectionObserverData, makeUnique<IntersectionObserverData>());
     return *m_intersectionObserverData;
 }
 

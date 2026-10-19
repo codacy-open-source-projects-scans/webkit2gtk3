@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010-2023 Google Inc. All rights reserved.
- * Copyright (C) 2008-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2026 Apple Inc. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -77,16 +77,20 @@ ScrollableArea::~ScrollableArea() = default;
 
 ScrollAnimator& ScrollableArea::scrollAnimator() const
 {
-    if (!m_scrollAnimator)
-        m_scrollAnimator = ScrollAnimator::create(const_cast<ScrollableArea&>(*this));
+    if (!m_scrollAnimator) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST m_scrollAnimator = ScrollAnimator::create(const_cast<ScrollableArea&>(*this));
+    }
 
     return *m_scrollAnimator.get();
 }
 
 ScrollbarsController& ScrollableArea::scrollbarsController() const
 {
-    if (!m_scrollbarsController)
-        const_cast<ScrollableArea&>(*this).internalCreateScrollbarsController();
+    if (!m_scrollbarsController) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST const_cast<ScrollableArea&>(*this).internalCreateScrollbarsController();
+    }
     RELEASE_ASSERT(m_scrollbarsController);
     return *m_scrollbarsController.get();
 }
@@ -94,8 +98,10 @@ ScrollbarsController& ScrollableArea::scrollbarsController() const
 void ScrollableArea::internalCreateScrollbarsController()
 {
     if (mockScrollbarsControllerEnabled()) {
-        auto mockController = makeUnique<ScrollbarsControllerMock>(const_cast<ScrollableArea&>(*this), [this](const String& message) {
-            logMockScrollbarsControllerMessage(message);
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST auto mockController = makeUnique<ScrollbarsControllerMock>(const_cast<ScrollableArea&>(*this), [weakThis = WeakPtr { *this }](const String& message) {
+            if (CheckedPtr protectedThis = weakThis)
+                protectedThis->logMockScrollbarsControllerMessage(message);
         });
         setScrollbarsController(WTF::move(mockController));
     } else
@@ -104,7 +110,8 @@ void ScrollableArea::internalCreateScrollbarsController()
 
 void ScrollableArea::createScrollbarsController()
 {
-    auto controller = ScrollbarsController::create(const_cast<ScrollableArea&>(*this));
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST auto controller = ScrollbarsController::create(const_cast<ScrollableArea&>(*this));
     setScrollbarsController(WTF::move(controller));
 }
 
@@ -118,6 +125,7 @@ void ScrollableArea::setScrollOrigin(const IntPoint& origin)
     if (m_scrollOrigin != origin) {
         m_scrollOrigin = origin;
         m_scrollOriginChanged = true;
+        scrollOriginDidChange();
     }
 }
 
@@ -154,11 +162,15 @@ bool ScrollableArea::scroll(ScrollDirection direction, ScrollGranularity granula
         step = adjustVerticalPageScrollStepForFixedContent(step);
 
     auto scrollDelta = step * stepCount;
-    
+
     if (direction == ScrollDirection::ScrollUp || direction == ScrollDirection::ScrollLeft)
         scrollDelta = -scrollDelta;
 
-    return scrollAnimator().singleAxisScroll(axis, scrollDelta, ScrollAnimator::ScrollBehavior::RespectScrollSnap);
+    EnumSet<ScrollAnimator::ScrollBehavior> behavior = ScrollAnimator::ScrollBehavior::RespectScrollSnap;
+    if (granularity == ScrollGranularity::Page)
+        behavior.add(ScrollAnimator::ScrollBehavior::Paged);
+
+    return scrollAnimator().singleAxisScroll(axis, scrollDelta, behavior);
 }
 
 void ScrollableArea::beginKeyboardScroll(const KeyboardScroll& scrollData)
@@ -187,8 +199,16 @@ void ScrollableArea::scrollToPositionWithAnimation(const FloatPoint& position, c
 {
     LOG_WITH_STREAM(Scrolling, stream << "ScrollableArea " << this << " scrollToPositionWithAnimation " << position);
 
-    if (scrollAnimationStatus() == ScrollAnimationStatus::Animating)
+    if (scrollAnimationStatus() == ScrollAnimationStatus::Animating) {
+        // If a smooth scroll animation is already running, retarget it to the new
+        // destination instead of cancelling it. Cancelling tears the animation down,
+        // which prematurely fires a scrollend event at the current intermediate position
+        // rather than running to the new destination. Fall back to cancellation when
+        // there is no active main-thread animation to retarget.
+        if (scrollAnimator().retargetRunningAnimation(position))
+            return;
         scrollAnimator().cancelAnimations();
+    }
 
     if (position == scrollPosition())
         return;
@@ -450,8 +470,8 @@ void ScrollableArea::availableContentSizeChanged(AvailableSizeChangeReason)
 
 bool ScrollableArea::hasOverlayScrollbars() const
 {
-    return (verticalScrollbar() && verticalScrollbar()->isOverlayScrollbar())
-        || (horizontalScrollbar() && horizontalScrollbar()->isOverlayScrollbar());
+    return (verticalScrollbar() && protect(verticalScrollbar())->isOverlayScrollbar())
+        || (horizontalScrollbar() && protect(horizontalScrollbar())->isOverlayScrollbar());
 }
 
 bool ScrollableArea::canShowNonOverlayScrollbars() const
@@ -653,14 +673,14 @@ void ScrollableArea::resnapAfterLayout()
     if (!horizontalScrollbar() || horizontalScrollbar()->pressedPart() == ScrollbarPart::NoPart) {
         const auto& horizontal = info->horizontalSnapOffsets;
         auto activeHorizontalIndex = currentHorizontalSnapPointIndex();
-        if (activeHorizontalIndex)
+        if (activeHorizontalIndex && !info->snapOffsetCoversSnapport(horizontal[*activeHorizontalIndex], ScrollEventAxis::Horizontal, currentOffset.x(), visibleWidth()))
             correctedOffset.setX(horizontal[*activeHorizontalIndex].offset.toInt());
     }
 
     if (!verticalScrollbar() || verticalScrollbar()->pressedPart() == ScrollbarPart::NoPart) {
         const auto& vertical = info->verticalSnapOffsets;
         auto activeVerticalIndex = currentVerticalSnapPointIndex();
-        if (activeVerticalIndex)
+        if (activeVerticalIndex && !info->snapOffsetCoversSnapport(vertical[*activeVerticalIndex], ScrollEventAxis::Vertical, currentOffset.y(), visibleHeight()))
             correctedOffset.setY(vertical[*activeVerticalIndex].offset.toInt());
     }
 
@@ -740,12 +760,12 @@ RectEdges<bool> ScrollableArea::edgePinnedState() const
 
 int ScrollableArea::horizontalScrollbarIntrusion() const
 {
-    return verticalScrollbar() ? verticalScrollbar()->occupiedWidth() : 0;
+    return verticalScrollbar() ? protect(verticalScrollbar())->occupiedWidth() : 0;
 }
 
 int ScrollableArea::verticalScrollbarIntrusion() const
 {
-    return horizontalScrollbar() ? horizontalScrollbar()->occupiedHeight() : 0;
+    return horizontalScrollbar() ? protect(horizontalScrollbar())->occupiedHeight() : 0;
 }
 
 IntSize ScrollableArea::scrollbarIntrusion() const
@@ -956,10 +976,14 @@ LayoutRect ScrollableArea::getRectToExposeForScrollIntoView(const LayoutRect& vi
             scrollX = alignX.getHiddenBehavior();
     }
 
-    // If we're trying to align to the closest edge, and the exposeRect is further right
-    // than the visibleBounds, and not bigger than the visible area, then align with the right.
-    if (scrollX == ScrollAlignment::Behavior::AlignToClosestEdge && exposeRect.maxX() > visibleBounds.maxX() && exposeRect.width() < visibleBounds.width())
-        scrollX = ScrollAlignment::Behavior::AlignRight;
+    if (scrollX == ScrollAlignment::Behavior::AlignToClosestEdge) {
+        // The closest edge is the right in two cases:
+        // (1) exposeRect is to the right of and smaller than visibleBounds.
+        // (2) exposeRect is to the left of and larger than visibleBounds.
+        if ((exposeRect.maxX() > visibleBounds.maxX() && exposeRect.width() < visibleBounds.width())
+            || (exposeRect.maxX() < visibleBounds.maxX() && exposeRect.width() > visibleBounds.width()))
+            scrollX = ScrollAlignment::Behavior::AlignRight;
+    }
 
     // Given the X behavior, compute the X coordinate.
     LayoutUnit x;
@@ -996,10 +1020,14 @@ LayoutRect ScrollableArea::getRectToExposeForScrollIntoView(const LayoutRect& vi
             scrollY = alignY.getHiddenBehavior();
     }
 
-    // If we're trying to align to the closest edge, and the exposeRect is further down
-    // than the visibleBounds, and not bigger than the visible area, then align with the bottom.
-    if (scrollY == ScrollAlignment::Behavior::AlignToClosestEdge && exposeRect.maxY() > visibleBounds.maxY() && exposeRect.height() < visibleBounds.height())
-        scrollY = ScrollAlignment::Behavior::AlignBottom;
+    if (scrollY == ScrollAlignment::Behavior::AlignToClosestEdge) {
+        // The closest edge is the bottom in two cases:
+        // (1) exposeRect is below and smaller than visibleBounds.
+        // (2) exposeRect is above and larger than visibleBounds.
+        if ((exposeRect.maxY() > visibleBounds.maxY() && exposeRect.height() < visibleBounds.height())
+            || (exposeRect.maxY() < visibleBounds.maxY() && exposeRect.height() > visibleBounds.height()))
+            scrollY = ScrollAlignment::Behavior::AlignBottom;
+    }
 
     // Given the Y behavior, compute the Y coordinate.
     LayoutUnit y;

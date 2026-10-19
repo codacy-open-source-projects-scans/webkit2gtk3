@@ -63,27 +63,27 @@ public:
 
     ~WebMesh();
 
-    bool NODELETE isValid() const;
-    void NODELETE render(uint32_t textureIndex, Function<void(bool)>&&) const;
-    void NODELETE update(Vector<WebModel::UpdateMeshDescriptor>&&);
-    void NODELETE updateTexture(Vector<WebModel::UpdateTextureDescriptor>&&);
-    void NODELETE updateMaterial(Vector<WebModel::UpdateMaterialDescriptor>&&);
-    void NODELETE setTransform(const simd_float4x4&);
-    void NODELETE setFOV(float);
-    void NODELETE setBackgroundColor(const simd_float3&);
-    void NODELETE setEnvironmentMap(const WebModel::UpdateTextureDescriptor&);
-    void NODELETE play(bool);
-    void NODELETE updateRenderBuffers(const WebModel::ResizeMeshDescriptor&);
+    bool LEGACY_NODELETE isValid() const;
+    void LEGACY_NODELETE render(uint32_t textureIndex, Function<void(bool)>&&) const;
+    void LEGACY_NODELETE update(Vector<WebModel::UpdateMeshDescriptor>&&);
+    void LEGACY_NODELETE updateTexture(Vector<WebModel::UpdateTextureDescriptor>&&);
+    void LEGACY_NODELETE updateMaterial(Vector<WebModel::UpdateMaterialDescriptor>&&);
+    void LEGACY_NODELETE setTransform(const simd_float4x4&);
+    void LEGACY_NODELETE setFOV(float);
+    void LEGACY_NODELETE setEnvironmentMap(WebModel::UpdateTextureDescriptor&&);
+    void LEGACY_NODELETE play(bool);
+    void LEGACY_NODELETE updateRenderBuffers(const WebModel::ResizeMeshDescriptor&);
     void processRemovals(Vector<WebModel::TypedResourceId>&& meshRemovals, Vector<WebModel::TypedResourceId>&& materialRemovals, Vector<WebModel::TypedResourceId>&& textureRemovals, CompletionHandler<void(bool)>&&);
 
 private:
     WebMesh(const WebModelCreateMeshDescriptor&);
 
     RetainPtr<NSMutableArray> m_textures;
+    const bool m_standardDynamicRange { false };
 
 #if ENABLE(GPU_PROCESS_MODEL)
     RetainPtr<WKBridgeReceiver> m_receiver;
-    RetainPtr<NSUUID> m_meshIdentifier;
+    const RetainPtr<NSUUID> m_meshIdentifier;
     mutable bool m_meshDataExists { false };
     std::optional<simd_float4x4> m_transform;
 #endif

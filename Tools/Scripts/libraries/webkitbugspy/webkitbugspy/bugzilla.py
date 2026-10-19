@@ -20,7 +20,9 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import base64
 import calendar
+import mimetypes
 import re
 import sys
 import time
@@ -47,6 +49,11 @@ class Tracker(GenericTracker):
     ]
     NAME = 'Bugzilla'
     DEFAULT_TIMEOUT = 30
+    MAX_SUMMARY_LENGTH = 255
+    # Bugzilla's invalid_login_or_password and account_disabled; it also answers HTTP 401 for errors that are not a refused login.
+    FAILED_LOGIN_CODES = (300, 301)
+    # FIXME: We should make this class project agnostic by specifying this in trackers.json.
+    DEFAULT_VERSION = 'WebKit Nightly Build'
 
     # Security keywords to detect in title/description.
     # These trigger a prompt to use Security product.
@@ -175,6 +182,7 @@ class Tracker(GenericTracker):
         super(Tracker, self).__init__(users=users, redact=redact, redact_exemption=redact_exemption, hide_title=hide_title, timeout=timeout or self.DEFAULT_TIMEOUT)
 
         self._logins_left = login_attempts + 1 if login_attempts else 1
+        self._projects = None
         self.session = requests.Session()
         match = self.ROOT_RE.match(url)
         if not match:
@@ -210,8 +218,7 @@ class Tracker(GenericTracker):
                 query='names={name}'.format(name=username or email or name),
             )), timeout=self.timeout,
         )
-        if response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
+        self._count_failed_login(response)
         response = response.json().get('users') if response.status_code // 100 == 2 else None
         if not response:
             return self.users.create(
@@ -268,6 +275,20 @@ class Tracker(GenericTracker):
             query='&{}'.format(query) if query else '',
         )
 
+    @staticmethod
+    def _error_code(response):
+        try:
+            body = response.json()
+        except ValueError:
+            return None
+        return body.get('code') if isinstance(body, dict) else None
+
+    def _count_failed_login(self, response):
+        if response is None or response.status_code // 100 != 4 or not self._logins_left:
+            return
+        if self._error_code(response) in self.FAILED_LOGIN_CODES:
+            self._logins_left -= 1
+
     @webkitcorepy.decorators.Memoize()
     def me(self):
         username, _ = self.credentials(required=True)
@@ -287,11 +308,10 @@ class Tracker(GenericTracker):
                 '{}/rest/bug/{}{}'.format(self.url, issue.id, self._login_arguments(required=False)),
                 timeout=self.timeout,
             )
-            if response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
-                if response.json().get('code') == 101:
-                    sys.stderr.write("{}\n".format(response.json().get('message')))
-                    return None
+            self._count_failed_login(response)
+            if response.status_code // 100 == 4 and self._error_code(response) == 101:
+                sys.stderr.write("{}\n".format(response.json().get('message')))
+                return None
             response = response.json().get('bugs', []) if response.status_code == 200 else None
             if response:
                 response = response[0]
@@ -340,8 +360,7 @@ class Tracker(GenericTracker):
                 '{}/rest/bug/{}/comment{}'.format(self.url, issue.id, self._login_arguments(required=False)),
                 timeout=self.timeout,
             )
-            if response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
+            self._count_failed_login(response)
             if response.status_code == 200:
                 response = response.json().get('bugs', {}).get(str(issue.id), {}).get('comments', None)
             else:
@@ -383,8 +402,7 @@ class Tracker(GenericTracker):
                     query=self._login_arguments(required=False, query='include_fields=see_also'),
                 ), timeout=self.timeout,
             )
-            if response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
+            self._count_failed_login(response)
             response = response.json().get('bugs', []) if response.status_code == 200 else None
             if response:
                 for link in response[0].get('see_also', []):
@@ -403,8 +421,7 @@ class Tracker(GenericTracker):
                     query=self._login_arguments(required=False, query='id={}'.format(issue.id)),
                 ), timeout=self.timeout,
             )
-            if response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
+            self._count_failed_login(response)
             issue._duplicates = []
             data = self.BugzillaPageParser.parse(response.text) if response.status_code // 100 == 2 else {}
             for dupe_id in data.get('duplicates') or []:
@@ -415,7 +432,46 @@ class Tracker(GenericTracker):
                 if issue.link not in refs:
                     issue._references.append(dupe)
 
+        if member == 'attachments':
+            issue._attachments = []
+            response = self.session.get(
+                '{url}/rest/bug/{id}/attachment{query}'.format(
+                    url=self.url, id=issue.id,
+                    query=self._login_arguments(required=False, query='exclude_fields=data'),
+                ), timeout=self.timeout,
+            )
+            self._count_failed_login(response)
+            attachments = response.json().get('bugs', {}).get(str(issue.id)) if response.status_code == 200 else None
+            if attachments is None:
+                sys.stderr.write("Failed to fetch attachments for '{}'\n".format(issue.link))
+            else:
+                for attachment in attachments:
+                    if attachment.get('is_obsolete'):
+                        continue
+                    issue._attachments.append(Issue.Attachment(
+                        name=attachment.get('file_name'),
+                        content_type=attachment.get('content_type'),
+                        contents=lambda id=attachment.get('id'): self._attachment_contents(id),
+                    ))
+
         return issue
+
+    def _attachment_contents(self, attachment_id):
+        '''Download a single attachment's bytes, or None. Fetched lazily so that listing an issue's
+        attachments does not download every attachment's content.'''
+        response = self.session.get(
+            '{url}/rest/bug/attachment/{id}{query}'.format(
+                url=self.url, id=attachment_id,
+                query=self._login_arguments(required=False, query='include_fields=data'),
+            ), timeout=self.timeout,
+        )
+        self._count_failed_login(response)
+        if response.status_code // 100 != 2:
+            sys.stderr.write('Failed to download attachment {}\n'.format(attachment_id))
+            return None
+        data = response.json().get('attachments', {}).get(str(attachment_id), {}).get('data')
+        return base64.b64decode(data) if data is not None else None
+
 
     def set(self, issue, assignee=None, opened=None, why=None, project=None, component=None, version=None, original=None, keywords=None, source_changes=None, state=None, substate=None, cc=None, see_also=None, **properties):
         update_dict = dict()
@@ -447,14 +503,15 @@ class Tracker(GenericTracker):
             update_dict['comment'] = dict(body=why)
 
         if project or component or version:
-            if not project and len(self.projects) == 1:
-                project = list(self.projects.keys())[0]
+            projects = self.projects
+            if not project and len(projects) == 1:
+                project = list(projects.keys())[0]
             if not project:
                 raise ValueError('No project provided')
-            if not self.projects.get(project):
+            if not projects.get(project):
                 raise ValueError("'{}' is not a recognized project".format(project))
 
-            components = sorted(self.projects.get(project, {}).get('components', {}).keys())
+            components = sorted(projects.get(project, {}).get('components', {}).keys())
             if not component and len(components) == 1:
                 component = components[0]
             if not component:
@@ -464,9 +521,9 @@ class Tracker(GenericTracker):
 
             versions = []
             if component:
-                versions = self.projects.get(project, {}).get('components', {}).get(component, {}).get('versions', [])
+                versions = projects.get(project, {}).get('components', {}).get(component, {}).get('versions', [])
             if not versions:
-                versions = self.projects.get(project, {}).get('versions', [])
+                versions = projects.get(project, {}).get('versions', [])
             if not version:
                 version = versions[0]
             if version not in versions:
@@ -496,9 +553,8 @@ class Tracker(GenericTracker):
                 )
             except RuntimeError as e:
                 sys.stderr.write('{}\n'.format(e))
-            if response and response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
-            if not response or response.status_code // 100 != 2:
+            self._count_failed_login(response)
+            if response is None or response.status_code // 100 != 2:
                 if assignee:
                     issue._assignee = None
                 if opened is not None:
@@ -534,9 +590,8 @@ class Tracker(GenericTracker):
         except RuntimeError as e:
             sys.stderr.write('{}\n'.format(e))
 
-        if response and response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
-        if not response or response.status_code // 100 != 2:
+        self._count_failed_login(response)
+        if response is None or response.status_code // 100 != 2:
             sys.stderr.write("Failed to add comment to '{}'\n".format(issue))
             return None
 
@@ -551,85 +606,116 @@ class Tracker(GenericTracker):
 
         return result
 
+    def add_attachment(self, issue, name, data, content_type=None, summary=None):
+        content_type = content_type or mimetypes.guess_type(name)[0] or 'application/octet-stream'
+        response = self.session.post(
+            '{}/rest/bug/{}/attachment{}'.format(self.url, issue.id, self._login_arguments(required=True)),
+            json=dict(
+                ids=[issue.id],
+                data=base64.b64encode(data).decode('ascii'),
+                file_name=name,
+                summary=summary or name,
+                content_type=content_type,
+            ),
+            timeout=self.timeout,
+        )
+        self._count_failed_login(response)
+        if response.status_code // 100 != 2:
+            try:
+                message = response.json().get('message') or response.text
+            except (AttributeError, ValueError):
+                message = response.text
+            message = message or getattr(response, 'reason', None)
+            description = 'Bugzilla attachment POST returned {}'.format(response.status_code)
+            raise RuntimeError('{}: {}'.format(description, message) if message else description)
+
+        result = Issue.Attachment(name=name, content_type=content_type, contents=data)
+        if issue._attachments is not None:
+            issue._attachments.append(result)
+        return result
+
+    RELATIONS = ('depends_on', 'blocks', 'regressed_by', 'regressions')
+
     def related_issue_id(self, issue):
         if isinstance(issue.tracker, Tracker):
             return issue.id
         else:
             raise TypeError('Cannot relate issues of different types.')
 
-    def relate(self, issue, depends_on=None, blocks=None, regressed_by=None, regressions=None, **relations):
-        if relations:
-            raise TypeError("'{}' is an invalid relation".format(list(relations.keys())[0]))
+    def _modify_relations(self, issue, action, relations):
+        if invalid := [relation for relation in relations if relation not in self.RELATIONS]:
+            raise TypeError(f"'{invalid[0]}' is an invalid relation")
 
-        update_dict = dict()
-        update_dict['ids'] = [issue.id]
-        if depends_on:
-            update_dict['depends_on'] = {'add': [self.related_issue_id(depends_on)]}
-        if blocks:
-            update_dict['blocks'] = {'add': [self.related_issue_id(blocks)]}
-        if regressed_by:
-            update_dict['regressed_by'] = {'add': [self.related_issue_id(regressed_by)]}
-        if regressions:
-            update_dict['regressions'] = {'add': [self.related_issue_id(regressions)]}
+        update_dict = {'ids': [issue.id]}
+        for relation, related in relations.items():
+            if related:
+                update_dict[relation] = {action: [self.related_issue_id(related)]}
 
         response = None
         try:
             response = self.session.put(
-                '{}/rest/bug/{}{}'.format(self.url, issue.id, self._login_arguments(required=True)),
+                f'{self.url}/rest/bug/{issue.id}{self._login_arguments(required=True)}',
                 json=update_dict,
                 timeout=self.timeout,
             )
         except requests.exceptions.RequestException as e:
-            sys.stderr.write('Request Error: {}\n'.format(e))
-        if response and response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
-        if not response or response.status_code // 100 != 2:
-            sys.stderr.write("Failed to modify '{}'\n".format(issue))
+            sys.stderr.write(f'Request Error: {e}\n')
+        self._count_failed_login(response)
+        if response is None or response.status_code // 100 != 2:
+            sys.stderr.write(f"Failed to modify '{issue}'\n")
             return None
 
         if not issue._related:
             self.populate(issue, 'related')
-        else:
-            if depends_on:
-                issue._related['depends_on'].append(depends_on)
-            if blocks:
-                issue._related['blocks'].append(blocks)
-            if regressed_by:
-                issue._related['regressed_by'].append(regressed_by)
-            if regressions:
-                issue._related['regressions'].append(regressions)
+            return issue
+
+        for relation, related in relations.items():
+            if not related:
+                continue
+            existing = issue._related.setdefault(relation, [])
+            if action == 'add' and related not in existing:
+                existing.append(related)
+            elif action == 'remove' and related in existing:
+                existing.remove(related)
         return issue
 
+    def relate(self, issue, **relations):
+        return self._modify_relations(issue, 'add', relations)
+
+    def unrelate(self, issue, **relations):
+        return self._modify_relations(issue, 'remove', relations)
+
     @property
-    @webkitcorepy.decorators.Memoize()
     def projects(self):
+        if self._projects is not None:
+            return self._projects
         response = self.session.get(
             '{}/rest/product_enterable{}'.format(self.url, self._login_arguments(required=False)),
             timeout=self.timeout,
         )
-        if response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
+        self._count_failed_login(response)
         if response.status_code // 100 != 2:
             sys.stderr.write("Failed to retrieve project list'\n")
             return dict()
 
         result = dict()
+        complete = True
         for id in response.json().get('ids', []):
             id_response = self.session.get(
                 '{}/rest/product/{}{}'.format(self.url, id, self._login_arguments(required=False)),
                 timeout=self.timeout,
             )
-            if response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
-            if response.status_code // 100 != 2:
+            self._count_failed_login(id_response)
+            if id_response.status_code // 100 != 2:
                 sys.stderr.write("Failed to query bugzilla about prod '{}'\n".format(id))
+                complete = False
                 continue
             for product in id_response.json()['products']:
                 if not product['is_active']:
                     continue
                 result[product['name']] = dict(
                     description=product['description'],
-                    versions=[version['name'] for version in product['versions']],
+                    versions=[version['name'] for version in product['versions'] if version['is_active']],
                     components=dict(),
                 )
                 for component in product['components']:
@@ -637,6 +723,9 @@ class Tracker(GenericTracker):
                         continue
                     result[product['name']]['components'][component['name']] = dict(description=component['description'])
 
+        # A failed or partial list is not kept, so the next access reads it again.
+        if complete:
+            self._projects = result
         return result
 
     def valid_keywords(self):
@@ -644,8 +733,7 @@ class Tracker(GenericTracker):
             '{}/rest/field/bug/{}{}'.format(self.url, 'keywords', self._login_arguments(required=False)),
             timeout=self.timeout,
         )
-        if response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
+        self._count_failed_login(response)
         if response.status_code // 100 != 2:
             sys.stderr.write("Failed to retrieve keywords list'\n")
             return {}
@@ -660,40 +748,48 @@ class Tracker(GenericTracker):
         if not description:
             raise ValueError('Must define description to create bug')
 
-        if not project and len(self.projects.keys()) == 1:
-            project = list(self.projects.keys())[0]
+        projects = self.projects
+        if not project and len(projects.keys()) == 1:
+            project = list(projects.keys())[0]
         elif not project:
             project = webkitcorepy.Terminal.choose(
                 'What project should the bug be associated with?',
-                options=sorted(self.projects.keys()), numbered=True,
+                options=sorted(projects.keys()), numbered=True,
             )
-        if project not in self.projects:
+        if project not in projects:
             raise ValueError("'{}' is not a recognized product on {}".format(project, self.url))
 
-        if not component and len(self.projects[project]['components'].keys()) == 1:
-            component = list(self.projects[project]['components'].keys())[0]
+        if not component and len(projects[project]['components'].keys()) == 1:
+            component = list(projects[project]['components'].keys())[0]
         elif not component:
             component = webkitcorepy.Terminal.choose(
                 "What component in '{}' should the bug be associated with?".format(project),
-                options=sorted(self.projects[project]['components'].keys()), numbered=True,
+                options=sorted(projects[project]['components'].keys()), numbered=True,
             )
-        if component not in self.projects[project]['components']:
+        if component not in projects[project]['components']:
             raise ValueError("'{}' is not a recognized component in '{}'".format(component, project))
 
-        if not version:
-            # This is the default option, aligned to webkit-patch behavior.
-            # FIXME: We should make this class project agnostic by specifying this in trackers.json.
-            version = "WebKit Nightly Build"
-            if version not in self.projects[project]['versions']:
-                # If the default option does not exist on the list, we pick the last one from versions.
-                version = self.projects[project]['versions'][-1]
-        if version not in self.projects[project]['versions']:
-            raise ValueError("'{}' is not a recognized version for '{}'".format(version, project))
+        versions = projects[project]['versions']
+        if not versions:
+            raise ValueError("'{}' has no active versions on {}".format(project, self.url))
+        if version not in versions:
+            fallback = self.DEFAULT_VERSION if self.DEFAULT_VERSION in versions else versions[-1]
+            # A caller may inherit a version from an existing bug (git-webkit revert does), and that
+            # version may since have been retired. Bugzilla rejects inactive versions, so fall back
+            # to the default instead of failing to file the bug.
+            if version:
+                sys.stderr.write("'{}' is not an active version for '{}', using '{}' instead\n".format(
+                    version, project, fallback,
+                ))
+            version = fallback
 
         keywords = keywords or []
         for keyword in keywords:
             if keyword not in self.valid_keywords():
                 raise ValueError(f"'{keyword}' is not a valid keyword for '{project}'")
+
+        if len(title) > self.MAX_SUMMARY_LENGTH:
+            title = title[:self.MAX_SUMMARY_LENGTH - 3] + '...'
 
         params = dict(
             summary=title,
@@ -716,11 +812,10 @@ class Tracker(GenericTracker):
             )
         except RuntimeError as e:
             sys.stderr.write('{}\n'.format(e))
-        if response and response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
-        if not response or response.status_code // 100 != 2:
+        self._count_failed_login(response)
+        if response is None or response.status_code // 100 != 2:
             sys.stderr.write("Failed to create bug: {}\n".format(
-                response.json().get('message', '?') if response else 'Login attempts exhausted'),
+                response.json().get('message', '?') if response is not None else 'Login attempts exhausted'),
             )
             return None
         return self.issue(response.json()['id'])
@@ -780,7 +875,7 @@ class Tracker(GenericTracker):
                         raise ValueError("Radar Importer is already CC'd")
                     user_to_cc = True
 
-        did_modify_cc = False
+        expecting_import = False
         if user_to_cc or keyword_to_add:
             log.info('CCing {}'.format(self.radar_importer.name))
             response = None
@@ -799,9 +894,8 @@ class Tracker(GenericTracker):
                 )
             except RuntimeError as e:
                 sys.stderr.write('{}\n'.format(e))
-            if response and response.status_code // 100 == 4 and self._logins_left:
-                self._logins_left -= 1
-            if not response or response.status_code // 100 != 2:
+            self._count_failed_login(response)
+            if response is None or response.status_code // 100 != 2:
                 sys.stderr.write("Failed to cc {} on '{}'\n".format(self.radar_importer.name, issue))
             elif radar and isinstance(radar.tracker, RadarTracker):
                 if comment_to_make:
@@ -813,16 +907,19 @@ class Tracker(GenericTracker):
                     ))
                 return radar
             else:
-                did_modify_cc = True
+                expecting_import = True
                 issue._comments = None
                 issue._references = None
+        else:
+            # Some components CC the importer by default
+            expecting_import = 'InRadar' not in (issue.keywords or [])
 
         start = time.time()
         while start + (timeout or 60) > time.time():
             for reference in (issue.references or []):
                 if isinstance(reference.tracker, RadarTracker):
                     return reference
-            if not block or not did_modify_cc:
+            if not block or not expecting_import:
                 break
             print('Waiting until {} imports bug...'.format(self.radar_importer.name))
             time.sleep(10)
@@ -841,8 +938,7 @@ class Tracker(GenericTracker):
             timeout=self.timeout,
         )
 
-        if response.status_code // 100 == 4 and self._logins_left:
-            self._logins_left -= 1
+        self._count_failed_login(response)
 
         if response.status_code != 200:
             sys.stderr.write("Failed to fetch group '{}': HTTP {}\n".format(group_name, response.status_code))

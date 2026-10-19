@@ -19,13 +19,14 @@
  */
 #pragma once
 
-#include <WebCore/DestinationColorSpace.h>
+#include <WebCore/ColorSpace.h>
 #include <WebCore/FloatPoint3D.h>
 #include <WebCore/GraphicsTypesGL.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/TransformationMatrix.h>
 #include <memory>
+#include <wtf/AbstractRefCountedAndCanMakeWeakPtr.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/HashMap.h>
 #include <wtf/Platform.h>
@@ -56,15 +57,6 @@
 #if ENABLE(WEBXR_LAYERS)
 #include <WebCore/FloatSize.h>
 #endif
-
-namespace PlatformXR {
-class TrackingAndRenderingClient;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<PlatformXR::TrackingAndRenderingClient> : std::true_type { };
-}
 
 namespace WebCore {
 enum class XRHitTestTrackableType : uint8_t;
@@ -287,6 +279,7 @@ struct DepthRange {
 struct RequestData {
     bool isPassthroughFullyObscured;
     DepthRange depthRange;
+    Vector<LayerHandle> activeLayerHandles;
 };
 
 struct RateMapDescription {
@@ -416,7 +409,7 @@ struct FrameData {
         std::optional<LayerSetupData> layerSetup = { std::nullopt };
         uint64_t renderingFrameIndex { 0 };
         std::optional<ExternalTextureData> textureData;
-        // FIXME: <rdar://134998122> Remove when new CC lands.
+        // FIXME: <rdar://182368025> Is this still necessary?
         bool requestDepth { false };
         bool isForTesting { false };
     };
@@ -489,10 +482,13 @@ struct FrameData {
 enum class CompositionLayerType : uint8_t {
     Quad,
     Equirect,
+    Cylinder,
+    Cube,
 };
 
 enum class LayerLayout : uint8_t {
     Mono,
+    Stereo,
     StereoLeftRight,
     StereoTopBottom,
 };
@@ -525,6 +521,18 @@ struct DeviceLayer {
         FrameData::Pose poseInLocalSpace;
     };
     std::optional<EquirectLayerData> equirectLayerData;
+    struct CylinderLayerData {
+        float radius;
+        float centralAngle;
+        float aspectRatio;
+        FrameData::Pose poseInLocalSpace;
+    };
+    std::optional<CylinderLayerData> cylinderLayerData;
+    struct CubeLayerData {
+        // Cube layers are mono and positioned solely by their orientation relative to the layer's space.
+        FrameData::FloatQuaternion orientation;
+    };
+    std::optional<CubeLayerData> cubeLayerData;
 #endif
 };
 
@@ -614,7 +622,7 @@ protected:
 
 using DeviceList = Vector<Ref<Device>>;
 
-class TrackingAndRenderingClient : public CanMakeWeakPtr<TrackingAndRenderingClient> {
+class TrackingAndRenderingClient : public AbstractRefCountedAndCanMakeWeakPtr<TrackingAndRenderingClient> {
 public:
     virtual ~TrackingAndRenderingClient() = default;
 
@@ -624,6 +632,7 @@ public:
     virtual void sessionDidInitializeInputSources(Vector<FrameData::InputSource>&&) = 0;
     virtual void sessionDidEnd() = 0;
     virtual void updateSessionVisibilityState(VisibilityState) = 0;
+    virtual void sessionDidInitializeRendering(uint32_t /* width */, uint32_t /* height */, uint32_t /* arrayLength */) { }
     // FIXME: handle frame update
 };
 

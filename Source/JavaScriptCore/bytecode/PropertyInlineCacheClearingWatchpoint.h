@@ -29,10 +29,11 @@
 
 #include "AdaptiveInferredPropertyValueWatchpointBase.h"
 #include "CodeBlock.h"
+#include "GCAwareJITStubRoutine.h"
 #include "ObjectPropertyCondition.h"
 #include "PackedCellPtr.h"
+#include "PropertyInlineCache.h"
 #include "Watchpoint.h"
-#include <wtf/Bag.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/TZoneMalloc.h>
 
@@ -40,7 +41,6 @@ namespace JSC {
 
 class CodeBlock;
 class PolymorphicAccessJITStubRoutine;
-class PropertyInlineCache;
 
 class PropertyInlineCacheClearingWatchpoint final : public Watchpoint {
     WTF_MAKE_NONCOPYABLE(PropertyInlineCacheClearingWatchpoint);
@@ -87,6 +87,7 @@ class AdaptiveValuePropertyInlineCacheClearingWatchpoint final : public Adaptive
     WTF_MAKE_NONCOPYABLE(AdaptiveValuePropertyInlineCacheClearingWatchpoint);
     WTF_MAKE_TZONE_ALLOCATED(AdaptiveValuePropertyInlineCacheClearingWatchpoint);
 
+    bool isValid() const final { return !m_owner->ownerIsDead(); }
     void handleFire(VM&, const FireDetail&) final;
 
 public:
@@ -98,8 +99,9 @@ public:
         RELEASE_ASSERT(key.condition().kind() == PropertyCondition::Equivalence);
     }
 
-
 private:
+    AdaptiveValuePropertyInlineCacheClearingWatchpoint(ClangVTableWorkaroundTag, WatchpointSet&);
+
     PolymorphicAccessJITStubRoutine* m_owner;
     const Ref<WatchpointSet> m_watchpointSet;
 };

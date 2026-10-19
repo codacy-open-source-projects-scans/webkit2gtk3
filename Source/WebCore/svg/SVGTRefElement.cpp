@@ -31,6 +31,7 @@
 #include "RenderSVGInline.h"
 #include "SVGDocumentExtensions.h"
 #include "SVGElementInlines.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGNames.h"
 #include "ScriptDisallowedScope.h"
 #include "ShadowRoot.h"
@@ -50,14 +51,14 @@ Ref<SVGTRefElement> SVGTRefElement::create(const QualifiedName& tagName, Documen
 
 class SVGTRefTargetEventListener final : public EventListener {
 public:
-    static Ref<SVGTRefTargetEventListener> create(SVGTRefElement& trefElement)
+    static Ref<SVGTRefTargetEventListener> LEGACY_NODELETE create(SVGTRefElement& trefElement)
     {
         return adoptRef(*new SVGTRefTargetEventListener(trefElement));
     }
 
     void attach(RefPtr<Element>&& target);
     void detach();
-    bool NODELETE isAttached() const { return m_target.get(); }
+    bool LEGACY_NODELETE isAttached() const { return m_target.get(); }
 
 private:
     explicit SVGTRefTargetEventListener(SVGTRefElement& trefElement);
@@ -116,7 +117,7 @@ void SVGTRefTargetEventListener::handleEvent(ScriptExecutionContext&, Event& eve
 }
 
 inline SVGTRefElement::SVGTRefElement(const QualifiedName& tagName, Document& document)
-    : SVGTextPositioningElement(tagName, document, makeUniqueRef<PropertyRegistry>(*this))
+    : SVGTextPositioningElement(tagName, document, PropertyRegistry::singleton())
     , SVGURIReference(this)
     , m_targetListener(SVGTRefTargetEventListener::create(*this))
 {
@@ -161,7 +162,7 @@ void SVGTRefElement::detachTarget()
     // Mark the referenced ID as pending.
     auto target = SVGURIReference::targetElementFromIRIString(href(), protect(document()));
     if (!target.identifier.isEmpty())
-        treeScopeForSVGReferences().addPendingSVGResource(target.identifier, *this);
+        protect(treeScopeForSVGReferences())->addPendingSVGResource(target.identifier, protect(*this));
 }
 
 void SVGTRefElement::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason attributeModificationReason)
@@ -181,7 +182,7 @@ void SVGTRefElement::svgAttributeChanged(const QualifiedName& attrName)
     }
 }
 
-RenderPtr<RenderElement> SVGTRefElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
+RenderPtr<RenderElement> SVGTRefElement::createElementRenderer(Style::ComputedStyle&& style, const RenderTreePosition&)
 {
     return createRenderer<RenderSVGInline>(RenderObject::Type::SVGInline, *this, WTF::move(style));
 }
@@ -191,11 +192,10 @@ bool SVGTRefElement::childShouldCreateRenderer(const Node& child) const
     return child.isInShadowTree();
 }
 
-bool SVGTRefElement::rendererIsNeeded(const RenderStyle& style)
+bool SVGTRefElement::rendererIsNeeded(const Style::ComputedStyle& style)
 {
     if (parentNode()
         && (parentNode()->hasTagName(SVGNames::aTag)
-            || parentNode()->hasTagName(SVGNames::altGlyphTag)
             || parentNode()->hasTagName(SVGNames::textTag)
             || parentNode()->hasTagName(SVGNames::textPathTag)
             || parentNode()->hasTagName(SVGNames::tspanTag)))
@@ -218,12 +218,12 @@ void SVGTRefElement::buildPendingResource()
     if (!isConnected())
         return;
 
-    auto target = SVGURIReference::targetElementFromIRIString(href(), treeScopeForSVGReferences());
+    auto target = SVGURIReference::targetElementFromIRIString(href(), protect(treeScopeForSVGReferences()));
     if (!target.element) {
         if (target.identifier.isEmpty())
             return;
 
-        treeScopeForSVGReferences().addPendingSVGResource(target.identifier, *this);
+        protect(treeScopeForSVGReferences())->addPendingSVGResource(target.identifier, protect(*this));
         ASSERT(hasPendingResources());
         return;
     }
@@ -262,7 +262,7 @@ void SVGTRefElement::removingSteps(RemovalType removalType, ContainerNode& oldPa
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::SVGTRefTargetEventListener)
-    static bool NODELETE isType(const WebCore::EventListener& listener)
+    static bool LEGACY_NODELETE isType(const WebCore::EventListener& listener)
     {
         return listener.type() == WebCore::EventListener::SVGTRefTargetEventListenerType;
     }

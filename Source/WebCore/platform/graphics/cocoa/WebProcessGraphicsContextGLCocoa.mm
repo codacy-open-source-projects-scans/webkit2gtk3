@@ -40,8 +40,6 @@
 
 namespace WebCore {
 
-constexpr Seconds frameFinishedTimeout = 5_s;
-
 namespace {
 
 class DisplayBufferFence final : public PlatformCALayerDelegatedContentsFence {
@@ -83,7 +81,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(DisplayBufferFence);
 
 class DisplayBufferDisplayDelegate final : public GraphicsLayerContentsDisplayDelegate {
 public:
-    static Ref<DisplayBufferDisplayDelegate> create(bool isOpaque)
+    static Ref<DisplayBufferDisplayDelegate> LEGACY_NODELETE create(bool isOpaque)
     {
         return adoptRef(*new DisplayBufferDisplayDelegate(isOpaque));
     }

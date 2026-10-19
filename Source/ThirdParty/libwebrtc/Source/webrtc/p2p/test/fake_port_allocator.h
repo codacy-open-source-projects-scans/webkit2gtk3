@@ -32,6 +32,10 @@
 #include "rtc_base/async_packet_socket.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/ip_address.h"
+#if defined(WEBRTC_WEBKIT_BUILD)
+#include "rtc_base/logging.h"
+#endif
+#include "rtc_base/net_helpers.h"
 #include "rtc_base/net_test_helpers.h"
 #include "rtc_base/network.h"
 #include "rtc_base/socket_factory.h"
@@ -109,14 +113,14 @@ class FakePortAllocatorSession : public PortAllocatorSession {
         allocator_(allocator),
         network_thread_(network_thread),
         factory_(factory),
-        ipv4_network_("network", "unittest", IPAddress(INADDR_LOOPBACK), 32),
-        ipv6_network_("network", "unittest", IPAddress(in6addr_loopback), 64),
+        ipv4_network_("network", "unittest", GetLoopbackIP(AF_INET), 32),
+        ipv6_network_("network", "unittest", GetLoopbackIP(AF_INET6), 64),
         port_(),
         port_config_count_(0),
         stun_servers_(allocator->stun_servers()),
         turn_servers_(allocator->turn_servers()) {
-    ipv4_network_.AddIP(IPAddress(INADDR_LOOPBACK));
-    ipv6_network_.AddIP(IPAddress(in6addr_loopback));
+    ipv4_network_.AddIP(GetLoopbackIP(AF_INET));
+    ipv6_network_.AddIP(GetLoopbackIP(AF_INET6));
   }
 
   void SetCandidateFilter(uint32_t filter) override {
@@ -129,15 +133,28 @@ class FakePortAllocatorSession : public PortAllocatorSession {
           (HasIPv6Enabled() && (flags() & PORTALLOCATOR_ENABLE_IPV6))
               ? ipv6_network_
               : ipv4_network_;
-      port_.reset(TestUDPPort::Create({.env = env_,
-                                       .network_thread = network_thread_,
-                                       .socket_factory = factory_,
-                                       .network = &network,
-                                       .ice_username_fragment = username(),
-                                       .ice_password = password()},
-                                      0, 0, false));
+      port_.reset(
+          TestUDPPort::Create({.env = env_,
+                               .network_thread = network_thread_,
+                               .socket_factory = factory_,
+                               .network = &network,
+                               .ice_username_fragment = username(),
+                               .ice_password = password(),
+                               .ice_tiebreaker = allocator_->ice_tiebreaker()},
+                              0, 0, false));
+#if defined(WEBRTC_WEBKIT_BUILD)
+      // Release builds compile out the RTC_DCHECK(port_) below.  A transient
+      // UDP socket creation failure in TestUDPPort::Create() would then
+      // null-deref through the virtual SetIceTiebreaker() call and SIGABRT the
+      // entire test binary.  Fail this gathering attempt gracefully instead so
+      // one flaky port creation only fails its own test.
+      if (!port_) {
+        RTC_LOG(LS_ERROR)
+            << "TestUDPPort::Create() failed; skipping port gathering";
+        return;
+      }
+#endif
       RTC_DCHECK(port_);
-      port_->SetIceTiebreaker(allocator_->ice_tiebreaker());
       port_->SubscribePortDestroyed(
           this, [this](PortInterface* port) { OnPortDestroyed(port); });
       AddPort(port_.get());

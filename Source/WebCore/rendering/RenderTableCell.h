@@ -4,7 +4,7 @@
  *           (C) 1998 Waldo Bastian (bastian@kde.org)
  *           (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2003, 2004, 2005, 2006, 2007, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2026 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -41,8 +41,8 @@ class RenderTableCell final : public RenderBlockFlow {
     WTF_MAKE_TZONE_ALLOCATED(RenderTableCell);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderTableCell);
 public:
-    RenderTableCell(Element&, RenderStyle&&);
-    RenderTableCell(Document&, RenderStyle&&);
+    RenderTableCell(Element&, Style::ComputedStyle&&);
+    RenderTableCell(Document&, Style::ComputedStyle&&);
     virtual ~RenderTableCell();
     
     unsigned colSpan() const;
@@ -143,12 +143,12 @@ protected:
     LogicalExtentComputedValues computeLogicalHeight(LayoutUnit logicalHeight, LayoutUnit logicalTop) const override;
 
 private:
-    void styleDidChange(Style::Difference, const RenderStyle* oldStyle) override;
-    void computePreferredLogicalWidths() override;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle* oldStyle) override;
+    void computeIntrinsicLogicalWidthContributions() override;
 
     LayoutUnit containingBlockLogicalWidthForContent() const override;
 
-    static RenderPtr<RenderTableCell> createTableCellWithStyle(Document&, const RenderStyle&);
+    static RenderPtr<RenderTableCell> createTableCellWithStyle(Document&, const Style::ComputedStyle&);
 
     ASCIILiteral renderName() const override;
 
@@ -160,7 +160,7 @@ private:
     void paintMask(PaintInfo&, const LayoutPoint&) override;
 
     LayoutSize offsetFromContainer(const RenderElement&, const LayoutPoint&, bool* offsetDependsOnPoint = 0) const override;
-    std::optional<RepaintRects> computeVisibleRectsInContainer(const RepaintRects&, const RenderLayerModelObject* container, VisibleRectContext) const override;
+    std::optional<RepaintRects> computeVisibleRectsInContainer(const RepaintRects&, const RenderLayerModelObject* container, const VisibleRectContext&, VisibleRectState) const override;
 
     LayoutUnit borderHalfLeft(bool outer) const;
     LayoutUnit borderHalfRight(bool outer) const;
@@ -176,7 +176,7 @@ private:
     void setIntrinsicPaddingAfter(LayoutUnit p) { m_intrinsicPaddingAfter = p; }
     void setIntrinsicPadding(LayoutUnit before, LayoutUnit after) { setIntrinsicPaddingBefore(before); setIntrinsicPaddingAfter(after); }
 
-    bool NODELETE hasStartBorderAdjoiningTable() const;
+    bool LEGACY_NODELETE hasStartBorderAdjoiningTable() const;
     bool hasEndBorderAdjoiningTable() const;
 
     CollapsedBorderValue collapsedStartBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
@@ -202,22 +202,21 @@ private:
 
     unsigned parseRowSpanFromDOM() const;
     unsigned parseColSpanFromDOM() const;
-    unsigned calculateRowSpanForRowSpanZero() const;
+    unsigned LEGACY_NODELETE calculateRowSpanForRowSpanZero() const;
 
     void nextSibling() const = delete;
     void previousSibling() const = delete;
 
     bool hasLineIfEmpty() const final;
 
-    // Note MSVC will only pack members if they have identical types, hence we use unsigned instead of bool here.
-    unsigned m_column : 25;
-    unsigned m_cellWidthChanged : 1;
-    unsigned m_hasColSpan: 1;
-    unsigned m_hasRowSpan: 1;
-    mutable unsigned m_hasEmptyCollapsedBeforeBorder: 1;
-    mutable unsigned m_hasEmptyCollapsedAfterBorder: 1;
-    mutable unsigned m_hasEmptyCollapsedStartBorder: 1;
-    mutable unsigned m_hasEmptyCollapsedEndBorder: 1;
+    unsigned m_column : 25 { unsetColumnIndex };
+    bool m_cellWidthChanged : 1 { false };
+    bool m_hasColSpan : 1 { false };
+    bool m_hasRowSpan : 1 { false };
+    mutable bool m_hasEmptyCollapsedBeforeBorder : 1 { false };
+    mutable bool m_hasEmptyCollapsedAfterBorder : 1 { false };
+    mutable bool m_hasEmptyCollapsedStartBorder : 1 { false };
+    mutable bool m_hasEmptyCollapsedEndBorder : 1 { false };
     bool m_isComputingPreferredSize { false };
     LayoutUnit m_intrinsicPaddingBefore { 0 };
     LayoutUnit m_intrinsicPaddingAfter { 0 };

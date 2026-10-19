@@ -52,12 +52,12 @@
 #include "modules/video_coding/codecs/vp8/vp8_scalability.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
+#include "modules/video_coding/utility/frame_sampler.h"
 #include "modules/video_coding/utility/simulcast_rate_allocator.h"
 #include "modules/video_coding/utility/simulcast_utility.h"
 #include "modules/video_coding/utility/vp8_constants.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/experiments/field_trial_parser.h"
-#include "rtc_base/experiments/psnr_experiment.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/numerics/safe_conversions.h"
 #include "rtc_base/trace_event.h"
@@ -342,8 +342,7 @@ LibvpxVp8Encoder::LibvpxVp8Encoder(const Environment& env,
       max_frame_drop_interval_(ParseFrameDropInterval(env_.field_trials())),
       android_specific_threading_settings_(env_.field_trials().IsEnabled(
           "WebRTC-LibvpxVp8Encoder-AndroidSpecificThreadingSettings")),
-      psnr_experiment_(env.field_trials()),
-      psnr_frame_sampler_(psnr_experiment_.SamplingInterval()) {
+      psnr_frame_sampler_(FrameSampler::kDefaultPsnrFrameSamplingInterval) {
   raw_images_.reserve(kMaxSimulcastStreams);
   encoded_images_.reserve(kMaxSimulcastStreams);
   send_stream_.reserve(kMaxSimulcastStreams);
@@ -1023,6 +1022,8 @@ int LibvpxVp8Encoder::Encode(const VideoFrame& frame,
   if (encoded_complete_callback_ == nullptr)
     return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
 
+  // A keyframe request on any stream triggers a keyframe on all streams
+  // in order to keep the temporal layering structure aligned.
   bool key_frame_requested = false;
   for (size_t i = 0; i < key_frame_request_.size() && i < send_stream_.size();
        ++i) {
@@ -1093,8 +1094,7 @@ int LibvpxVp8Encoder::Encode(const VideoFrame& frame,
   }
 
 #if defined(WEBRTC_ENCODER_PSNR_STATS) && defined(VPX_EFLAG_CALCULATE_PSNR)
-  if (psnr_experiment_.IsEnabled() &&
-      psnr_frame_sampler_.ShouldBeSampled(frame)) {
+  if (psnr_frame_sampler_.ShouldBeSampled(frame)) {
     for (size_t i = 0; i < encoders_.size(); ++i) {
       flags[i] |= VPX_EFLAG_CALCULATE_PSNR;
     }
@@ -1493,6 +1493,13 @@ std::vector<scoped_refptr<VideoFrameBuffer>> LibvpxVp8Encoder::PrepareBuffers(
                         << " image to I420. Can't encode frame.";
       return {};
     }
+
+    // TODO: crbug.com/492213293 - Remove once the root cause is fixed.
+    if (converted_buffer->StrideU() != converted_buffer->StrideV()) {
+      RTC_LOG(LS_ERROR) << "Libvpx requires the U and V strides to be equal.";
+      return {};
+    }
+
     RTC_CHECK(converted_buffer->type() == VideoFrameBuffer::Type::kI420 ||
               converted_buffer->type() == VideoFrameBuffer::Type::kI420A);
 
@@ -1564,6 +1571,21 @@ std::vector<scoped_refptr<VideoFrameBuffer>> LibvpxVp8Encoder::PrepareBuffers(
     SetRawImagePlanes(&raw_images_[i], scaled_buffer.get());
     prepared_buffers.push_back(scaled_buffer);
   }
+
+  // TODO: crbug.com/492213293 - Remove once the root cause is fixed.
+  for (const scoped_refptr<VideoFrameBuffer>& prepared_buffer :
+       prepared_buffers) {
+    if (prepared_buffer->type() == VideoFrameBuffer::Type::kI420 ||
+        prepared_buffer->type() == VideoFrameBuffer::Type::kI420A) {
+      auto i420_buffer = prepared_buffer->GetI420();
+      RTC_DCHECK(i420_buffer);
+      if (i420_buffer->StrideU() != i420_buffer->StrideV()) {
+        RTC_LOG(LS_ERROR) << "Libvpx requires the U and V strides to be equal.";
+        return {};
+      }
+    }
+  }
+
   return prepared_buffers;
 }
 

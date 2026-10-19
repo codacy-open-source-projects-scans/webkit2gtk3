@@ -39,12 +39,12 @@
 
 namespace WebKit {
 
-using ApplicationBundleIdentifierOrAuditToken = Variant<String, Vector<uint8_t>>;
+using ApplicationBundleIdentifiersOrAuditToken = Variant<std::pair<String, String>, Vector<uint8_t>>;
 
 class PrivateClickMeasurementManager : public PCM::ManagerInterface, public CanMakeWeakPtr<PrivateClickMeasurementManager> {
     WTF_MAKE_TZONE_ALLOCATED(PrivateClickMeasurementManager);
 public:
-    static Ref<PrivateClickMeasurementManager> create(UniqueRef<PCM::Client>&&, const String& storageDirectory, const ApplicationBundleIdentifierOrAuditToken&);
+    static Ref<PrivateClickMeasurementManager> create(UniqueRef<PCM::Client>&&, const String& storageDirectory, const ApplicationBundleIdentifiersOrAuditToken&);
 
     ~PrivateClickMeasurementManager();
 
@@ -57,6 +57,7 @@ public:
     void clearForRegistrableDomain(RegistrableDomain&&, CompletionHandler<void()>&&) final;
     void migratePrivateClickMeasurementFromLegacyStorage(PrivateClickMeasurement&&, PrivateClickMeasurementAttributionType) final;
     void setDebugModeIsEnabled(bool) final;
+    void setPrivateRelayEnforcementIsEnabled(bool) final;
     void firePendingAttributionRequests();
 
     void toStringForTesting(CompletionHandler<void(String)>&&) const final;
@@ -74,7 +75,7 @@ public:
     void fetchRegistrableDomains(CompletionHandler<void(Vector<WebCore::RegistrableDomain>&&)>&&);
 
 private:
-    PrivateClickMeasurementManager(UniqueRef<PCM::Client>&&, const String& storageDirectory, const ApplicationBundleIdentifierOrAuditToken&);
+    PrivateClickMeasurementManager(UniqueRef<PCM::Client>&&, const String& storageDirectory, const ApplicationBundleIdentifiersOrAuditToken&);
 
     PCM::Store& store();
     const PCM::Store& store() const;
@@ -94,6 +95,7 @@ private:
     void clearExpired();
     bool featureEnabled() const;
     bool debugModeEnabled() const;
+    bool shouldBypassPrivateRelay() const;
     Seconds randomlyBetweenFifteenAndThirtyMinutes() const;
 
     RunLoop::Timer m_firePendingAttributionRequestsTimer;
@@ -103,7 +105,7 @@ private:
     std::optional<ApplicationBundleIdentifier> m_privateClickMeasurementAppBundleIDForTesting;
     mutable RefPtr<PCM::Store> m_store;
     String m_storageDirectory;
-    const ApplicationBundleIdentifierOrAuditToken m_applicationBundleIdentifier;
+    const ApplicationBundleIdentifiersOrAuditToken m_applicationBundleIdentifier;
     const UniqueRef<PCM::Client> m_client;
 
     struct AttributionReportTestConfig {

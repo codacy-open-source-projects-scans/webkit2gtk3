@@ -26,7 +26,7 @@
 #include "config.h"
 #include "AudioDecoderCocoa.h"
 
-#if ENABLE(WEB_CODECS) && USE(AVFOUNDATION)
+#if USE(AVFOUNDATION)
 
 #include "AudioSampleBufferConverter.h"
 #include "AudioSampleFormat.h"
@@ -66,7 +66,7 @@ class InternalAudioDecoderCocoa : public ThreadSafeRefCountedAndCanMakeThreadSaf
     WTF_MAKE_TZONE_ALLOCATED(InternalAudioDecoderCocoa);
 
 public:
-    static Ref<InternalAudioDecoderCocoa> create(AudioDecoder::OutputCallback&& outputCallback)
+    static Ref<InternalAudioDecoderCocoa> LEGACY_NODELETE create(AudioDecoder::OutputCallback&& outputCallback)
     {
         return adoptRef(*new InternalAudioDecoderCocoa(WTF::move(outputCallback)));
     }
@@ -76,7 +76,7 @@ public:
 
     using DecodePromise = AudioDecoder::DecodePromise;
 
-    Ref<DecodePromise> decode(Ref<SharedBuffer>&&, bool isKeyFrame, int64_t timestamp, std::optional<uint64_t> duration);
+    Ref<DecodePromise> decode(AudioEncodedData&&);
     Ref<GenericPromise> flush();
     void close();
 
@@ -84,7 +84,6 @@ private:
     InternalAudioDecoderCocoa(AudioDecoder::OutputCallback&&);
 
     static WorkQueue& queueSingleton() { return AudioDecoderCocoa::queueSingleton(); }
-    static void decompressedAudioOutputBufferCallback(void*, CMBufferQueueTriggerToken);
     Ref<AudioSampleBufferConverter> converter() const
     {
         assertIsCurrent(queueSingleton());
@@ -133,7 +132,7 @@ AudioDecoderCocoa::~AudioDecoderCocoa()
     });
 }
 
-Expected<std::pair<FourCharCode, std::optional<AudioStreamDescription::PCMFormat>>, String> AudioDecoderCocoa::isCodecSupported(const StringView& codecName)
+std::expected<std::pair<FourCharCode, std::optional<AudioStreamDescription::PCMFormat>>, String> AudioDecoderCocoa::isCodecSupported(const StringView& codecName)
 {
     auto codec = [](auto& codecName) -> FourCharCode {
         if (codecName.startsWith("mp4a.40.5"_s))
@@ -190,10 +189,10 @@ Expected<std::pair<FourCharCode, std::optional<AudioStreamDescription::PCMFormat
     return std::make_pair(codec, format);
 }
 
-Ref<AudioDecoder::DecodePromise> AudioDecoderCocoa::decode(EncodedData&& data)
+Ref<AudioDecoder::DecodePromise> AudioDecoderCocoa::decode(AudioEncodedData&& data)
 {
-    return invokeAsync(queueSingleton(), [data = SharedBuffer::create(data.data), isKeyFrame = data.isKeyFrame, timestamp = data.timestamp, duration = data.duration, decoder = m_internalDecoder]() mutable {
-        return decoder->decode(WTF::move(data), isKeyFrame, timestamp, duration);
+    return invokeAsync(queueSingleton(), [data = WTF::move(data).isolatedCopy(), decoder = m_internalDecoder] mutable {
+        return decoder->decode(WTF::move(data));
     });
 }
 
@@ -215,17 +214,6 @@ void AudioDecoderCocoa::close()
 {
     queueSingleton().dispatch([decoder = m_internalDecoder] {
         decoder->close();
-    });
-}
-
-void InternalAudioDecoderCocoa::decompressedAudioOutputBufferCallback(void* object, CMBufferQueueTriggerToken)
-{
-    // We can only be called from the CoreMedia callback if we are still alive.
-    RefPtr decoder = static_cast<class InternalAudioDecoderCocoa*>(object);
-
-    queueSingleton().dispatch([weakDecoder = ThreadSafeWeakPtr { *decoder }] {
-        if (RefPtr protectedDecoder = weakDecoder.get())
-            protectedDecoder->processedDecodedOutputs();
     });
 }
 
@@ -314,7 +302,12 @@ String InternalAudioDecoderCocoa::initialize(const String& codecName, const Audi
         .preSkip = preSkip
     };
 
-    m_converter = AudioSampleBufferConverter::create(decompressedAudioOutputBufferCallback, this, options);
+    m_converter = AudioSampleBufferConverter::create([weakThis = ThreadSafeWeakPtr { *this }] {
+        queueSingleton().dispatch([weakThis] {
+            if (RefPtr protectedThis = weakThis.get())
+                protectedThis->processedDecodedOutputs();
+        });
+    }, options);
     if (!m_converter)
         return "Couldn't create AudioSampleBufferConverter"_s;
 
@@ -337,15 +330,16 @@ Ref<SharedBuffer> InternalAudioDecoderCocoa::stripADTSHeader(SharedBuffer& buffe
     return buffer.getContiguousData(kADTSHeaderSize, buffer.size() - kADTSHeaderSize);
 }
 
-Ref<AudioDecoder::DecodePromise> InternalAudioDecoderCocoa::decode(Ref<SharedBuffer>&& frameData, [[maybe_unused]] bool isKeyFrame, int64_t timestamp, std::optional<uint64_t> duration)
+Ref<AudioDecoder::DecodePromise> InternalAudioDecoderCocoa::decode(AudioEncodedData&& data)
 {
     assertIsCurrent(queueSingleton());
 
-    LOG(Media, "Decoding%s frame", isKeyFrame ? " key" : "");
+    LOG(Media, "Decoding%s frame", data.isKeyFrame ? " key" : "");
 
     if (m_isClosed)
         return DecodePromise::createAndReject("Decoder is closed"_s);
 
+    Ref frameData = WTF::move(data.data);
     if (mIsAAC)
         frameData = stripADTSHeader(frameData);
 
@@ -354,9 +348,9 @@ Ref<AudioDecoder::DecodePromise> InternalAudioDecoderCocoa::decode(Ref<SharedBuf
         return DecodePromise::createAndReject("Couldn't create CMBlockBuffer"_s);
 
     CMSampleTimingInfo packetTiming = {
-        .duration = PAL::CMTimeMake(duration.value_or(0), 1000000), // CoreMedia does not deal with a CMSampleBuffer with a duration set to either invalid or indefinite. So use 0 instead if no duration has been provided.
-        .presentationTimeStamp = PAL::CMTimeMake(timestamp, 1000000),
-        .decodeTimeStamp = PAL::CMTimeMake(timestamp, 1000000)
+        .duration = PAL::CMTimeMake(data.duration.value_or(0), 1000000), // CoreMedia does not deal with a CMSampleBuffer with a duration set to either invalid or indefinite. So use 0 instead if no duration has been provided.
+        .presentationTimeStamp = PAL::CMTimeMake(data.timestamp, 1000000),
+        .decodeTimeStamp = PAL::CMTimeMake(data.timestamp, 1000000)
     };
     size_t packetSize = frameData->size();
 
@@ -397,14 +391,10 @@ void InternalAudioDecoderCocoa::close()
         return;
     m_isClosed = true;
 
-    RefPtr converter = std::exchange(m_converter, { });
-    if (!converter)
-        return;
-    // We keep a reference to ourselves until the converter has been marked as finished. This guarantees that no
-    // callback will occur after we are .
-    converter->finish()->whenSettled(queueSingleton(), [protectedThis = Ref { *this }] { });
+    if (RefPtr converter = std::exchange(m_converter, { }))
+        converter->finish();
 }
 
 } // namespace WebCore
 
-#endif // ENABLE(WEB_CODECS) && USE(AVFOUNDATION)
+#endif // USE(AVFOUNDATION)

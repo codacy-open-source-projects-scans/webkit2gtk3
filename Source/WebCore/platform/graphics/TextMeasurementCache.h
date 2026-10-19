@@ -33,9 +33,9 @@
 #include <wtf/Hasher.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/ZippedRange.h>
+#include <wtf/text/RapidHash.h>
 #include <wtf/text/StringCommon.h>
 #include <wtf/text/StringImpl.h>
-#include <wtf/text/WYHash.h>
 #include <wtf/unicode/CharacterNames.h>
 
 namespace WebCore {
@@ -85,7 +85,7 @@ private:
                 copySmallCharacters(std::span { m_characters }, string.span8());
             else
                 copySmallCharacters(std::span { m_characters }, string.span16());
-            m_hashAndLength = WYHash::computeHashAndMaskTop8Bits(std::span<const char16_t> { m_characters }.first(s_capacity)) | (length << 24);
+            m_hashAndLength = RapidHash::computeHashAndMaskTop8Bits(std::span<const char16_t> { m_characters }.first(length)) | (length << 24);
         }
 
         const char16_t* characters() const LIFETIME_BOUND { return m_characters.data(); }
@@ -97,7 +97,12 @@ private:
         // Empty and deleted values have lengths that are not equal to any valid length.
         static constexpr bool safeToCompareToHashTableEmptyOrDeletedValue = true;
 
-        friend bool operator==(const SmallStringKey&, const SmallStringKey&) = default;
+        friend bool operator==(const SmallStringKey& a, const SmallStringKey& b)
+        {
+            if (a.m_hashAndLength != b.m_hashAndLength)
+                return false;
+            return a.isHashTableEmptyValue() || a.isHashTableDeletedValue() || equal(std::span { a.m_characters }.first(a.length()), std::span { b.m_characters }.first(b.length()));
+        }
 
     private:
         static constexpr unsigned s_capacity = MaxTextLength;
@@ -181,6 +186,8 @@ public:
         m_singleCharMap.clear();
         m_map.clear();
     }
+
+    bool isEmpty() const { return m_singleCharMap.isEmpty() && m_map.isEmpty(); }
 
 private:
 

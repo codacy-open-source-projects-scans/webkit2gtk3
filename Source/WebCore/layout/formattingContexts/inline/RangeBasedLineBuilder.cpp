@@ -27,13 +27,13 @@
 #include "RangeBasedLineBuilder.h"
 
 #include "InlineFormattingContext.h"
-#include "RenderStyle+GettersInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleComputedStyle+InitialInlines.h"
 
 namespace WebCore {
 namespace Layout {
 
-static inline bool NODELETE hasInlineBoxesOnly(size_t inlineBoxCount, size_t numberOfInlineItems)
+static inline bool LEGACY_NODELETE hasInlineBoxesOnly(size_t inlineBoxCount, size_t numberOfInlineItems)
 {
     return !(numberOfInlineItems % 2) && inlineBoxCount == numberOfInlineItems / 2;
 }

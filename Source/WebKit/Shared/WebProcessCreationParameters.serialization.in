@@ -81,6 +81,7 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
     bool attrStyleEnabled;
     bool shouldThrowExceptionForGlobalConstantRedeclaration;
     WebCore::CrossOriginMode crossOriginMode;
+    WebKit::JSCOptionsForWebProcess jscOptions;
 
 #if ENABLE(SERVICE_CONTROLS)
     bool hasImageServices;
@@ -137,14 +138,16 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
 #if USE(WPE_RENDERER)
     bool isServiceWorkerProcess;
     UnixFileDescriptor hostClientFileDescriptor;
-    CString implementationLibraryName;
+    UTF8CString implementationLibraryName;
 #endif
 
     std::optional<WebKit::WebProcessDataStoreParameters> websiteDataStoreParameters;
 
-    std::optional<WebKit::SandboxExtensionHandle> mobileGestaltExtensionHandle;
+#if (PLATFORM(MAC) || PLATFORM(MACCATALYST)) && !ENABLE(LAUNCHSERVICES_SANDBOX_EXTENSION_BLOCKING)
     std::optional<WebKit::SandboxExtensionHandle> launchServicesExtensionHandle;
-#if (PLATFORM(MAC) || PLATFORM(MACCATALYST)) && HAVE(VIDEO_RESTRICTED_DECODING)
+#endif
+
+#if (PLATFORM(MAC) || PLATFORM(MACCATALYST)) && HAVE(VIDEO_RESTRICTED_DECODING) && !ENABLE(TRUSTD_BLOCKING_IN_WEBCONTENT)
     WebKit::SandboxExtensionHandle trustdExtensionHandle;
 #endif
 #if HAVE(VIDEO_RESTRICTED_DECODING)
@@ -164,10 +167,12 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
 #if PLATFORM(IOS_FAMILY)
     PAL::UserInterfaceIdiom currentUserInterfaceIdiom;
     bool supportsPictureInPicture;
-    WebCore::RenderThemeIOS::CSSValueToSystemColorMap cssValueToSystemColorMap;
+    WebCore::CSSValueToSystemColorMap cssValueToSystemColorMap;
     WebCore::Color focusRingColor;
     String localizedDeviceModel;
     String contentSizeCategory;
+#endif
+
 #endif
 
 #if USE(GBM)
@@ -177,7 +182,7 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
 #if PLATFORM(GTK) || PLATFORM(WPE)
     OptionSet<WebKit::RendererBufferTransportMode> rendererBufferTransportMode;
     WebCore::SystemSettings::State systemSettings;
-    std::optional<WTF::MemoryPressureHandler::Configuration> memoryPressureHandlerConfiguration;
+    std::optional<MemoryPressureHandlerConfiguration> memoryPressureHandlerConfiguration;
     bool disableFontHintingForTesting;
     OptionSet<WebKit::AvailableInputDevices> availableInputDevices;
 #endif
@@ -205,7 +210,7 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
     String applicationName;
 #endif
 #if USE(GLIB) && ENABLE(REMOTE_INSPECTOR)
-    CString inspectorServerAddress;
+    UTF8CString inspectorServerAddress;
 #endif
 
 #if USE(ATSPI)
@@ -219,8 +224,11 @@ using WebCore::SystemSettings::State = WebCore::SystemSettingsState;
     HashSet<WebCore::RegistrableDomain> storageAccessPromptQuirksDomains;
     WebKit::ScriptTrackingPrivacyRules scriptTrackingPrivacyRules;
 
+    Seconds hiddenPageDOMTimerThrottlingIncreaseLimit;
     Seconds memoryFootprintPollIntervalForTesting;
     Vector<uint64_t> memoryFootprintNotificationThresholds;
+
+    std::optional<Seconds> overridePersistentNotificationMinimumLifetime;
 
 #if ENABLE(NOTIFY_BLOCKING)
     Vector<std::pair<String, uint64_t>> notifyState;

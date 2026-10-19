@@ -29,6 +29,7 @@
 
 #if ENABLE(WEB_AUTHN)
 
+#include "AuthenticatorCoordinator.h"
 #include "CredentialCreationOptions.h"
 #include "CredentialRequestCoordinator.h"
 #include "CredentialRequestOptions.h"
@@ -37,6 +38,7 @@
 #include "JSBasicCredential.h"
 #include "JSDOMConvertInterface.h"
 #include "JSDOMConvertNullable.h"
+#include "JSDOMPromiseDeferred.h"
 #include "JSDigitalCredential.h"
 #include "JSValueInWrappedObjectInlines.h"
 #include "LocalFrame.h"
@@ -168,7 +170,7 @@ void CredentialsContainer::get(CredentialRequestOptions&& options, CredentialPro
         return;
     }
 
-    document->page()->authenticatorCoordinator().discoverFromExternalSource(*document, WTF::move(options), WTF::move(promise));
+    protect(document->page()->authenticatorCoordinator())->discoverFromExternalSource(*document, WTF::move(options), WTF::move(promise));
 }
 
 void CredentialsContainer::store(const BasicCredential&, CredentialPromise&& promise)
@@ -194,7 +196,7 @@ void CredentialsContainer::isCreate(CredentialCreationOptions&& options, Credent
     }
 
     if (options.publicKey) {
-        document->page()->authenticatorCoordinator().create(*document, WTF::move(options), WTF::move(options.signal), WTF::move(promise));
+        protect(document->page()->authenticatorCoordinator())->create(*document, WTF::move(options), WTF::move(options.signal), WTF::move(promise));
         return;
     }
 
@@ -203,7 +205,7 @@ void CredentialsContainer::isCreate(CredentialCreationOptions&& options, Credent
 
 void CredentialsContainer::preventSilentAccess(DOMPromiseDeferred<void>&& promise) const
 {
-    if (RefPtr document = this->document(); !document->isFullyActive()) {
+    if (RefPtr document = this->document(); !document || !document->isFullyActive()) {
         promise.reject(Exception { ExceptionCode::InvalidStateError, "The document is not fully active."_s });
         return;
     }

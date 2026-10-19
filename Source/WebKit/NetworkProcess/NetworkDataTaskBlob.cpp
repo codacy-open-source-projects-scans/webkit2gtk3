@@ -49,6 +49,7 @@
 #include <WebCore/SharedBuffer.h>
 #include <wtf/Borrow.h>
 #include <wtf/RunLoop.h>
+#include <wtf/text/TextStream.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -79,7 +80,7 @@ NetworkDataTaskBlob::NetworkDataTaskBlob(NetworkSession& session, NetworkDataTas
     for (Ref fileReference : borrow(m_fileReferences).get())
         fileReference->prepareForFileAccess();
 
-    LOG(NetworkSession, "%p - Created NetworkDataTaskBlob for %s", this, request.url().string().utf8().data());
+    LOG_WITH_STREAM(NetworkSession, stream << this << " - Created NetworkDataTaskBlob for "_s << request.url().string());
 }
 
 NetworkDataTaskBlob::~NetworkDataTaskBlob()
@@ -148,7 +149,7 @@ void NetworkDataTaskBlob::didReceiveResponse(ResourceResponse&& response)
 
         switch (policyAction) {
         case PolicyAction::Use:
-            buffer().resize(bufferSize);
+            resizeBuffer(bufferSize);
             readAsync();
             break;
         case PolicyAction::LoadWillContinueInAnotherProcess:
@@ -200,7 +201,7 @@ void NetworkDataTaskBlob::download()
     ASSERT(m_pendingDownloadLocation);
     ASSERT(m_session);
 
-    LOG(NetworkSession, "%p - NetworkDataTaskBlob::download to %s", this, m_pendingDownloadLocation.utf8().data());
+    LOG_WITH_STREAM(NetworkSession, stream << this << " - NetworkDataTaskBlob::download to "_s << m_pendingDownloadLocation);
 
     m_downloadFile = FileSystem::openFile(m_pendingDownloadLocation, FileSystem::FileOpenMode::Truncate);
     if (!m_downloadFile) {
@@ -215,7 +216,7 @@ void NetworkDataTaskBlob::download()
 
     ASSERT(!m_client);
 
-    buffer().resize(bufferSize);
+    resizeBuffer(bufferSize);
     readAsync();
 }
 

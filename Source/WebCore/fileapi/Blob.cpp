@@ -37,7 +37,6 @@
 #include "BlobPart.h"
 #include "BlobURL.h"
 #include "ContextDestructionObserverInlines.h"
-#include "EventTargetInlines.h"
 #include "File.h"
 #include "JSDOMConvertBufferSource.h"
 #include "JSDOMConvertStrings.h"
@@ -52,6 +51,7 @@
 #include "ThreadableBlobRegistry.h"
 #include "WebCoreOpaqueRoot.h"
 #include <JavaScriptCore/JSCJSValueInlines.h>
+#include <JavaScriptCore/Uint8Array.h>
 #include <wtf/Lock.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
@@ -259,7 +259,7 @@ Ref<Blob> Blob::slice(long long start, long long end, const String& contentType)
             sliceMemoryCost = positiveEnd - positiveStart;
         ASSERT(sliceMemoryCost <= totalMemoryCost);
     }
-    auto blob = adoptRef(*new Blob(scriptExecutionContext(), m_internalURL, start, end, sliceMemoryCost, contentType));
+    Ref blob = adoptRef(*new Blob(protect(scriptExecutionContext()), m_internalURL, start, end, sliceMemoryCost, contentType));
     blob->suspendIfNeeded();
     return blob;
 }
@@ -397,7 +397,6 @@ ExceptionOr<Ref<ReadableStream>> Blob::stream()
         BlobStreamSource(ScriptExecutionContext& scriptExecutionContext, Blob& blob)
             : m_loader(FileReaderLoader::create(FileReaderLoader::ReadType::ReadAsBinaryChunks, this))
         {
-            relaxAdoptionRequirement();
             m_loader->start(&scriptExecutionContext, blob);
         }
 
@@ -518,7 +517,7 @@ ExceptionOr<Ref<ReadableStream>> Blob::stream()
         return promise;
     };
 
-    return ReadableStream::createReadableByteStream(*uncheckedDowncast<JSDOMGlobalObject>(globalObject), WTF::move(pullAlgorithm), WTF::move(cancelAlgorithm), {
+    return ReadableStream::createReadableByteStream(*downcast<JSDOMGlobalObject>(globalObject), WTF::move(pullAlgorithm), WTF::move(cancelAlgorithm), {
         .isSourceReachableFromOpaqueRoot = ReadableStream::IsSourceReachableFromOpaqueRoot::Yes
     });
 }
@@ -537,7 +536,7 @@ bool Blob::isNormalizedContentType(const String& contentType)
     return true;
 }
 
-bool Blob::isNormalizedContentType(const CString& contentType)
+bool Blob::isNormalizedContentType(const ASCIICString& contentType)
 {
     // FIXME: Do we really want to treat the empty string and null string as valid content types?
     for (auto character : contentType.span()) {

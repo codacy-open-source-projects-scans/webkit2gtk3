@@ -87,7 +87,8 @@ public:
 
     void scheduleSelectionChangeEvent();
 
-    TextFieldSelectionDirection NODELETE computeSelectionDirection() const;
+    TextFieldSelectionDirection LEGACY_NODELETE computeSelectionDirection() const;
+    TextFieldSelectionDirection normalizeSelectionDirection(TextFieldSelectionDirection);
 
     std::optional<SimpleRange> selection() const;
     String selectedText() const;
@@ -100,13 +101,13 @@ public:
     virtual ExceptionOr<void> setValue(const String&, TextFieldEventBehavior = DispatchNoEvent, TextControlSetValueSelection = TextControlSetValueSelection::SetSelectionToEnd) = 0;
     virtual RefPtr<TextControlInnerTextElement> innerTextElement() const = 0;
     virtual RefPtr<TextControlInnerTextElement> innerTextElementCreatingShadowSubtreeIfNeeded() = 0;
-    virtual RenderStyle createInnerTextStyle(const RenderStyle&) = 0;
+    virtual Style::ComputedStyle createInnerTextStyle(const Style::ComputedStyle&) = 0;
 
     virtual bool dirAutoUsesValue() const = 0;
 
     bool selectionChanged(bool shouldFireSelectEvent);
-    WEBCORE_EXPORT bool NODELETE lastChangeWasUserEdit() const;
-    bool NODELETE wasEverChangedByUserEdit() const;
+    WEBCORE_EXPORT bool LEGACY_NODELETE lastChangeWasUserEdit() const;
+    bool LEGACY_NODELETE wasEverChangedByUserEdit() const;
     void setInnerTextValue(String&&);
     String innerTextValue() const;
 
@@ -121,7 +122,7 @@ public:
     WEBCORE_EXPORT void dispatchUserTextInputEvent();
 
 protected:
-    HTMLTextFormControlElement(const QualifiedName&, Document&, HTMLFormElement*);
+    HTMLTextFormControlElement(const QualifiedName&, Document&);
     virtual void updatePlaceholderText() = 0;
 
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) override;
@@ -132,7 +133,7 @@ protected:
 
     void updateInnerTextElementEditability();
 
-    bool NODELETE cacheSelection(unsigned start, unsigned end, TextFieldSelectionDirection);
+    bool LEGACY_NODELETE cacheSelection(unsigned start, unsigned end, TextFieldSelectionDirection);
 
     void restoreCachedSelection(SelectionRevealMode, const AXTextStateChangeIntent& = AXTextStateChangeIntent());
     bool hasCachedSelection() const { return m_hasCachedSelection; }
@@ -146,7 +147,7 @@ protected:
 
     String valueWithHardLineBreaks() const;
 
-    void adjustInnerTextStyle(const RenderStyle& parentStyle, RenderStyle& textBlockStyle) const;
+    void adjustInnerTextStyle(const Style::ComputedStyle& parentStyle, Style::ComputedStyle& textBlockStyle) const;
 
     void internalSetMaxLength(int maxLength) { m_maxLength = maxLength; }
     void internalSetMinLength(int minLength) { m_minLength = minLength; }
@@ -156,7 +157,7 @@ protected:
 private:
     TextFieldSelectionDirection cachedSelectionDirection() const { return static_cast<TextFieldSelectionDirection>(m_cachedSelectionDirection); }
 
-    bool NODELETE isTextFormControlElement() const final { return true; }
+    bool LEGACY_NODELETE isTextFormControlElement() const final { return true; }
 
     void dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, const FocusOptions&) final;
     void dispatchBlurEvent(RefPtr<Element>&& newFocusedElement) final;
@@ -198,7 +199,7 @@ private:
     String m_textAsOfLastFormControlChangeEvent;
 };
 
-WEBCORE_EXPORT HTMLTextFormControlElement* NODELETE enclosingTextFormControl(const Position&);
+WEBCORE_EXPORT HTMLTextFormControlElement* LEGACY_NODELETE enclosingTextFormControl(const Position&);
 
 } // namespace WebCore
 

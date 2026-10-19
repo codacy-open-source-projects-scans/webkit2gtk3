@@ -1,20 +1,26 @@
 /*
- * Copyright (C) 2025 Igalia, S.L.
+ * Copyright (C) 2025-2026 Igalia, S.L.
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public License
- * aint with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "config.h"
@@ -24,6 +30,10 @@
 
 #include "APIUIClient.h"
 #include "OpenXRExtensions.h"
+#include "OpenXRGraphicsBinding.h"
+#if defined(XR_USE_GRAPHICS_API_OPENGL_ES)
+#include "OpenXRGraphicsBindingOpenGLES.h"
+#endif
 #include "OpenXRHitTestManager.h"
 #include "OpenXRInput.h"
 #include "OpenXRInputSource.h"
@@ -31,23 +41,8 @@
 #include "OpenXRUtils.h"
 #include "WebPageProxy.h"
 #include "WebProcessProxy.h"
-#if USE(LIBEPOXY)
-#define __GBM__ 1
-#include <epoxy/egl.h>
-#else
-#include <EGL/egl.h>
-#endif
-#include <WebCore/GLContext.h>
-#include <WebCore/GLDisplay.h>
-#include <WebCore/GLFence.h>
 #include <wtf/RunLoop.h>
 #include <wtf/WorkQueue.h>
-
-#if USE(GBM)
-#include "DRMMainDevice.h"
-#include <WebCore/DRMDevice.h>
-#include <WebCore/GBMDevice.h>
-#endif
 
 #if OS(ANDROID)
 #include <dlfcn.h>
@@ -65,6 +60,8 @@ struct OpenXRCoordinator::RenderState {
     PlatformXR::Device::RequestFrameCallback onFrameUpdate;
     XrFrameState frameState;
     bool passthroughFullyObscured { false };
+    Vector<PlatformXR::LayerHandle> activeLayerHandles;
+    Vector<PlatformXR::LayerHandle> frameActiveLayerHandles;
 #if ENABLE(WEBXR_HIT_TEST)
     HashMap<PlatformXR::HitTestSource, UniqueRef<PlatformXR::HitTestOptions>> hitTestSources;
     HashMap<PlatformXR::TransientInputHitTestSource, UniqueRef<PlatformXR::TransientInputHitTestOptions>> transientInputHitTestSources;
@@ -186,13 +183,9 @@ bool OpenXRCoordinator::collectSwapchainFormatsIfNeeded()
     return true;
 }
 
-std::unique_ptr<OpenXRSwapchain> OpenXRCoordinator::createSwapchain(uint32_t width, uint32_t height, bool alpha) const
+std::unique_ptr<OpenXRSwapchain> OpenXRCoordinator::createSwapchain(uint32_t width, uint32_t height, bool alpha, uint32_t faceCount) const
 {
-    // Even if alpha is false we always ask for the RGBA8 format, as the DRM_FORMAT_RGB8 is not supported by ANGLE.
-    // In this case we ignore the alpha channel by using DRM_FORMAT_XRGB8888 when exporting the texture.
-    auto preferredFormat = GL_RGBA8;
-    auto format = m_supportedSwapchainFormats.contains(preferredFormat) ? preferredFormat : m_supportedSwapchainFormats.first();
-    auto sampleCount = m_viewConfigurationViews.isEmpty() ? 1 : m_viewConfigurationViews.first().recommendedSwapchainSampleCount;
+    auto format = m_graphicsBinding->selectColorFormat(m_supportedSwapchainFormats, alpha);
 
     auto info = createOpenXRStruct<XrSwapchainCreateInfo, XR_TYPE_SWAPCHAIN_CREATE_INFO>();
     info.arraySize = 1;
@@ -200,11 +193,13 @@ std::unique_ptr<OpenXRSwapchain> OpenXRCoordinator::createSwapchain(uint32_t wid
     info.width = width;
     info.height = height;
     info.mipCount = 1;
-    info.faceCount = 1;
-    info.sampleCount = sampleCount;
+    info.faceCount = faceCount;
+    // Single-sampled, deliberately ignoring the view configuration's recommendedSwapchainSampleCount. Antialiasing is applied and
+    // resolved in the web process before the content reaches us.
+    info.sampleCount = 1;
     info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 
-    return OpenXRSwapchain::create(m_session, info, alpha ? OpenXRSwapchain::HasAlpha::Yes : OpenXRSwapchain::HasAlpha::No);
+    return OpenXRSwapchain::create(m_session, info, alpha ? OpenXRSwapchain::HasAlpha::Yes : OpenXRSwapchain::HasAlpha::No, *m_graphicsBinding);
 }
 
 void OpenXRCoordinator::createLayerProjection(uint32_t width, uint32_t height, bool alpha, CompletionHandler<void(std::optional<PlatformXR::LayerInfo>)>&& reply)
@@ -233,10 +228,6 @@ void OpenXRCoordinator::createLayerProjection(uint32_t width, uint32_t height, b
 
                 auto imageCount = swapchain->imageCount();
                 if (auto layer = OpenXRLayerProjection::create(WTF::move(swapchain))) {
-#if USE(GBM)
-                    if (m_gbmDevice)
-                        layer->setGBMDevice(m_gbmDevice);
-#endif
                     auto layerHandle = m_nextLayerHandle++;
                     m_layers.add(layerHandle, WTF::move(layer));
                     PlatformXR::LayerInfo layerInfo { layerHandle, imageCount };
@@ -265,6 +256,20 @@ void OpenXRCoordinator::createCompositionLayer(PlatformXR::CompositionLayerType 
 #endif
     }
 
+    if (type == PlatformXR::CompositionLayerType::Cube) {
+#if !defined(XR_KHR_composition_layer_cube)
+        RELEASE_LOG(XR, "OpenXRCoordinator: cube layer not supported (XR_KHR_composition_layer_cube not defined)");
+        reply(std::nullopt);
+        return;
+#else
+        if (!OpenXRExtensions::singleton().isExtensionSupported(XR_KHR_COMPOSITION_LAYER_CUBE_EXTENSION_NAME ""_span)) {
+            RELEASE_LOG(XR, "OpenXRCoordinator: cube layer extension not supported");
+            reply(std::nullopt);
+            return;
+        }
+#endif
+    }
+
     WTF::switchOn(m_state,
         [&](Idle&) { reply(std::nullopt); },
         [&](Active& active) {
@@ -278,7 +283,8 @@ void OpenXRCoordinator::createCompositionLayer(PlatformXR::CompositionLayerType 
                 }
 
                 bool alpha = false;
-                auto swapchain = createSwapchain(size.width(), size.height(), alpha);
+                uint32_t faceCount = type == PlatformXR::CompositionLayerType::Cube ? 6 : 1;
+                auto swapchain = createSwapchain(size.width(), size.height(), alpha, faceCount);
                 if (!swapchain) {
                     RELEASE_LOG(XR, "OpenXRCoordinator: failed to create swapchain");
                     callOnMainRunLoop([completion = WTF::move(completionHandler)] mutable {
@@ -299,6 +305,20 @@ void OpenXRCoordinator::createCompositionLayer(PlatformXR::CompositionLayerType 
                     layer = OpenXREquirectLayer::create(WTF::move(swapchain), layout);
 #endif
                     break;
+                case PlatformXR::CompositionLayerType::Cylinder:
+#if defined(XR_KHR_composition_layer_cylinder)
+                    layer = OpenXRCylinderLayer::create(WTF::move(swapchain), layout);
+#endif
+                    break;
+                case PlatformXR::CompositionLayerType::Cube:
+#if defined(XR_KHR_composition_layer_cube)
+                    ASSERT(layout == PlatformXR::LayerLayout::Mono || layout == PlatformXR::LayerLayout::Stereo);
+                    if (layout == PlatformXR::LayerLayout::Mono)
+                        layer = OpenXRCubeLayer::create(WTF::move(swapchain), nullptr, layout);
+                    else if (auto rightSwapchain = createSwapchain(size.width(), size.height(), alpha, faceCount))
+                        layer = OpenXRCubeLayer::create(WTF::move(swapchain), WTF::move(rightSwapchain), layout);
+#endif
+                    break;
                 }
                 if (!layer) {
                     RELEASE_LOG(XR, "OpenXRCoordinator: failed to create composition layer");
@@ -308,10 +328,6 @@ void OpenXRCoordinator::createCompositionLayer(PlatformXR::CompositionLayerType 
                     return;
                 }
 
-#if USE(GBM)
-                if (m_gbmDevice)
-                    layer->setGBMDevice(m_gbmDevice);
-#endif
                 auto layerHandle = m_nextLayerHandle++;
                 m_layers.add(layerHandle, WTF::move(layer));
                 PlatformXR::LayerInfo layerInfo { layerHandle, imageCount };
@@ -321,6 +337,7 @@ void OpenXRCoordinator::createCompositionLayer(PlatformXR::CompositionLayerType 
             });
         });
 }
+
 #endif // ENABLE(WEBXR_LAYERS)
 
 void OpenXRCoordinator::startSession(WebPageProxy& page, WeakPtr<PlatformXRCoordinatorSessionEventClient>&& sessionEventClient, const WebCore::SecurityOriginData&, PlatformXR::SessionMode sessionMode, const PlatformXR::Device::FeatureList&, std::optional<WebCore::XRCanvasConfiguration>&&)
@@ -356,7 +373,7 @@ void OpenXRCoordinator::startSession(WebPageProxy& page, WeakPtr<PlatformXRCoord
                     cleanupAllResources();
                     return;
                 }
-                renderLoop(renderState);
+                waitForSessionReady(renderState, [] { });
             });
         },
         [&](Active&) {
@@ -388,10 +405,15 @@ void OpenXRCoordinator::endSessionIfExists(WebPageProxy& page)
                     cleanupAllResources();
                     return;
                 }
+                // If xrBeginFrame() was called but submitFrame() cannot be dispatched (the main thread is blocked in dispatchSync),
+                // close the open frame before requesting exit, as OpenXR requires xrEndFrame() to be paired with every xrBeginFrame().
+                if (renderState->pendingFrame)
+                    endFrame(renderState, { });
+
                 // OpenXR will transition the session to STOPPING state and then we will call xrEndSession().
                 CHECK_XRCMD(xrRequestExitSession(m_session));
                 while (m_session != XR_NULL_HANDLE)
-                    renderLoop(renderState);
+                    pollEvents();
             });
             active.renderQueue = nullptr;
 
@@ -408,6 +430,17 @@ void OpenXRCoordinator::endSessionIfExists(WebPageProxy& page)
                 page.uiClient().didEndXRSession(page);
             m_state = Idle { };
         });
+}
+
+void OpenXRCoordinator::stopWhenIdle()
+{
+    ASSERT(RunLoop::isMain());
+    LOG(XR, "OpenXRCoordinator::stopWhenIdle");
+    if (std::holds_alternative<Active>(m_state)) {
+        LOG(XR, "... skipping, a session is active");
+        return;
+    }
+    cleanupInstanceAndAssociatedResources();
 }
 
 void OpenXRCoordinator::scheduleAnimationFrame(WebPageProxy& page, std::optional<PlatformXR::RequestData>&& requestData, PlatformXR::Device::RequestFrameCallback&& onFrameUpdateCallback)
@@ -429,9 +462,12 @@ void OpenXRCoordinator::scheduleAnimationFrame(WebPageProxy& page, std::optional
             }
 
             active.renderQueue->dispatch([this, renderState = active.renderState, requestData = WTF::move(requestData), onFrameUpdateCallback = WTF::move(onFrameUpdateCallback)]() mutable {
-                renderState->passthroughFullyObscured = requestData ? requestData->isPassthroughFullyObscured : false;
+                if (requestData) {
+                    renderState->passthroughFullyObscured = requestData->isPassthroughFullyObscured;
+                    renderState->activeLayerHandles = requestData->activeLayerHandles;
+                }
                 renderState->onFrameUpdate = WTF::move(onFrameUpdateCallback);
-                renderLoop(renderState);
+                maybeBeginFrame(renderState);
             });
         });
 }
@@ -456,7 +492,7 @@ void OpenXRCoordinator::submitFrame(WebPageProxy& page, Vector<PlatformXR::Devic
 
             active.renderQueue->dispatch([this, renderState = active.renderState, layers = WTF::move(layers)]() mutable {
                 endFrame(renderState, WTF::move(layers));
-                renderLoop(renderState);
+                maybeBeginFrame(renderState);
             });
         });
 }
@@ -629,13 +665,8 @@ void OpenXRCoordinator::createInstance()
 #endif
 
     Vector<char *> extensions;
-#if defined(XR_USE_PLATFORM_EGL)
-    if (OpenXRExtensions::singleton().isExtensionSupported(XR_MNDX_EGL_ENABLE_EXTENSION_NAME ""_span))
-        extensions.append(const_cast<char*>(XR_MNDX_EGL_ENABLE_EXTENSION_NAME));
-#endif
-#if defined(XR_USE_GRAPHICS_API_OPENGL_ES)
-    extensions.append(const_cast<char*>(XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME));
-#endif
+    for (auto graphicsExtension : m_graphicsBinding->requiredInstanceExtensions())
+        extensions.append(const_cast<char*>(graphicsExtension.characters()));
 #if defined(XR_EXT_hand_interaction)
     if (OpenXRExtensions::singleton().isExtensionSupported(XR_EXT_HAND_INTERACTION_EXTENSION_NAME ""_span))
         extensions.append(const_cast<char*>(XR_EXT_HAND_INTERACTION_EXTENSION_NAME));
@@ -661,6 +692,14 @@ void OpenXRCoordinator::createInstance()
     if (OpenXRExtensions::singleton().isExtensionSupported(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME ""_span))
         extensions.append(const_cast<char*>(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME));
 #endif
+#if defined(XR_KHR_composition_layer_cylinder)
+    if (OpenXRExtensions::singleton().isExtensionSupported(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME ""_span))
+        extensions.append(const_cast<char*>(XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME));
+#endif
+#if defined(XR_KHR_composition_layer_cube)
+    if (OpenXRExtensions::singleton().isExtensionSupported(XR_KHR_COMPOSITION_LAYER_CUBE_EXTENSION_NAME ""_span))
+        extensions.append(const_cast<char*>(XR_KHR_COMPOSITION_LAYER_CUBE_EXTENSION_NAME));
+#endif
 
     XrInstanceCreateInfo createInfo = createOpenXRStruct<XrInstanceCreateInfo, XR_TYPE_INSTANCE_CREATE_INFO >();
     createInfo.applicationInfo = { "WebKit", 1, "WebKit", 1, XR_CURRENT_API_VERSION };
@@ -676,52 +715,6 @@ void OpenXRCoordinator::createInstance()
 #endif
 
     CHECK_XRCMD(xrCreateInstance(&createInfo, &m_instance));
-}
-
-RefPtr<WebCore::GLDisplay> OpenXRCoordinator::createGLDisplay(bool isForTesting) const
-{
-    ASSERT(RunLoop::isMain());
-    ASSERT(!m_glDisplay);
-
-    const char* extensions = eglQueryString(nullptr, EGL_EXTENSIONS);
-    auto tryCreateDisplay = [&](EGLenum platform, void *native) -> RefPtr<WebCore::GLDisplay> {
-        if (WebCore::GLContext::isExtensionSupported(extensions, "EGL_EXT_platform_base"))
-            return WebCore::GLDisplay::create(eglGetPlatformDisplayEXT(platform, native, nullptr));
-        if (WebCore::GLContext::isExtensionSupported(extensions, "EGL_KHR_platform_base"))
-            return WebCore::GLDisplay::create(eglGetPlatformDisplay(platform, native, nullptr));
-        return nullptr;
-    };
-
-    RefPtr<WebCore::GLDisplay> glDisplay;
-
-#if OS(ANDROID)
-    if (WebCore::GLContext::isExtensionSupported(extensions, "EGL_KHR_platform_android")) {
-        glDisplay = tryCreateDisplay(EGL_PLATFORM_ANDROID_KHR, EGL_DEFAULT_DISPLAY);
-        if (!glDisplay)
-            glDisplay = WebCore::GLDisplay::create(eglGetDisplay(EGL_DEFAULT_DISPLAY));
-        if (glDisplay && !(glDisplay->extensions().ANDROID_get_native_client_buffer && glDisplay->extensions().ANDROID_image_native_buffer))
-            glDisplay = nullptr;
-    }
-#endif // OS(ANDROID)
-
-    if (WebCore::GLContext::isExtensionSupported(extensions, "EGL_MESA_platform_surfaceless")) {
-        glDisplay = tryCreateDisplay(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY);
-        if (glDisplay && !isForTesting && !glDisplay->extensions().MESA_image_dma_buf_export)
-            glDisplay = nullptr;
-    }
-
-#if USE(GBM)
-    if (!glDisplay && WebCore::GLContext::isExtensionSupported(extensions, "EGL_KHR_platform_gbm")) {
-        const auto& mainDevice = drmMainDevice();
-        if (!mainDevice.isNull()) {
-            m_gbmDevice = WebCore::GBMDevice::create(!mainDevice.renderNode.isNull() ? mainDevice.renderNode : mainDevice.primaryNode);
-            if (m_gbmDevice)
-                glDisplay = tryCreateDisplay(EGL_PLATFORM_GBM_KHR, m_gbmDevice->device());
-        }
-    }
-#endif
-
-    return glDisplay;
 }
 
 void OpenXRCoordinator::collectViewConfigurations()
@@ -771,15 +764,22 @@ void OpenXRCoordinator::initializeDevice(bool isForTesting)
     if (m_instance != XR_NULL_HANDLE)
         return;
 
-    auto display = createGLDisplay(isForTesting);
-    if (!display) {
+    std::unique_ptr<OpenXRGraphicsBinding> graphicsBinding;
+#if defined(XR_USE_GRAPHICS_API_OPENGL_ES)
+    graphicsBinding = OpenXRGraphicsBindingOpenGLES::create();
+#endif
+    if (!graphicsBinding || !graphicsBinding->initializeDisplay(isForTesting)) {
         LOG(XR, "Failed to create a display for OpenXR.");
         return;
     }
+    m_graphicsBinding = WTF::move(graphicsBinding);
 
     createInstance();
     if (m_instance == XR_NULL_HANDLE) {
         LOG(XR, "Failed to create OpenXR instance.");
+        // The display is only kept once the instance has been created successfully, so that a
+        // later retry recreates the whole graphics binding from scratch.
+        m_graphicsBinding = nullptr;
         return;
     }
 
@@ -796,8 +796,6 @@ void OpenXRCoordinator::initializeDevice(bool isForTesting)
 
     collectViewConfigurations();
     initializeBlendModes();
-
-    m_glDisplay = WTF::move(display);
 }
 
 void OpenXRCoordinator::initializeBlendModes()
@@ -828,43 +826,6 @@ void OpenXRCoordinator::initializeBlendModes()
     m_vrBlendMode = supportsOpaqueBlendMode ? XR_ENVIRONMENT_BLEND_MODE_OPAQUE : m_arBlendMode;
 }
 
-void OpenXRCoordinator::tryInitializeGraphicsBinding()
-{
-#if !OS(ANDROID)
-    if (!OpenXRExtensions::singleton().isExtensionSupported(XR_MNDX_EGL_ENABLE_EXTENSION_NAME ""_span)) {
-        LOG(XR, "OpenXR MNDX_EGL_ENABLE extension is not supported.");
-        return;
-    }
-#endif
-
-    if (!m_glContext) {
-#if USE(GBM)
-        const WebCore::GLContext::Target target = m_gbmDevice ? WebCore::GLContext::Target::Default : WebCore::GLContext::Target::Surfaceless;
-#else
-        static const WebCore::GLContext::Target target = WebCore::GLContext::Target::Surfaceless;
-#endif
-        m_glContext = WebCore::GLContext::create(*m_glDisplay, target);
-        if (!m_glContext) {
-            LOG(XR, "Failed to create the GL context for OpenXR.");
-            return;
-        }
-        if (!m_glContext->makeContextCurrent()) {
-            LOG(XR, "Failed to make the GL context current.");
-            return;
-        }
-    }
-
-#if OS(ANDROID)
-    m_graphicsBinding = createOpenXRStruct<XrGraphicsBindingOpenGLESAndroidKHR, XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR>();
-#else
-    m_graphicsBinding = createOpenXRStruct<XrGraphicsBindingEGLMNDX, XR_TYPE_GRAPHICS_BINDING_EGL_MNDX>();
-    m_graphicsBinding.getProcAddress = OpenXRExtensions::singleton().methods().getProcAddressFunc;
-#endif
-    m_graphicsBinding.display = m_glDisplay->eglDisplay();
-    m_graphicsBinding.context = m_glContext->platformContext();
-    m_graphicsBinding.config = m_glContext->config();
-}
-
 void OpenXRCoordinator::createSessionIfNeeded()
 {
     ASSERT(!RunLoop::isMain());
@@ -873,19 +834,17 @@ void OpenXRCoordinator::createSessionIfNeeded()
     if (m_session != XR_NULL_HANDLE)
         return;
 
-#if defined(XR_USE_GRAPHICS_API_OPENGL_ES)
-    auto requirements = createOpenXRStruct<XrGraphicsRequirementsOpenGLESKHR, XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR>();
-    CHECK_XRCMD(OpenXRExtensions::singleton().methods().xrGetOpenGLESGraphicsRequirementsKHR(m_instance, m_systemId, &requirements));
-#endif
-
-    tryInitializeGraphicsBinding();
+    if (!m_graphicsBinding->initializeForSession(m_instance, m_systemId)) {
+        LOG(XR, "Failed to initialize the graphics binding for the OpenXR session.");
+        return;
+    }
 
     m_views.resize(m_viewConfigurationViews.size());
 
     // Create the session.
     auto sessionCreateInfo = createOpenXRStruct<XrSessionCreateInfo, XR_TYPE_SESSION_CREATE_INFO>();
     sessionCreateInfo.systemId = m_systemId;
-    sessionCreateInfo.next = &m_graphicsBinding;
+    sessionCreateInfo.next = m_graphicsBinding->sessionGraphicsBinding();
     CHECK_XRCMD(xrCreateSession(m_instance, &sessionCreateInfo, &m_session));
 }
 
@@ -920,7 +879,8 @@ void OpenXRCoordinator::cleanupSessionAndAssociatedResources()
         m_session = XR_NULL_HANDLE;
     }
 
-    m_glContext.reset();
+    if (m_graphicsBinding)
+        m_graphicsBinding->releaseSessionGraphics();
 }
 
 void OpenXRCoordinator::cleanupInstanceAndAssociatedResources()
@@ -928,8 +888,7 @@ void OpenXRCoordinator::cleanupInstanceAndAssociatedResources()
     m_viewConfigurationViews.clear();
     m_systemId = XR_NULL_SYSTEM_ID;
 
-    ASSERT(!m_glContext);
-    m_glDisplay = nullptr;
+    m_graphicsBinding = nullptr;
 
     if (m_instance == XR_NULL_HANDLE)
         return;
@@ -1104,7 +1063,9 @@ PlatformXR::FrameData OpenXRCoordinator::populateFrameData(Box<RenderState> rend
         frameData.floorTransform = XrIdentityPose();
 
     for (auto& layer : m_layers) {
-        auto layerData = layer.value->startFrame();
+        if (!renderState->activeLayerHandles.contains(layer.key))
+            continue;
+        auto layerData = layer.value->startFrame(*m_graphicsBinding);
         if (layerData) {
             auto layerDataRef = makeUniqueRef<PlatformXR::FrameData::LayerData>(WTF::move(*layerData));
             frameData.layers.add(layer.key, WTF::move(layerDataRef));
@@ -1215,6 +1176,11 @@ void OpenXRCoordinator::beginFrame(Box<RenderState> renderState)
 {
     ASSERT(!RunLoop::isMain());
 
+    if (pollEvents() == PollResult::Stop)
+        return;
+
+    renderState->frameActiveLayerHandles = renderState->activeLayerHandles;
+
     XrFrameWaitInfo frameWaitInfo = createOpenXRStruct<XrFrameWaitInfo, XR_TYPE_FRAME_WAIT_INFO>();
     XrFrameState frameState = createOpenXRStruct<XrFrameState, XR_TYPE_FRAME_STATE>();
     CHECK_XRCMD(xrWaitFrame(m_session, &frameWaitInfo, &frameState));
@@ -1249,16 +1215,23 @@ void OpenXRCoordinator::endFrame(Box<RenderState> renderState, Vector<PlatformXR
     for (auto& layer : layers) {
         auto it = m_layers.find(layer.handle);
         if (it == m_layers.end()) {
-            LOG(XR, "Didn't find a OpenXRLayer with %d handle", layer.handle);
+            // This should not happen as handlers are created here and never changed in the WebProcess. However it could be the case that a layer
+            // is removed but still submitted for rendering due to some unfortunate timing of IPC messages and/or asynchronous methods.
+            RELEASE_LOG(XR, "OpenXRCoordinator::endFrame: skipping unknown layer handle %d", layer.handle);
             continue;
         }
 
-        if (layer.fenceFD) {
-            if (auto fence = WebCore::GLFence::importFD(*m_glDisplay, WTF::move(layer.fenceFD)))
-                fence->serverWait();
+        if (!renderState->frameActiveLayerHandles.contains(layer.handle)) {
+            // endFrame should only process layers that beginFrame started. If IPC delivers a layer handle that was not in frameActiveLayerHandles
+            // (i.e. due to a call to updateRenderState with a different list of layers), skip it to avoid asserting on an unacquired swapchain.
+            RELEASE_LOG(XR, "OpenXRCoordinator::endFrame: skipping layer not started in beginFrame");
+            continue;
         }
 
-        auto headers = it->value->endFrame(layer, m_localSpace, m_views);
+        if (layer.fenceFD)
+            m_graphicsBinding->waitFrameFence(WTF::move(layer.fenceFD));
+
+        auto headers = it->value->endFrame(*m_graphicsBinding, layer, m_localSpace, m_views);
         frameEndLayers.appendVector(WTF::move(headers));
     }
 
@@ -1272,21 +1245,26 @@ void OpenXRCoordinator::endFrame(Box<RenderState> renderState, Vector<PlatformXR
     renderState->pendingFrame = false;
 }
 
-void OpenXRCoordinator::renderLoop(Box<RenderState> renderState)
+void OpenXRCoordinator::maybeBeginFrame(Box<RenderState> renderState)
 {
-    while (pollEvents() != PollResult::Stop) {
-        if (!m_isSessionRunning && m_sessionState < XR_SESSION_STATE_READY) {
-            RunLoop::currentSingleton().dispatchAfter(250_ms, [this, renderState] {
-                renderLoop(renderState);
-            });
-            return;
-        }
+    ASSERT(!RunLoop::isMain());
+    if (renderState->pendingFrame || !renderState->onFrameUpdate || renderState->terminateRequested)
+        return;
+    beginFrame(renderState);
+}
 
-        if (!renderState->onFrameUpdate || renderState->pendingFrame)
-            return;
-
-        beginFrame(renderState);
+void OpenXRCoordinator::waitForSessionReady(Box<RenderState> renderState, Function<void()>&& onReady)
+{
+    ASSERT(!RunLoop::isMain());
+    if (pollEvents() == PollResult::Stop)
+        return;
+    if (!m_isSessionRunning && m_sessionState < XR_SESSION_STATE_READY) {
+        RunLoop::currentSingleton().dispatchAfter(250_ms, [this, renderState, onReady = WTF::move(onReady)]() mutable {
+            waitForSessionReady(WTF::move(renderState), WTF::move(onReady));
+        });
+        return;
     }
+    onReady();
 }
 
 

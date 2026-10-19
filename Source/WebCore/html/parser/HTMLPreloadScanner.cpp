@@ -61,8 +61,9 @@ using namespace HTMLNames;
 
 TokenPreloadScanner::TagId TokenPreloadScanner::tagIdFor(const HTMLToken::DataVector& data)
 {
-    static constexpr SortedArrayMap map { std::to_array<std::pair<PackedASCIILiteral<uint64_t>, TokenPreloadScanner::TagId>>({
+    static constexpr SortedArrayMap map { WTF::toArray<std::pair<PackedASCIILiteral<uint64_t>, TokenPreloadScanner::TagId>>({
         { "base"_s, TagId::Base },
+        { "image"_s, TagId::Img },
         { "img"_s, TagId::Img },
         { "input"_s, TagId::Input },
         { "link"_s, TagId::Link },
@@ -71,6 +72,7 @@ TokenPreloadScanner::TagId TokenPreloadScanner::tagIdFor(const HTMLToken::DataVe
         { "script"_s, TagId::Script },
         { "source"_s, TagId::Source },
         { "style"_s, TagId::Style },
+        { "svg"_s, TagId::Svg },
         { "template"_s, TagId::Template },
         { "video"_s, TagId::Video },
     }) };
@@ -97,6 +99,7 @@ ASCIILiteral TokenPreloadScanner::initiatorFor(TagId tagId)
     case TagId::Template:
     case TagId::Meta:
     case TagId::Picture:
+    case TagId::Svg:
         ASSERT_NOT_REACHED();
         return "unknown"_s;
     }
@@ -118,7 +121,7 @@ public:
     {
     }
 
-    void processAttributes(const HTMLToken::AttributeList& attributes, Vector<bool>& pictureState)
+    void processAttributes(const HTMLToken::AttributeList& attributes, Vector<PreloadScannerPictureState>& pictureState)
     {
         ASSERT(isMainThread());
         if (m_tagId >= TagId::Unknown)
@@ -129,17 +132,26 @@ public:
             processAttribute(knownAttributeName, attribute.value.span(), pictureState);
         }
 
-        if (m_tagId == TagId::Source && !pictureState.isEmpty() && !pictureState.last() && m_mediaMatched && m_typeMatched && !m_srcSetAttribute.isEmpty()) {
+        if (m_tagId == TagId::Source && !pictureState.isEmpty() && !pictureState.last().sourceMatched && m_mediaMatched && m_typeMatched && !m_srcSetAttribute.isEmpty()) {
             auto sourceSize = SizesAttributeParser(m_sizesAttribute, m_document).effectiveSize();
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, m_urlToLoad, m_srcSetAttribute, sourceSize);
             if (!imageCandidate.isEmpty()) {
-                pictureState.last() = true;
+                pictureState.last().sourceMatched = true;
                 setURLToLoadAllowingReplacement(imageCandidate.string.view);
             }
         }
 
         // Resolve between src and srcSet if we have them and the tag is img.
         if (m_tagId == TagId::Img && !m_srcSetAttribute.isEmpty()) {
+            auto sourceSize = SizesAttributeParser(m_sizesAttribute, m_document).effectiveSize();
+            ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, m_urlToLoad, m_srcSetAttribute, sourceSize);
+            setURLToLoadAllowingReplacement(imageCandidate.string.view);
+        }
+
+        // Resolve between href and imagesrcset for <link rel=preload as=image>, the same way
+        // LinkLoader::preloadIfNeeded does. Otherwise the scanner would fetch href while the
+        // link element fetches the source set candidate, downloading the image twice.
+        if (m_tagId == TagId::Link && m_linkIsPreload && !m_srcSetAttribute.isEmpty() && resourceType() == CachedResource::Type::ImageResource) {
             auto sourceSize = SizesAttributeParser(m_sizesAttribute, m_document).effectiveSize();
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, m_urlToLoad, m_srcSetAttribute, sourceSize);
             setURLToLoadAllowingReplacement(imageCandidate.string.view);
@@ -190,7 +202,12 @@ public:
         return request;
     }
 
-    static bool NODELETE match(const AtomString& name, const QualifiedName& qName)
+    bool isLazyloadingImage() const
+    {
+        return m_tagId == TagId::Img && HTMLImageElement::hasLazyLoadableAttributeValue(m_lazyloadAttribute);
+    }
+
+    static bool LEGACY_NODELETE match(const AtomString& name, const QualifiedName& qName)
     {
         ASSERT(isMainThread());
         return qName.localName() == name;
@@ -215,12 +232,20 @@ private:
             m_crossOriginMode = attributeValue.trim(isASCIIWhitespace<char16_t>).toString();
     }
 
-    void processAttribute(const AtomString& attributeName, StringView attributeValue, const Vector<bool>& pictureState)
+    void processAttribute(const AtomString& attributeName, StringView attributeValue, const Vector<PreloadScannerPictureState>& pictureState)
     {
         bool inPicture = !pictureState.isEmpty();
-        bool alreadyMatchedSource = inPicture && pictureState.last();
+        bool alreadyMatchedSource = inPicture && pictureState.last().sourceMatched;
         switch (m_tagId) {
         case TagId::Img:
+            // Even when a sibling <source> already matched, the <img>'s loading attribute
+            // still governs whether the matched source's preload should fire — read it first.
+            if (m_document->settings().lazyImageLoadingEnabled()) {
+                if (match(attributeName, loadingAttr) && m_lazyloadAttribute.isNull()) {
+                    m_lazyloadAttribute = attributeValue.toString();
+                    break;
+                }
+            }
             if (inPicture && alreadyMatchedSource)
                 break;
             if (match(attributeName, srcsetAttr) && m_srcSetAttribute.isNull()) {
@@ -239,12 +264,6 @@ private:
                 m_referrerPolicy = parseReferrerPolicy(attributeValue, ReferrerPolicySource::ReferrerPolicyAttribute).value_or(ReferrerPolicy::EmptyString);
                 break;
             }
-            if (m_document->settings().lazyImageLoadingEnabled()) {
-                if (match(attributeName, loadingAttr) && m_lazyloadAttribute.isNull()) {
-                    m_lazyloadAttribute = attributeValue.toString();
-                    break;
-                }
-            }
             processImageAndScriptAttribute(attributeName, attributeValue);
             break;
         case TagId::Source:
@@ -261,9 +280,8 @@ private:
             if (match(attributeName, mediaAttr) && m_mediaAttribute.isNull()) {
                 m_mediaAttribute = attributeValue.toString();
                 auto mediaQueries = MQ::MediaQueryParser::parse(m_mediaAttribute, m_document->cssParserContext());
-                RefPtr documentElement = m_document->documentElement();
                 LOG(MediaQueries, "HTMLPreloadScanner %p processAttribute evaluating media queries", this);
-                m_mediaMatched = MQ::MediaQueryEvaluator { m_document->printing() ? printAtom() : screenAtom(), m_document, documentElement ? documentElement->computedStyle() : nullptr }.evaluate(mediaQueries);
+                m_mediaMatched = MQ::MediaQueryEvaluator { m_document->printing() ? printAtom() : screenAtom(), m_document }.evaluate(mediaQueries);
             }
             if (match(attributeName, typeAttr) && m_typeAttribute.isNull()) {
                 // when multiple type attributes present: first value wins, ignore subsequent (to match ImageElement parser and Blink behaviours)
@@ -324,6 +342,10 @@ private:
                 m_fetchPriority = parseEnumerationFromString<RequestPriority>(attributeValue.toString()).value_or(RequestPriority::Auto);
             else if (match(attributeName, disabledAttr))
                 m_linkIsDisabled = true;
+            else if (match(attributeName, imagesrcsetAttr) && m_srcSetAttribute.isNull())
+                m_srcSetAttribute = attributeValue.toString();
+            else if (match(attributeName, imagesizesAttr) && m_sizesAttribute.isNull())
+                m_sizesAttribute = attributeValue.toString();
             break;
         case TagId::Input:
             if (match(attributeName, srcAttr))
@@ -347,12 +369,13 @@ private:
         case TagId::Style:
         case TagId::Template:
         case TagId::Picture:
+        case TagId::Svg:
         case TagId::Unknown:
             break;
         }
     }
 
-    static bool NODELETE relAttributeIsStyleSheet(const LinkRelAttribute& parsedAttribute)
+    static bool LEGACY_NODELETE relAttributeIsStyleSheet(const LinkRelAttribute& parsedAttribute)
     {
         return parsedAttribute.isStyleSheet && !parsedAttribute.isAlternate && !parsedAttribute.iconType && !parsedAttribute.isDNSPrefetch;
     }
@@ -374,7 +397,7 @@ private:
         m_urlToLoad = trimmedURL.toString();
     }
 
-    const String& NODELETE charset() const
+    const String& LEGACY_NODELETE charset() const
     {
         return m_charset;
     }
@@ -402,6 +425,7 @@ private:
         case TagId::Base:
         case TagId::Template:
         case TagId::Picture:
+        case TagId::Svg:
             break;
         }
         ASSERT_NOT_REACHED();
@@ -486,8 +510,15 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
             if (m_inStyle)
                 m_cssScanner.reset();
             m_inStyle = false;
-        } else if (tagId == TagId::Picture && !m_pictureSourceState.isEmpty())
+        } else if (tagId == TagId::Picture && !m_pictureSourceState.isEmpty()) {
+            // If the <picture> closes without an <img> the buffered <source>
+            // preload is orphaned and we drop it. A picture with no <img> has
+            // no rendering, so the speculative fetch is wasted and would also
+            // diverge from the non-speculative case (matches WPT
+            // html/syntax/speculative-parsing/.../picture-source-no-img).
             m_pictureSourceState.removeLast();
+        } else if (tagId == TagId::Svg && m_foreignContentCount)
+            --m_foreignContentCount;
 
         return;
     }
@@ -496,7 +527,7 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
         TagId tagId = tagIdFor(token.name());
         if (tagId == TagId::Template) {
             bool isDeclarativeShadowRoot = false;
-            static constexpr auto shadowRootAsUTF16 = std::to_array<char16_t>({ 's', 'h', 'a', 'd', 'o', 'w', 'r', 'o', 'o', 't', 'm', 'o', 'd', 'e' });
+            static constexpr auto shadowRootAsUTF16 = WTF::toArray<char16_t>({ 's', 'h', 'a', 'd', 'o', 'w', 'r', 'o', 'o', 't', 'm', 'o', 'd', 'e' });
             const auto* shadowRootModeAttribute = findAttribute(token.attributes(), shadowRootAsUTF16);
             if (shadowRootModeAttribute)
                 isDeclarativeShadowRoot = !!parseShadowRootMode(StringView(shadowRootModeAttribute->value.span()));
@@ -521,13 +552,52 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
             return;
         }
         if (tagId == TagId::Picture) {
-            m_pictureSourceState.append(false);
+            m_pictureSourceState.append({ });
             return;
+        }
+        if (tagId == TagId::Svg) {
+            ++m_foreignContentCount;
+            return;
+        }
+
+        // In SVG foreign content, <script> uses href/xlink:href, not src.
+        // Don't speculatively preload scripts inside SVG.
+        if (m_foreignContentCount && tagId == TagId::Script)
+            return;
+
+        // <image> is rewritten to <img> by the HTML parser only in HTML content; inside SVG
+        // foreign content it is the SVG image element (which uses href/xlink:href, not src),
+        // so it must not be preloaded as if it were an HTML <img>. (A literal <img> breaks
+        // out of foreign content per HTML parsing rules, so handling it as Img is fine.)
+        if (m_foreignContentCount && tagId == TagId::Img) {
+            static constexpr auto imageAsUTF16 = WTF::toArray<char16_t>({ 'i', 'm', 'a', 'g', 'e' });
+            if (equalSpans(token.name().span(), std::span { imageAsUTF16 }))
+                return;
         }
 
         StartTagScanner scanner(document, tagId, m_deviceScaleFactor);
         scanner.processAttributes(token.attributes(), m_pictureSourceState);
-        if (auto request = scanner.createPreloadRequest(m_predictedBaseElementURL))
+        auto request = scanner.createPreloadRequest(m_predictedBaseElementURL);
+
+        // Inside a <picture>, defer matched-source preloads until the inner <img>
+        // is seen. If the <img> has loading=lazy we discard the buffered request;
+        // otherwise we flush it. This prevents speculatively fetching alternative
+        // <source> candidates (JXL/WebP/AVIF/srcset) for off-screen lazy images.
+        if (tagId == TagId::Source && !m_pictureSourceState.isEmpty()) {
+            if (request)
+                m_pictureSourceState.last().bufferedSourceRequest = WTF::move(request);
+            return;
+        }
+
+        if (tagId == TagId::Img && !m_pictureSourceState.isEmpty()) {
+            auto& pictureState = m_pictureSourceState.last();
+            if (scanner.isLazyloadingImage())
+                pictureState.bufferedSourceRequest.reset();
+            else if (auto buffered = WTF::move(pictureState.bufferedSourceRequest))
+                requests.append(WTF::move(buffered));
+        }
+
+        if (request)
             requests.append(WTF::move(request));
         return;
     }
@@ -540,7 +610,7 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
 void TokenPreloadScanner::updatePredictedBaseURL(const HTMLToken& token, bool shouldRestrictBaseURLSchemes)
 {
     ASSERT(m_predictedBaseElementURL.isEmpty());
-    static constexpr auto hrefAsUTF16 = std::to_array<char16_t>({ 'h', 'r', 'e', 'f' });
+    static constexpr auto hrefAsUTF16 = WTF::toArray<char16_t>({ 'h', 'r', 'e', 'f' });
     auto* hrefAttribute = findAttribute(token.attributes(), hrefAsUTF16);
     if (!hrefAttribute)
         return;

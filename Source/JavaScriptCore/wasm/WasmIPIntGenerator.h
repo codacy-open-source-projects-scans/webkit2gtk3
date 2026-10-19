@@ -30,18 +30,16 @@
 #if ENABLE(WEBASSEMBLY)
 
 #include <JavaScriptCore/WasmCallingConvention.h>
-#include <wtf/Expected.h>
 #include <wtf/text/WTFString.h>
 
 namespace JSC { namespace Wasm {
 
 class FunctionIPIntMetadataGenerator;
-class TypeDefinition;
 struct ModuleInformation;
 struct FunctionDebugInfo;
 
-Expected<std::unique_ptr<FunctionIPIntMetadataGenerator>, String> parseAndCompileMetadata(std::span<const uint8_t>, const TypeDefinition&, ModuleInformation&, FunctionCodeIndex functionIndex);
-JS_EXPORT_PRIVATE void parseForDebugInfo(std::span<const uint8_t>, const TypeDefinition&, ModuleInformation&, FunctionCodeIndex, FunctionDebugInfo&);
+std::expected<std::unique_ptr<FunctionIPIntMetadataGenerator>, String> parseAndCompileMetadata(std::span<const uint8_t>, const RTT&, ModuleInformation&, FunctionCodeIndex functionIndex);
+JS_EXPORT_PRIVATE void parseForDebugInfo(std::span<const uint8_t>, const RTT&, ModuleInformation&, FunctionCodeIndex, FunctionDebugInfo&);
 
 } // namespace JSC::Wasm
 
@@ -81,6 +79,8 @@ static_assert(sizeof(IPIntLocal) == LOCAL_SIZE);
 struct InstructionLengthMetadata {
     uint8_t length; // 1B for length of current instruction
 };
+// IPInt consumes this with one loadbAndAdvance, which hard-codes both the offset and the size.
+static_assert(sizeof(InstructionLengthMetadata) == 1);
 
 struct BlockMetadata {
     // Field order is significant, both may be loaded with one 'loadpairi' instruction.
@@ -181,10 +181,12 @@ struct AtomicMemoryAccessMetadata {
 
 struct MemorySizeMetadata {
     uint8_t memoryIndex;
+    InstructionLengthMetadata instructionLength;
 };
 
 struct MemoryGrowMetadata {
     uint8_t memoryIndex;
+    InstructionLengthMetadata instructionLength;
 };
 
 struct TableInitMetadata {
@@ -212,6 +214,7 @@ struct TableCopyMetadata {
 // Metadata structure for calls:
 
 struct CallSignatureMetadata {
+    SUPPRESS_UNCOUNTED_MEMBER const Wasm::RTT* rtt; // 8B -- owner of shared call bytecode
     uint32_t stackFrameSize; // 4B for stack frame size
     uint16_t numExtraResults; // 2B for number of spots we need to reserve for returns
     uint16_t numArguments; // 2B for number of arguments, to figure out how much to move SP down by
@@ -249,24 +252,21 @@ struct CallMetadata {
     uint32_t callProfileIndex; // 4B for call profile index
     Wasm::FunctionSpaceIndex functionIndex; // 4B for decoded index
     CallSignatureMetadata signature;
-    CallArgumentBytecode argumentBytecode[0];
 };
 
 struct TailCallMetadata {
     uint8_t length; // 1B for instruction length
     uint32_t callProfileIndex; // 4B for call profile index
     Wasm::FunctionSpaceIndex functionIndex; // 4B for decoded index
+    SUPPRESS_UNCOUNTED_MEMBER const Wasm::RTT* rtt; // 8B for RTT
     int32_t callerStackArgSize; // 4B for caller stack size
-    CallArgumentBytecode argumentBytecode[0];
 };
 
 struct CallIndirectMetadata {
     uint8_t length; // 1B for length
     uint32_t callProfileIndex; // 4B for call profile index
     uint32_t tableIndex; // 4B for table index
-    SUPPRESS_UNCOUNTED_MEMBER const Wasm::RTT* rtt; // 8B for RTT
     CallSignatureMetadata signature;
-    CallArgumentBytecode argumentBytecode[0];
 };
 
 struct TailCallIndirectMetadata {
@@ -275,21 +275,19 @@ struct TailCallIndirectMetadata {
     uint32_t tableIndex; // 4B for table index
     SUPPRESS_UNCOUNTED_MEMBER const Wasm::RTT* rtt; // 8B for RTT
     int32_t callerStackArgSize; // 4B for caller stack size
-    CallArgumentBytecode argumentBytecode[0];
 };
 
 struct CallRefMetadata {
     uint8_t length; // 1B for length
     uint32_t callProfileIndex; // 4B for call profile index
     CallSignatureMetadata signature;
-    CallArgumentBytecode argumentBytecode[0];
 };
 
 struct TailCallRefMetadata {
     uint8_t length; // 1B for length
     uint32_t callProfileIndex; // 4B for call profile index
+    SUPPRESS_UNCOUNTED_MEMBER const Wasm::RTT* rtt; // 8B for RTT
     int32_t callerStackArgSize; // 4B for caller stack size
-    CallArgumentBytecode argumentBytecode[0];
 };
 
 // Metadata structure for returns:
@@ -307,7 +305,6 @@ enum class CallResultBytecode : uint8_t { // (mINT)
 struct CallReturnMetadata {
     uint32_t stackFrameSize; // 4B for stack frame size
     uint32_t firstStackResultSPOffset; // 4B for stack argument offset
-    CallResultBytecode resultBytecode[0];
 };
 
 // argumINT / uINT
@@ -322,7 +319,7 @@ enum class ArgumINTBytecode: uint8_t {
     NumOpcodes // this must be the last element of the enum!
 };
 
-enum class UIntBytecode: uint8_t {
+enum class UINTBytecode: uint8_t {
     RetGPR = 0x0, // 0x00 - 0x07: r0 - r7
     RetFPR = 0x8, // 0x08 - 0x0f: fr0 - fr7
     Stack = 0x10,
@@ -391,6 +388,7 @@ struct ArrayInitElemMetadata {
 struct RefTestCastMetadata {
     int32_t toHeapType;
     uint8_t length;
+    uint8_t allowNull;
 };
 
 #pragma pack()

@@ -29,6 +29,7 @@
 #include "Path.h"
 
 #include "AffineTransform.h"
+#include "PathArcLengthMapper.h"
 #include "PathStream.h"
 #include "PathTraversalState.h"
 #include "PlatformPathImpl.h"
@@ -86,7 +87,8 @@ bool Path::definitelyEqual(const Path& other) const
 
 PathImpl& Path::setImpl(Ref<PathImpl>&& impl)
 {
-    auto& platformPathImpl = impl.get();
+    // We can't use Ref here since we return a reference to PathImpl after moving impl into m_data, which keeps it alive.
+    SUPPRESS_UNCOUNTED_LOCAL auto& platformPathImpl = impl.get();
     m_data = WTF::move(impl);
     return platformPathImpl;
 }
@@ -178,7 +180,7 @@ void Path::addRoundedRect(const FloatRoundedRect& roundedRect, PathRoundedRect::
         // after constraint scaling), adjust them to fit rather than dropping them.
         auto adjustedRect = roundedRect;
         adjustedRect.adjustRadii();
-        if (!adjustedRect.isRounded()) {
+        if (!adjustedRect.hasNonZeroRadii()) {
             addRect(adjustedRect.rect());
             return;
         }
@@ -244,7 +246,7 @@ void Path::addPath(const Path& path, const AffineTransform& transform)
     protect(ensurePlatformPathImpl())->addPath(protect(const_cast<Path&>(path).ensurePlatformPathImpl()), transform);
 }
 
-void Path::applySegments(const PathSegmentApplier& applier) const
+void Path::applySegments(NOESCAPE const PathSegmentApplier& applier) const
 {
     if (auto segment = asSingle())
         applier(*segment);
@@ -252,7 +254,7 @@ void Path::applySegments(const PathSegmentApplier& applier) const
         impl->applySegments(applier);
 }
 
-void Path::applyElements(const PathElementApplier& applier) const
+void Path::applyElements(NOESCAPE const PathElementApplier& applier) const
 {
     if (isEmpty())
         return;
@@ -265,7 +267,8 @@ void Path::applyElements(const PathElementApplier& applier) const
     if (impl && impl->applyElements(applier))
         return;
 
-    protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->applyElements(applier);
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->applyElements(applier);
 }
 
 void Path::clear()
@@ -325,7 +328,8 @@ PlatformPathPtr Path::platformPath() const
         return PlatformPathImpl::emptyPlatformPath();
 
 #if USE(CG)
-    return const_cast<Path&>(*this).ensurePlatformPathImpl().platformPath();
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<Path&>(*this).ensurePlatformPathImpl().platformPath();
 #else
     return const_cast<Path&>(*this).ensurePlatformPathImpl().platformPath();
 #endif
@@ -390,12 +394,22 @@ FloatPoint Path::pointAtLength(float length) const
     return traversalStateAtLength(length).current();
 }
 
+PathArcLengthMapper Path::arcLengthMapper() const
+{
+    PathArcLengthMapper mapper;
+    applyElements([&mapper](const PathElement& element) {
+        mapper.appendPathElement(element);
+    });
+    return mapper;
+}
+
 bool Path::contains(const FloatPoint& point, WindRule rule) const
 {
     if (isEmpty())
         return false;
 
-    return protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->contains(point, rule);
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->contains(point, rule);
 }
 
 bool Path::strokeContains(const FloatPoint& point, NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
@@ -405,7 +419,8 @@ bool Path::strokeContains(const FloatPoint& point, NOESCAPE const Function<void(
     if (isEmpty())
         return false;
 
-    return protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->strokeContains(point, strokeStyleApplier);
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->strokeContains(point, strokeStyleApplier);
 }
 
 bool Path::hasSubpaths() const
@@ -424,7 +439,7 @@ FloatRect Path::fastBoundingRect() const
     if (auto* segment = asSingle())
         return segment->fastBoundingRect();
 
-    if (RefPtr impl = asImpl())
+    SUPPRESS_UNCOUNTED_LOCAL if (auto* impl = asImpl())
         return impl->fastBoundingRect();
 
     return { };
@@ -443,7 +458,8 @@ FloatRect Path::boundingRect() const
 
 FloatRect Path::strokeBoundingRect(NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
-    return protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->strokeBoundingRect(strokeStyleApplier);
+    // FIXME: Remove suppression once rdar://189998365 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return protect(const_cast<Path&>(*this).ensurePlatformPathImpl())->strokeBoundingRect(strokeStyleApplier);
 }
 
 TextStream& operator<<(TextStream& ts, const Path& path)

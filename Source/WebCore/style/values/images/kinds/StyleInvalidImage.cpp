@@ -28,6 +28,7 @@
 #include "StyleInvalidImage.h"
 
 #include "CSSImageValue.h"
+#include "DeprecatedCSSOMValue.h"
 
 namespace WebCore {
 namespace Style {
@@ -40,7 +41,7 @@ Ref<InvalidImage> InvalidImage::create()
 InvalidImage::~InvalidImage() = default;
 
 InvalidImage::InvalidImage()
-    : GeneratedImage(Image::Type::InvalidImage, true)
+    : GeneratedImage(Image::Type::InvalidImage)
 {
 }
 
@@ -48,14 +49,34 @@ void InvalidImage::load(CachedResourceLoader&, const ResourceLoaderOptions&)
 {
 }
 
-RefPtr<WebCore::Image> InvalidImage::image(const RenderElement*, const FloatSize&, const GraphicsContext&, bool) const
+ImageDrawResult InvalidImage::draw(GraphicsContext&, const RenderElement&, ConcreteObjectSize, const FloatRect&, const FloatRect&, ImagePaintingOptions, bool) const
 {
-    return &WebCore::Image::nullImage();
+    return ImageDrawResult::DidNothing;
 }
 
-Ref<CSSValue> InvalidImage::computedStyleValue(const RenderStyle&) const
+ImageDrawResult InvalidImage::drawAsPattern(GraphicsContext&, const RenderElement&, ConcreteObjectSize, const FloatRect&, const FloatRect&, const AffineTransform&, const FloatPoint&, const FloatSize&, ImagePaintingOptions, bool) const
+{
+    return ImageDrawResult::DidNothing;
+}
+
+ImageDrawResult InvalidImage::drawTiled(GraphicsContext&, const RenderElement&, ConcreteObjectSize, const FloatRect&, const FloatPoint&, const FloatSize&, const FloatSize&, ImagePaintingOptions, bool) const
+{
+    return ImageDrawResult::DidNothing;
+}
+
+ImageDrawResult InvalidImage::drawNinePiece(GraphicsContext&, const RenderElement&, ConcreteObjectSize, const NinePieceGeometry&, ImagePaintingOptions) const
+{
+    return ImageDrawResult::DidNothing;
+}
+
+Ref<CSSValue> InvalidImage::computedStyleValue(const Style::ComputedStyle&) const
 {
     return CSSImageValue::create();
+}
+
+Ref<DeprecatedCSSOMValue> InvalidImage::computedStyleDeprecatedCSSOMValue(CSSValuePool&, const Style::ComputedStyle& style, CSSStyleDeclaration& owner) const
+{
+    return computedStyleValue(style)->createDeprecatedCSSOMWrapper(owner);
 }
 
 } // namespace Style

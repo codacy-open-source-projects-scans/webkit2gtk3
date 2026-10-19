@@ -39,6 +39,8 @@
 #include "DocumentSecurityOrigin.h"
 #include "FrameDestructionObserverInlines.h"
 #include "JSBasicCredential.h"
+#include "LegacySchemeRegistry.h"
+#include "LocalFrameInlines.h"
 #include "JSCredentialCreationOptions.h"
 #include "JSCredentialRequestOptions.h"
 #include "JSDOMConvertBoolean.h"
@@ -55,7 +57,7 @@
 #include "PublicKeyCredentialCreationOptions.h"
 #include "PublicKeyCredentialRequestOptions.h"
 #include "RegistrableDomain.h"
-#include "LegacySchemeRegistry.h"
+#include "RemoteFrame.h"
 #include "UnknownCredentialOptions.h"
 #include "WebAuthenticationConstants.h"
 #include "WebAuthenticationUtils.h"
@@ -107,11 +109,12 @@ static ScopeAndCrossOriginParent scopeAndCrossOriginParent(const Document& docum
     Ref origin = document.securityOrigin();
     auto url = document.url();
     std::optional<SecurityOriginData> crossOriginParent;
-    for (RefPtr parentDocument = document.parentDocument(); parentDocument; parentDocument = parentDocument->parentDocument()) {
-        if (!origin->isSameOriginDomain(protect(parentDocument->securityOrigin())) && !areRegistrableDomainsEqual(url, parentDocument->url()))
+    for (Ref parentFrame : ancestorFrames(document.frame())) {
+        RefPtr parentOrigin = parentFrame->frameDocumentSecurityOrigin();
+        if (!parentOrigin || is<RemoteFrame>(parentFrame) || RegistrableDomain(parentOrigin->data()) != RegistrableDomain(origin->data()))
             isSameSite = false;
-        if (!crossOriginParent && !origin->isSameOriginAs(protect(parentDocument->securityOrigin())))
-            crossOriginParent = parentDocument->securityOrigin().data();
+        if (parentOrigin && !origin->isSameOriginAs(*parentOrigin))
+            crossOriginParent = parentOrigin->data();
     }
 
     if (!crossOriginParent)
@@ -165,7 +168,7 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
     const auto& options = createOptions.publicKey.value();
 
     // Step 2.
-    if (scopeAndCrossOriginParent(document).first != WebAuthn::Scope::SameOrigin) {
+    if (!document.isSameOriginWithAncestors()) {
         promise.reject(Exception { ExceptionCode::NotAllowedError, "The origin of the document is not the same as its ancestors."_s });
         return;
     }
@@ -270,7 +273,7 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
             RefPtr frame = weakFrame.get();
             if (!frame)
                 return;
-            weakThis->m_client->makeCredential(*weakFrame, options, createOptions.mediation, WTF::move(callback));
+            weakThis->m_client->makeCredential(*frame, options, createOptions.mediation, WTF::move(callback));
         };
         return;
     }
@@ -391,7 +394,7 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
             RefPtr frame = weakFrame.get();
             if (!frame)
                 return;
-            weakThis->m_client->getAssertion(*weakFrame, options, requestOptions.mediation, scopeCrossOriginParent, WTF::move(callback));
+            weakThis->m_client->getAssertion(*frame, options, requestOptions.mediation, scopeCrossOriginParent, WTF::move(callback));
         };
         return;
     }

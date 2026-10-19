@@ -36,7 +36,17 @@
 #include <WebCore/StyleSepiaFunction.h>
 #include <wtf/StdLibExtras.h>
 
+#if ENABLE(NEUTRALIZE_COLOR_FILTER)
+// FIXME: Properly support using WKA in modules.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnon-modular-include-in-module"
+#include <WebKitAdditions/AppleNeutralizeFunction.h>
+#pragma clang diagnostic pop
+#endif
+
 namespace WebCore {
+
+class Color;
 
 namespace CSS {
 struct AppleColorFilter;
@@ -49,6 +59,9 @@ namespace Style {
 // Any <apple-color-filter-function>.
 // (Equivalent of https://drafts.fxtf.org/filter-effects/#typedef-filter-function)
 using AppleColorFilterValueKind = Variant<
+#if ENABLE(NEUTRALIZE_COLOR_FILTER)
+    AppleNeutralizeFunction,
+#endif
     AppleInvertLightnessFunction,
     BrightnessFunction,
     ContrastFunction,
@@ -86,7 +99,7 @@ struct AppleColorFilter : ListOrNone<AppleColorFilterValueList> {
 
     using ListOrNone<AppleColorFilterValueList>::ListOrNone;
 
-    static const AppleColorFilter& none();
+    static const AppleColorFilter& LEGACY_NODELETE none();
 
     bool transformColor(WebCore::Color&) const;
     bool inverseTransformColor(WebCore::Color&) const;
@@ -103,18 +116,18 @@ template<typename T> bool AppleColorFilter::hasFilterOfType() const
 
 // MARK: - Conversion
 
-template<> struct ToCSS<AppleColorFilterValueList> { auto operator()(const AppleColorFilterValueList&, const RenderStyle&) -> CSS::AppleColorFilterValueList; };
+template<> struct ToCSS<AppleColorFilterValueList> { auto operator()(const AppleColorFilterValueList&, const Style::ComputedStyle&) -> CSS::AppleColorFilterValueList; };
 template<> struct ToStyle<CSS::AppleColorFilterValueList> { auto operator()(const CSS::AppleColorFilterValueList&, const BuilderState&) -> AppleColorFilterValueList; };
 
 template<> struct CSSValueConversion<AppleColorFilter> { auto operator()(BuilderState&, const CSSValue&) -> AppleColorFilter; };
-template<> struct CSSValueCreation<AppleColorFilter> { auto operator()(CSSValuePool&, const RenderStyle&, const AppleColorFilter&) -> Ref<CSSValue>; };
+template<> struct CSSValueCreation<AppleColorFilter> { auto operator()(CSSValuePool&, const Style::ComputedStyle&, const AppleColorFilter&) -> Ref<CSSValue>; };
 
 // MARK: - Blending
 
 template<> struct Blending<AppleColorFilter> {
-    auto canBlend(const AppleColorFilter&, const AppleColorFilter&, CompositeOperation) -> bool;
+    bool LEGACY_NODELETE canBlend(const AppleColorFilter&, const AppleColorFilter&, CompositeOperation);
     constexpr auto requiresInterpolationForAccumulativeIteration(const AppleColorFilter&, const AppleColorFilter&) -> bool { return true; }
-    auto blend(const AppleColorFilter&, const AppleColorFilter&, const RenderStyle&, const RenderStyle&, const BlendingContext&) -> AppleColorFilter;
+    auto blend(const AppleColorFilter&, const AppleColorFilter&, const Style::ComputedStyle&, const Style::ComputedStyle&, const BlendingContext&) -> AppleColorFilter;
 };
 
 } // namespace Style

@@ -359,6 +359,20 @@ TEST(WebKit, ConfigurationMaskedURLSchemes)
     imageSource = [webView stringByEvaluatingJavaScript:@"document.querySelectorAll(\"img\")[1].getAttributeNode(\"src\").value"];
     EXPECT_WK_STREQ(imageSource, @"baz.png");
 
+    NSString *serializedHTML = [webView stringByEvaluatingJavaScript:@"new XMLSerializer().serializeToString(document.querySelectorAll(\"img\")[0])"];
+    EXPECT_TRUE([serializedHTML containsString:@"webkit-masked-url://hidden/"]);
+    EXPECT_FALSE([serializedHTML containsString:@"test-scheme://"]);
+
+    serializedHTML = [webView stringByEvaluatingJavaScript:@"new XMLSerializer().serializeToString(document.querySelectorAll(\"img\")[1])"];
+    EXPECT_TRUE([serializedHTML containsString:@"baz.png"]);
+    EXPECT_FALSE([serializedHTML containsString:@"webkit-masked-url://"]);
+    EXPECT_FALSE([serializedHTML containsString:@"test-scheme://"]);
+
+    serializedHTML = [webView stringByEvaluatingJavaScript:@"new XMLSerializer().serializeToString(document)"];
+    EXPECT_TRUE([serializedHTML containsString:@"webkit-masked-url://hidden/"]);
+    EXPECT_TRUE([serializedHTML containsString:@"baz.png"]);
+    EXPECT_FALSE([serializedHTML containsString:@"test-scheme://"]);
+
     [webView synchronouslyLoadHTMLString:@"<img srcset=\"test-scheme://foo.com/bar.jpg 1x, bar.jpg 2x, another-scheme://foo.com/bar.gif 3x\"><img srcset=\"https://apple.com/baz.png 2x, baz.png 1x\">" baseURL:[NSURL URLWithString:@"https://example.com"]];
 
     imageSource = [webView stringByEvaluatingJavaScript:@"document.querySelectorAll(\"img\")[0].srcset"];
@@ -449,7 +463,7 @@ TEST(WebKit, OverrideReferrer)
         }
         EXPECT_TRUE(strnstr(request.span().data(), "\r\nReferer: overridereferer\r\n", request.size()));
         EXPECT_FALSE(strnstr(request.span().data(), "eferrer", request.size()));
-        EXPECT_EQ(String(request.span()).split("Referer"_s).size(), 2u);
+        EXPECT_EQ(String::fromLatin1(request.span()).split("Referer"_s).size(), 2u);
         if (path == "/example"_s) {
             co_await connection.awaitableSend(HTTPResponse("<script>window.location = 'https://webkit.org/webkit'</script>"_s).serialize());
             continue;

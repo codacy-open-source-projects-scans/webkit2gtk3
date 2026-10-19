@@ -24,12 +24,11 @@
 #include "RenderTextFragment.h"
 
 #include "RenderBlock.h"
-#include "RenderInline.h"
 #include "RenderIterator.h"
 #include "RenderObjectInlines.h"
 #include "RenderMultiColumnFlow.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderTreeBuilder.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "Text.h"
 #include <wtf/TZoneMallocInlines.h>
 
@@ -75,8 +74,8 @@ bool RenderTextFragment::canBeSelectionLeaf() const
         return firstLetter() || textNode->hasEditableStyle();
     }
     // First-letter is always selectable.
-    CheckedPtr anonymousInlineWrapper = dynamicDowncast<RenderInline>(this->parent());
-    return anonymousInlineWrapper && anonymousInlineWrapper->firstLetterRemainingText();
+    CheckedPtr anonymousInlineWrapper = dynamicDowncast<RenderBoxModelObject>(this->parent());
+    return anonymousInlineWrapper && anonymousInlineWrapper->isInlineBox() && anonymousInlineWrapper->firstLetterRemainingText();
 }
 
 void RenderTextFragment::setTextInternal(const String& newText, bool force)

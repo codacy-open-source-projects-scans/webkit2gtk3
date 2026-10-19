@@ -74,19 +74,20 @@ ImageDrawResult GraphicsContext::drawMultiRepresentationHEIC(Image& image, const
     if (!multiRepresentationHEIC)
         return ImageDrawResult::DidNothing;
 
-    RefPtr imageBuffer = createScaledImageBuffer(destination.size(), scaleFactor(), DestinationColorSpace::SRGB(), RenderingMode::Unaccelerated, RenderingMethod::Local);
+    RefPtr imageBuffer = createScaledImageBuffer(destination.size(), scaleFactor(), ColorSpace::SRGB(), RenderingMode::Unaccelerated, RenderingMethod::Local);
     if (!imageBuffer)
         return ImageDrawResult::DidNothing;
 
-    CGContextRef cgContext = imageBuffer->context().platformContext();
+    RetainPtr cgContext = imageBuffer->context().platformContext();
 
     CGContextScaleCTM(cgContext, 1, -1);
     CGContextTranslateCTM(cgContext, 0, -destination.height());
 
     // FIXME (rdar://123044459): This needs to account for vertical writing modes.
+    CGContextSetTextMatrix(cgContext, CGAffineTransformIdentity);
     CGContextSetTextPosition(cgContext, 0, font.metricsForMultiRepresentationHEIC().descent);
 
-    CTFontDrawImageFromAdaptiveImageProviderAtPoint(font.ctFont(), multiRepresentationHEIC.get(), CGContextGetTextPosition(cgContext), cgContext);
+    CTFontDrawImageFromAdaptiveImageProviderAtPoint(protect(font.ctFont()), multiRepresentationHEIC.get(), CGContextGetTextPosition(cgContext), cgContext);
 
     auto orientation = options.orientation();
     if (orientation == ImageOrientation::Orientation::FromImage)
@@ -118,7 +119,7 @@ void GraphicsContextCG::drawFocusRing(const Path& path, float, const Color& colo
 #endif
 
     // zoomFactor covers CSS zoom / page zoom (Cmd+/-). ctmScale covers page scale (pinch-to-zoom), canvas transforms, etc.
-    CGContextRef platformContext = this->platformContext();
+    RetainPtr platformContext = this->platformContext();
     auto ctmScale = singularValue(getUserToBaseCTM(platformContext), SingularValueSelection::Largest);
     if (ctmScale <= 0)
         ctmScale = 1.0f;
@@ -135,7 +136,7 @@ void GraphicsContextCG::drawFocusRing(const Path& path, float, const Color& colo
 
     CGContextSetStyle(platformContext, style.get());
     CGContextBeginPath(platformContext);
-    CGContextAddPath(platformContext, path.platformPath());
+    CGContextAddPath(platformContext, protect(path.platformPath()));
 
     CGContextFillPath(platformContext);
 }
@@ -146,14 +147,6 @@ void GraphicsContextCG::drawFocusRing(const Vector<FloatRect>& rects, float outl
     for (const auto& rect : rects)
         path.addRect(rect);
     drawFocusRing(path, outlineWidth, color, zoomFactor);
-}
-
-static inline void setPatternPhaseInUserSpace(CGContextRef context, CGPoint phasePoint)
-{
-    CGAffineTransform userToBase = getUserToBaseCTM(context);
-    CGPoint phase = CGPointApplyAffineTransform(phasePoint, userToBase);
-
-    CGContextSetPatternPhase(context, CGSizeMake(phase.x, phase.y));
 }
 
 static inline void drawDotsForDocumentMarker(CGContextRef context, const FloatRect& rect, DocumentMarkerLineStyle style)
@@ -215,11 +208,11 @@ void GraphicsContextCG::drawDotsForDocumentMarker(const FloatRect& rect, Documen
 {
 #if HAVE(AUTOCORRECTION_ENHANCEMENTS)
     if (style.mode == DocumentMarkerLineStyleMode::AutocorrectionReplacement) {
-        drawRoundedRectForDocumentMarker(this->platformContext(), rect, style);
+        drawRoundedRectForDocumentMarker(protect(this->platformContext()), rect, style);
         return;
     }
 #endif
-    WebCore::drawDotsForDocumentMarker(this->platformContext(), rect, style);
+    WebCore::drawDotsForDocumentMarker(protect(this->platformContext()), rect, style);
 }
 
 } // namespace WebCore

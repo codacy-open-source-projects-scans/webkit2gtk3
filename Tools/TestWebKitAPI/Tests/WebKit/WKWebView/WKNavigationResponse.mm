@@ -31,6 +31,8 @@
 #import "Helpers/PlatformUtilities.h"
 #import "Helpers/Test.h"
 #import "Helpers/cocoa/TestNavigationDelegate.h"
+#import "Helpers/cocoa/TestUIDelegate.h"
+#import "Helpers/cocoa/TestWKWebView.h"
 #import "Helpers/cocoa/WKWebViewConfigurationExtras.h"
 #import <WebKit/WKNavigationActionPrivate.h>
 #import <WebKit/WKNavigationResponsePrivate.h>
@@ -208,41 +210,19 @@ TEST(WebKit, WKNavigationResponsePDFType)
 
 @end
 
-// FIXME when rdar://170575820 is resolved.
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 260000
-TEST(WebKit, DISABLED_WKNavigationResponseDownloadAttribute)
-#else
 TEST(WebKit, WKNavigationResponseDownloadAttribute)
-#endif
 {
     auto getDownloadResponse = [] (RetainPtr<NSString> body) -> RetainPtr<WKNavigationResponse> {
         using namespace TestWebKitAPI;
-        HTTPServer server([body](Connection connection) {
-            connection.receiveHTTPRequest([=](Vector<char>&&) {
-                unsigned bodyLength = [body length];
-                NSString *firstResponse = [NSString stringWithFormat:
-                    @"HTTP/1.1 200 OK\r\n"
-                    "Content-Length: %d\r\n\r\n"
-                    "%@",
-                    bodyLength,
-                    body.get()
-                ];
-                connection.send(firstResponse, [=] {
-                    connection.receiveHTTPRequest([=](Vector<char>&&) {
-                        NSString *secondResponse = @"HTTP/1.1 200 OK\r\n"
-                            "Content-Length: 6\r\n"
-                            "Content-Disposition: attachment; filename=fromHeader.txt;\r\n\r\n"
-                            "Hello!";
-                        connection.send(secondResponse);
-                    });
-                });
-            });
+        HTTPServer server({
+            { "/"_s, { String(body.get()) } },
+            { "/fromHref.txt"_s, { { { "Content-Disposition"_s, "attachment; filename=fromHeader.txt;"_s } }, "Hello!"_s } },
         });
         RetainPtr delegate = adoptNS([NavigationResponseTestDelegate new]);
         RetainPtr webView = adoptNS([WKWebView new]);
         [webView setNavigationDelegate:delegate.get()];
 
-        [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/", server.port()]]]];
+        [webView loadRequest:server.request()];
         [delegate waitForNavigationFinishedCallback];
 
         [webView evaluateJavaScript:@"document.getElementById('link').click();" completionHandler:nil];
@@ -296,5 +276,29 @@ TEST(WebKit, SkipDecidePolicyForResponse)
         [delegate waitForDidFinishNavigation];
         EXPECT_TRUE(std::exchange(responseDelegateCalled, false));
     }
+}
+#endif
+
+#if WK_HAVE_C_SPI
+TEST(WebKit, SkipDecidePolicyForResponseForOpaqueOriginSubframe)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/main"_s, { { { "Content-Type"_s, "text/html"_s } }, "<iframe src='data:text/html,hi'></iframe>"_s } },
+    });
+
+    WKWebViewConfiguration *configuration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"SkipDecidePolicyForResponsePlugIn"];
+    configuration.preferences.fraudulentWebsiteWarningEnabled = NO;
+    RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration]);
+    RetainPtr delegate = adoptNS([TestNavigationDelegate new]);
+    __block unsigned responseDelegateCalls { 0 };
+    delegate.get().decidePolicyForNavigationResponse = ^(WKNavigationResponse *, void (^completionHandler)(WKNavigationResponsePolicy)) {
+        ++responseDelegateCalls;
+        completionHandler(WKNavigationResponsePolicyAllow);
+    };
+    webView.get().navigationDelegate = delegate.get();
+
+    [webView loadRequest:server.request("/main"_s)];
+    [delegate waitForDidFinishNavigation];
+    EXPECT_EQ(responseDelegateCalls, 0u);
 }
 #endif

@@ -25,13 +25,13 @@
 #include "Event.h"
 #include "RenderCombineText.h"
 #include "RenderSVGInlineText.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderText.h"
 #include "SVGElementInlines.h"
 #include "SVGNames.h"
 #include "ScopedEventQueue.h"
 #include "SerializedNode.h"
 #include "ShadowRoot.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleResolver.h"
 #include "StyleUpdate.h"
 #include "TextManipulationController.h"
@@ -79,7 +79,7 @@ ExceptionOr<Ref<Text>> Text::splitText(unsigned offset)
     return newText;
 }
 
-static const Text* NODELETE earliestLogicallyAdjacentTextNode(const Text* text)
+static const Text* LEGACY_NODELETE earliestLogicallyAdjacentTextNode(const Text* text)
 {
     const Node* node = text;
     while ((node = node->previousSibling())) {
@@ -91,7 +91,7 @@ static const Text* NODELETE earliestLogicallyAdjacentTextNode(const Text* text)
     return text;
 }
 
-static const Text* NODELETE latestLogicallyAdjacentTextNode(const Text* text)
+static const Text* LEGACY_NODELETE latestLogicallyAdjacentTextNode(const Text* text)
 {
     const Node* node = text;
     while ((node = node->nextSibling())) {
@@ -162,21 +162,21 @@ SerializedNode Text::serializeNode(CloningOperation) const
     return { SerializedNode::Text { data() } };
 }
 
-static bool NODELETE isSVGShadowText(const Text& text)
+static bool LEGACY_NODELETE isSVGShadowText(const Text& text)
 {
     ASSERT(text.parentNode());
     auto* parentShadowRoot = dynamicDowncast<ShadowRoot>(*text.parentNode());
     return parentShadowRoot && parentShadowRoot->host()->hasTagName(SVGNames::trefTag);
 }
 
-static bool NODELETE isSVGText(const Text& text)
+static bool LEGACY_NODELETE isSVGText(const Text& text)
 {
     ASSERT(text.parentNode());
     auto* parentElement = dynamicDowncast<SVGElement>(*text.parentNode());
     return parentElement && !parentElement->hasTagName(SVGNames::foreignObjectTag);
 }
 
-RenderPtr<RenderText> Text::createTextRenderer(const RenderStyle& style)
+RenderPtr<RenderText> Text::createTextRenderer(const Style::ComputedStyle& style)
 {
     if (isSVGText(*this) || isSVGShadowText(*this))
         return createRenderer<RenderSVGInlineText>(*this, data());

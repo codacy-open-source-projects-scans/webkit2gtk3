@@ -29,6 +29,7 @@
 #include <WebCore/Color.h>
 #include <WebCore/ElementContext.h>
 #include <WebCore/FontAttributes.h>
+#include <WebCore/FrameIdentifier.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/ScrollTypes.h>
@@ -36,6 +37,7 @@
 #include <WebCore/SelectionType.h>
 #include <WebCore/WritingDirection.h>
 #include <optional>
+#include <wtf/Markable.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
@@ -87,6 +89,7 @@ struct EditorState {
 #if PLATFORM(MAC)
     bool canEnableAutomaticSpellingCorrection { true };
     bool inputMethodUsesCorrectKeyEventOrder { false };
+    bool inputMethodMustUseCompositionEvents { false };
 #endif
 
     struct PostLayoutData {
@@ -139,11 +142,14 @@ struct EditorState {
         bool canPaste { false };
     };
 
-    bool NODELETE isEditableOrRanged() const;
+    bool LEGACY_NODELETE isEditableOrRanged() const;
     bool hasPostLayoutData() const { return !!postLayoutData; }
 
     // Visual data is only updated in sync with rendering updates.
     struct VisualData {
+        // Local root frame the rects below are relative to, so the UIProcess can map them to
+        // main-frame coordinates when the selection is in a cross-origin subframe.
+        Markable<WebCore::FrameIdentifier> rootFrameID;
 #if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
         WebCore::IntRect caretRectAtStart;
 #endif
@@ -164,6 +170,8 @@ struct EditorState {
         std::optional<WebCore::ScrollingNodeID> scrollingNodeIDAtEnd;
         WebCore::ScrollOffset enclosingScrollOffset;
         bool enclosingLayerUsesContentsLayer { false };
+        bool needsHideSelectionDuringOverflowScrollQuirk { false };
+        bool shouldAllowTouchMoveToChangeSelectionQuirk { false };
 #endif // PLATFORM(IOS_FAMILY)
     };
 

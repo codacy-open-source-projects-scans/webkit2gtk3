@@ -34,12 +34,12 @@ HitTestLocation::HitTestLocation(const LayoutPoint& point)
 {
 }
 
-HitTestLocation::HitTestLocation(const FloatPoint& point, const FloatQuad& quad)
+HitTestLocation::HitTestLocation(const FloatPoint& point, const FloatQuad& quad, RectBased rectBased)
     : m_point { flooredLayoutPoint(point) }
     , m_boundingBox { quad.enclosingBoundingBox() }
     , m_transformedPoint { point }
     , m_transformedRect { quad }
-    , m_isRectBased { true }
+    , m_isRectBased { rectBased == RectBased::Yes }
     , m_isRectilinear { quad.isRectilinear() }
 {
 }
@@ -79,7 +79,7 @@ void HitTestLocation::move(const LayoutSize& offset)
 }
 
 template<typename RectType>
-bool HitTestLocation::intersectsRect(const RectType& rect) const
+bool LEGACY_NODELETE HitTestLocation::intersectsRect(const RectType& rect) const
 {
     // FIXME: When the hit test is not rect based we should use rect.contains(m_point).
     // That does change some corner case tests though.

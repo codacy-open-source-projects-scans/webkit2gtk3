@@ -25,7 +25,6 @@
 
 import Testing
 import WebKit
-import struct _Concurrency.Task
 import struct Swift.String
 import struct Foundation.URL
 private import TestWebKitAPILibrary
@@ -100,10 +99,10 @@ struct TestURLSchemeHandler: URLSchemeHandler, Sendable {
 
             case .async:
                 Task {
-                    try await Task.sleep(for: delays.beforeYield)
+                    try? await Task.sleep(for: delays.beforeYield)
                     yieldResponse()
 
-                    try await Task.sleep(for: delays.beforeFinish)
+                    try? await Task.sleep(for: delays.beforeFinish)
                     yieldDataAndFinish()
                 }
             }

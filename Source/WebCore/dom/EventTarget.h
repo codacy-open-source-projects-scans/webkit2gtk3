@@ -35,16 +35,11 @@
 #include <WebCore/EventListenerOptions.h>
 #include <WebCore/PlatformExportMacros.h>
 #include <WebCore/ScriptWrappable.h>
-#include <memory>
 #include <wtf/CanMakeWeakPtr.h>
 #include <wtf/CheckedPtr.h>
-#include <wtf/EnumTraits.h>
 #include <wtf/Forward.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/Variant.h>
-#include <wtf/WeakPtr.h>
-#include <wtf/WeakPtrFactory.h>
-#include <wtf/WeakPtrImpl.h>
 
 namespace JSC {
 class JSValue;
@@ -89,17 +84,17 @@ private:
 class WEBCORE_EXPORT EventTarget : public ScriptWrappable, public CanMakeWeakPtrWithBitField<EventTarget, WeakPtrFactoryInitialization::Lazy, WeakPtrImplWithEventTargetData> {
     WTF_MAKE_TZONE_ALLOCATED(EventTarget);
 public:
-    static Ref<EventTarget> create(ScriptExecutionContext&);
+    static Ref<EventTarget> LEGACY_NODELETE create(ScriptExecutionContext&);
 
     inline void ref(); // Defined in EventTargetInlines.h.
     inline void deref(); // Defined in EventTargetInlines.h.
 
-    virtual enum EventTargetInterfaceType NODELETE eventTargetInterface() const = 0;
+    virtual enum EventTargetInterfaceType LEGACY_NODELETE eventTargetInterface() const = 0;
     virtual ScriptExecutionContext* scriptExecutionContext() const = 0;
 
-    virtual WebCoreOpaqueRoot NODELETE opaqueRoot() const;
+    virtual WebCoreOpaqueRoot LEGACY_NODELETE opaqueRoot() const;
 
-    virtual bool NODELETE isPaymentRequest() const;
+    virtual bool LEGACY_NODELETE isPaymentRequest() const;
 
     using AddEventListenerOptionsOrBoolean = Variant<AddEventListenerOptions, bool>;
     void addEventListenerForBindings(const AtomString& eventType, RefPtr<EventListener>&&, AddEventListenerOptionsOrBoolean&&);
@@ -123,31 +118,31 @@ public:
     bool setAttributeEventListener(const AtomString& eventType, RefPtr<EventListener>&&, DOMWrapperWorld&);
     RefPtr<JSEventListener> attributeEventListener(const AtomString& eventType, DOMWrapperWorld&);
 
-    bool hasEventListeners() const;
-    bool hasEventListeners(const AtomString& eventType) const;
-    bool hasAnyEventListeners(std::span<const AtomString> eventTypes) const;
-    bool hasCapturingEventListeners(const AtomString& eventType);
-    bool NODELETE hasActiveEventListeners(const AtomString& eventType) const;
+    inline bool hasEventListeners() const; // Defined in EventTargetInlines.h
+    inline bool hasEventListeners(const AtomString& eventType) const; // Defined in EventTargetInlines.h
+    bool LEGACY_NODELETE hasAnyEventListeners(std::span<const AtomString> eventTypes) const;
+    inline bool hasCapturingEventListeners(const AtomString& eventType); // Defined in EventTargetInlines.h
+    bool LEGACY_NODELETE hasActiveEventListeners(const AtomString& eventType) const;
 
     Vector<AtomString> eventTypes() const;
-    const EventListenerVector& NODELETE eventListeners(const AtomString& eventType);
+    const EventListenerVector& LEGACY_NODELETE eventListeners(const AtomString& eventType);
 
     enum class EventInvokePhase { Capturing, Bubbling };
     void fireEventListeners(Event&, EventInvokePhase);
 
     template<typename Visitor>
-    inline void visitJSEventListenersInGCThread(Visitor&);
+    inline void visitJSEventListenersInGCThread(Visitor&); // Defined in EventTargetInlines.h
     void invalidateJSEventListeners(JSC::JSObject*);
 
-    inline const EventTargetData* eventTargetData() const;
-    inline EventTargetData* eventTargetData();
-    inline EventTargetData* eventTargetDataConcurrently();
+    inline const EventTargetData* eventTargetData() const; // Defined in EventTargetInlines.h
+    inline EventTargetData* eventTargetData(); // Defined in EventTargetInlines.h
+    inline EventTargetData* eventTargetDataConcurrently(); // Defined in EventTargetInlines.h
 
     template<typename CallbackType>
-    inline void enumerateEventListenerTypes(NOESCAPE const CallbackType&) const;
+    inline void enumerateEventListenerTypes(NOESCAPE const CallbackType&) const; // Defined in EventTargetInlines.h
 
     template<typename CallbackType>
-    inline bool containsMatchingEventListener(NOESCAPE const CallbackType&) const;
+    inline bool containsMatchingEventListener(NOESCAPE const CallbackType&) const; // Defined in EventTargetInlines.h
 
     bool hasEventTargetData() const { return hasEventTargetFlag(EventTargetFlag::HasEventTargetData); }
     bool isNode() const { return hasEventTargetFlag(EventTargetFlag::IsNode); }
@@ -155,8 +150,8 @@ public:
     bool isInGCReacheableRefMap() const { return hasEventTargetFlag(EventTargetFlag::IsInGCReachableRefMap); }
     void setIsInGCReacheableRefMap(bool flag) { setEventTargetFlag(EventTargetFlag::IsInGCReachableRefMap, flag); }
 
-    bool hasValidQuerySelectorAllResults() const { return hasEventTargetFlag(EventTargetFlag::HasValidQuerySelectorAllResults); }
-    void setHasValidQuerySelectorAllResults(bool flag) { setEventTargetFlag(EventTargetFlag::HasValidQuerySelectorAllResults, flag); }
+    bool hasValidQuerySelectorResults() const { return hasEventTargetFlag(EventTargetFlag::HasValidQuerySelectorResults); }
+    void setHasValidQuerySelectorResults(bool flag) { setEventTargetFlag(EventTargetFlag::HasValidQuerySelectorResults, flag); }
 
     bool hasInternalTouchEventHandling() const { return hasEventTargetFlag(EventTargetFlag::HasInternalTouchEventHandling); }
     void setHasInternalTouchEventHandling(bool flag) { setEventTargetFlag(EventTargetFlag::HasInternalTouchEventHandling, flag); }
@@ -180,7 +175,7 @@ protected:
         IsConnected = 1 << 3,
         IsInShadowTree = 1 << 4,
         HasBeenInUserAgentShadowTree = 1 << 5,
-        HasValidQuerySelectorAllResults = 1 << 6,
+        HasValidQuerySelectorResults = 1 << 6,
         // Element bits
         HasSyntheticAttrChildNodes = 1 << 7,
         HasDuplicateAttribute = 1 << 8,

@@ -39,7 +39,7 @@ class WorkerOrWorkletGlobalScope;
 class WorkerMessagePortChannelProvider final : public MessagePortChannelProvider, public RefCounted<WorkerMessagePortChannelProvider> {
     WTF_MAKE_TZONE_ALLOCATED(WorkerMessagePortChannelProvider);
 public:
-    static Ref<WorkerMessagePortChannelProvider> create(WorkerOrWorkletGlobalScope&);
+    static Ref<WorkerMessagePortChannelProvider> LEGACY_NODELETE create(WorkerOrWorkletGlobalScope&);
     ~WorkerMessagePortChannelProvider();
 
     void ref() const final { RefCounted::ref(); }
@@ -48,7 +48,7 @@ public:
 private:
     explicit WorkerMessagePortChannelProvider(WorkerOrWorkletGlobalScope&);
 
-    void createNewMessagePortChannel(const MessagePortIdentifier& local, const MessagePortIdentifier& remote, bool siteIsolationEnabled) final;
+    void createNewMessagePortChannel(const MessagePortIdentifier& local, const MessagePortIdentifier& remote) final;
     void entangleLocalPortInThisProcessToRemote(const MessagePortIdentifier& local, const MessagePortIdentifier& remote) final;
     void messagePortDisentangled(const MessagePortIdentifier& local) final;
     void messagePortClosed(const MessagePortIdentifier& local) final;

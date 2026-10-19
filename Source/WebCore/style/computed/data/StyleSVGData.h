@@ -25,7 +25,6 @@
 #pragma once
 
 #include <WebCore/RenderStyleConstants.h>
-#include <WebCore/StyleSVGGlyphOrientationHorizontal.h>
 #include <WebCore/StyleSVGGlyphOrientationVertical.h>
 #include <WebCore/WindRule.h>
 #include <wtf/DataRef.h>
@@ -46,7 +45,7 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(SVGData);
 class SVGData : public RefCounted<SVGData> {
     WTF_DEPRECATED_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(SVGData, SVGData);
 public:
-    static Ref<SVGData> createDefaultStyle();
+    static Ref<SVGData> LEGACY_NODELETE createDefaultStyle();
     static Ref<SVGData> create() { return adoptRef(*new SVGData); }
     Ref<SVGData> copy() const;
     ~SVGData();
@@ -76,7 +75,6 @@ public:
         PREFERRED_TYPE(TextAnchor) unsigned textAnchor : 2;
         PREFERRED_TYPE(ColorInterpolation) unsigned colorInterpolation : 2;
         PREFERRED_TYPE(ColorInterpolation) unsigned colorInterpolationFilters : 2;
-        PREFERRED_TYPE(SVGGlyphOrientationHorizontal) unsigned glyphOrientationHorizontal : 2;
         PREFERRED_TYPE(SVGGlyphOrientationVertical) unsigned glyphOrientationVertical : 3;
     };
 
@@ -114,7 +112,7 @@ private:
     enum CreateDefaultType { CreateDefault };
     SVGData(CreateDefaultType); // Used to create the default style.
 
-    void NODELETE setBitDefaults();
+    void LEGACY_NODELETE setBitDefaults();
 };
 
 } // namespace Style

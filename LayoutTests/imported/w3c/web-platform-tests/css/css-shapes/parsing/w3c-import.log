@@ -10,8 +10,6 @@ Do NOT modify or remove this file.
 ------------------------------------------------------------------------
 Properties requiring vendor prefixes:
 None
-Property values requiring vendor prefixes:
-None
 ------------------------------------------------------------------------
 List of files:
 /LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/WEB_FEATURES.yml
@@ -23,4 +21,8 @@ List of files:
 /LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-margin-valid.html
 /LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-computed.html
 /LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-invalid-position.html
+/LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-path-invalid.html
+/LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-path-valid.html
+/LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-shape-invalid.html
+/LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-shape-valid.html
 /LayoutTests/imported/w3c/web-platform-tests/css/css-shapes/parsing/shape-outside-valid-position.html

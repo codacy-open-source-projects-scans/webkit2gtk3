@@ -33,7 +33,7 @@ namespace WebCore {
 
 class MessagePortChannelProviderImpl final : public MessagePortChannelProvider, public RefCounted<MessagePortChannelProviderImpl> {
 public:
-    static Ref<MessagePortChannelProviderImpl> create();
+    static Ref<MessagePortChannelProviderImpl> LEGACY_NODELETE create();
     ~MessagePortChannelProviderImpl() final;
 
     void ref() const final { RefCounted::ref(); }
@@ -42,7 +42,7 @@ public:
 private:
     MessagePortChannelProviderImpl();
 
-    void createNewMessagePortChannel(const MessagePortIdentifier& local, const MessagePortIdentifier& remote, bool siteIsolationEnabled) final;
+    void createNewMessagePortChannel(const MessagePortIdentifier& local, const MessagePortIdentifier& remote) final;
     void entangleLocalPortInThisProcessToRemote(const MessagePortIdentifier& local, const MessagePortIdentifier& remote) final;
     void messagePortDisentangled(const MessagePortIdentifier& local) final;
     void messagePortClosed(const MessagePortIdentifier& local) final;

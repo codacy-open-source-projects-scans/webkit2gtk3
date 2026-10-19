@@ -32,6 +32,7 @@
 #include "WebPageProxy.h"
 #include "WebProcessPool.h"
 #include "WebProcessProxy.h"
+#include <wtf/NumberOfCores.h>
 
 namespace WebKit {
 
@@ -126,7 +127,7 @@ void WebProcessActivityState::takeMutedCaptureAssertion()
 
     isMutedCaptureAssertion->setInvalidationHandler([weakPage = page] {
         auto invalidateCaptureAssertion = [](auto&& weakPage) {
-            if (auto* page = weakPage.get()) {
+            if (RefPtr page = weakPage.get()) {
                 RELEASE_LOG(ProcessSuspension, "Muted capture assertion is invalidated");
                 page->processActivityState().m_isMutedCaptureAssertion = nullptr;
             }

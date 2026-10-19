@@ -42,18 +42,16 @@
 #include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
-#if ENABLE(DBLCLICK_EVENT_REGIONS)
-#include <WebCore/FrameIdentifier.h>
-#include <wtf/Markable.h>
-#endif
-
 namespace WebCore {
 
 class EventRegion;
 class Path;
 class RenderObject;
-class RenderStyle;
 enum class TrackingType : uint8_t;
+
+namespace Style {
+class ComputedStyle;
+}
 
 class EventRegionContext final : public RegionContext {
     WTF_MAKE_TZONE_ALLOCATED_EXPORT(EventRegionContext, WEBCORE_EXPORT);
@@ -64,13 +62,14 @@ public:
 
     bool isEventRegionContext() const final { return true; }
 
-    WEBCORE_EXPORT void unite(const FloatRoundedRect&, const RenderObject&, const RenderStyle&, bool overrideUserModifyIsEditable = false);
+    enum class ContributeToInteractionRegions : bool { No, Yes };
+    WEBCORE_EXPORT void unite(const FloatRoundedRect&, const RenderObject&, const Style::ComputedStyle&, bool overrideUserModifyIsEditable = false, ContributeToInteractionRegions = ContributeToInteractionRegions::Yes);
     bool contains(const IntRect&) const;
 
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
     void uniteInteractionRegions(const RenderObject&, const FloatRect&, const FloatSize&, const std::optional<AffineTransform>&);
     bool shouldConsolidateInteractionRegion(const RenderObject&, const IntRect&, const NodeIdentifier&);
-    void convertGuardContainersToInterationIfNeeded(float minimumCornerRadius);
+    void resolveGuardContainers(float minimumCornerRadius);
     void removeSuperfluousInteractionRegions();
     void shrinkWrapInteractionRegions();
     void copyInteractionRegionsToEventRegion(float minimumCornerRadius);
@@ -89,6 +88,7 @@ private:
     HashSet<NodeIdentifier> m_containerRemovalCandidates;
     HashSet<NodeIdentifier> m_containersToRemove;
     HashMap<NodeIdentifier, Vector<InteractionRegion>> m_discoveredRegionsByElement;
+    HashSet<NodeIdentifier> m_consolidatedElements;
 #endif
 };
 
@@ -127,9 +127,6 @@ public:
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
     , Vector<WebCore::InteractionRegion>
 #endif
-#if ENABLE(DBLCLICK_EVENT_REGIONS)
-    , Markable<FrameIdentifier>
-#endif
     );
 
     EventRegionContext makeContext() { return EventRegionContext(*this); }
@@ -138,8 +135,8 @@ public:
 
     friend bool operator==(const EventRegion&, const EventRegion&) = default;
 
-    void unite(const Region&, const RenderObject&, const RenderStyle&, bool overrideUserModifyIsEditable = false);
-    void NODELETE translate(const IntSize&);
+    void unite(const Region&, const RenderObject&, const Style::ComputedStyle&, bool overrideUserModifyIsEditable = false);
+    void LEGACY_NODELETE translate(const IntSize&);
 
     bool contains(const IntPoint& point) const { return m_region.contains(point); }
     bool contains(const IntRect& rect) const { return m_region.contains(rect); }
@@ -159,8 +156,8 @@ public:
 #endif
 
 #if ENABLE(WHEEL_EVENT_REGIONS)
-    WEBCORE_EXPORT OptionSet<EventListenerRegionType> NODELETE eventListenerRegionTypesForPoint(const IntPoint&) const;
-    const Region& NODELETE eventListenerRegionForType(EventListenerRegionType) const LIFETIME_BOUND;
+    WEBCORE_EXPORT OptionSet<EventListenerRegionType> LEGACY_NODELETE eventListenerRegionTypesForPoint(const IntPoint&) const;
+    const Region& LEGACY_NODELETE eventListenerRegionForType(EventListenerRegionType) const LIFETIME_BOUND;
 #endif
 
 #if ENABLE(EDITABLE_REGION)
@@ -176,11 +173,6 @@ public:
     const Vector<InteractionRegion>& interactionRegions() const LIFETIME_BOUND { return m_interactionRegions; }
     void appendInteractionRegions(const Vector<InteractionRegion>&);
     void clearInteractionRegions();
-#endif
-
-#if ENABLE(DBLCLICK_EVENT_REGIONS)
-    Markable<FrameIdentifier> frameID() const { return m_frameID; }
-    void setFrameID(FrameIdentifier frameID) { m_frameID = frameID; }
 #endif
 
 private:
@@ -207,9 +199,6 @@ private:
 #endif
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
     Vector<InteractionRegion> m_interactionRegions;
-#endif
-#if ENABLE(DBLCLICK_EVENT_REGIONS)
-    Markable<FrameIdentifier> m_frameID;
 #endif
 };
 

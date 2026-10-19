@@ -35,26 +35,26 @@ namespace WebCore {
 
 static const unsigned char InitialOctetEC = 0x04; // Per Section 2.3.3 of http://www.secg.org/sec1-v2.pdf
 // OID id-ecPublicKey 1.2.840.10045.2.1.
-static constexpr auto IdEcPublicKey = std::to_array<unsigned char>({ 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01 });
+static constexpr auto IdEcPublicKey = WTF::toArray<unsigned char>({ 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01 });
 // OID secp256r1 1.2.840.10045.3.1.7.
-static constexpr auto Secp256r1 = std::to_array<unsigned char>({ 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07 });
+static constexpr auto Secp256r1 = WTF::toArray<unsigned char>({ 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07 });
 // OID secp384r1 1.3.132.0.34
-static constexpr auto Secp384r1 = std::to_array<unsigned char>({ 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22 });
+static constexpr auto Secp384r1 = WTF::toArray<unsigned char>({ 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22 });
 // OID secp521r1 1.3.132.0.35
-static constexpr auto Secp521r1 = std::to_array<unsigned char>({ 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x23 });
+static constexpr auto Secp521r1 = WTF::toArray<unsigned char>({ 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x23 });
 
 // Version 1. Per https://tools.ietf.org/html/rfc5915#section-3
 static constexpr std::array<uint8_t, 3> PrivateKeyVersion { 0x02, 0x01, 0x01 };
 // Tagged type [1]
 static const unsigned char TaggedType1 = 0xa1;
 
-static constexpr size_t NODELETE sizeCeil(float f)
+static constexpr size_t LEGACY_NODELETE sizeCeil(float f)
 {
     auto s = static_cast<size_t>(f);
     return f > s ? s + 1 : s;
 }
 
-static constexpr size_t NODELETE keySizeInBitsFromNamedCurve(CryptoKeyEC::NamedCurve curve)
+static constexpr size_t LEGACY_NODELETE keySizeInBitsFromNamedCurve(CryptoKeyEC::NamedCurve curve)
 {
     switch (curve) {
     case CryptoKeyEC::NamedCurve::P256:
@@ -69,20 +69,20 @@ static constexpr size_t NODELETE keySizeInBitsFromNamedCurve(CryptoKeyEC::NamedC
     return 0;
 }
 
-static constexpr size_t NODELETE keySizeInBytesFromNamedCurve(CryptoKeyEC::NamedCurve curve)
+static constexpr size_t LEGACY_NODELETE keySizeInBytesFromNamedCurve(CryptoKeyEC::NamedCurve curve)
 {
     return sizeCeil(keySizeInBitsFromNamedCurve(curve) / 8.);
 }
 
 // Per Section 2.3.4 of http://www.secg.org/sec1-v2.pdf
 // We only support uncompressed point format.
-static constexpr bool NODELETE doesUncompressedPointMatchNamedCurve(CryptoKeyEC::NamedCurve curve, size_t size)
+static constexpr bool LEGACY_NODELETE doesUncompressedPointMatchNamedCurve(CryptoKeyEC::NamedCurve curve, size_t size)
 {
     return (keySizeInBytesFromNamedCurve(curve) * 2 + 1) == size;
 }
 
 // Per Section 2.3.5 of http://www.secg.org/sec1-v2.pdf
-static constexpr bool NODELETE doesFieldElementMatchNamedCurve(CryptoKeyEC::NamedCurve curve, size_t size)
+static constexpr bool LEGACY_NODELETE doesFieldElementMatchNamedCurve(CryptoKeyEC::NamedCurve curve, size_t size)
 {
     return keySizeInBytesFromNamedCurve(curve) == size;
 }
@@ -109,7 +109,7 @@ RefPtr<CryptoKeyEC> CryptoKeyEC::platformImportRaw(CryptoAlgorithmIdentifier ide
     if (!doesUncompressedPointMatchNamedCurve(curve, keyData.size()))
         return nullptr;
 
-    auto rv = PAL::Crypto::PlatformECKey::importX963Pub(keyData.span(), curve);
+    auto rv = PAL::Crypto::PlatformECKey::importX963Pub(keyData, curve);
     if (!rv)
         return nullptr;
     return create(identifier, curve, CryptoKeyType::Public, WTF::move(*rv), extractable, usages);
@@ -149,7 +149,7 @@ RefPtr<CryptoKeyEC> CryptoKeyEC::platformImportJWKPrivate(CryptoAlgorithmIdentif
     binaryInput.appendVector(y);
     binaryInput.appendVector(d);
 
-    auto rv = PAL::Crypto::PlatformECKey::importX963Private(binaryInput.span(), curve);
+    auto rv = PAL::Crypto::PlatformECKey::importX963Private(binaryInput, curve);
     if (!rv)
         return nullptr;
     return create(identifier, curve, CryptoKeyType::Private, WTF::move(*rv), extractable, usages);
@@ -190,7 +190,7 @@ bool CryptoKeyEC::platformAddFieldElements(JsonWebKey& jwk) const
     return true;
 }
 
-static std::span<const uint8_t> NODELETE getOID(CryptoKeyEC::NamedCurve curve)
+static std::span<const uint8_t> LEGACY_NODELETE getOID(CryptoKeyEC::NamedCurve curve)
 {
     switch (curve) {
     case CryptoKeyEC::NamedCurve::P256:
@@ -236,11 +236,13 @@ RefPtr<CryptoKeyEC> CryptoKeyEC::platformImportSpki(CryptoAlgorithmIdentifier id
     if (keyData.size() < index + 1)
         return nullptr;
     index += bytesUsedToEncodedLength(keyData[index]) + 1; // Read length
+    if (keyData.size() < index)
+        return nullptr;
     if (doesUncompressedPointMatchNamedCurve(curve, keyData.size() - index))
         return platformImportRaw(identifier, curve, Vector<uint8_t>(keyData.subspan(index, keyData.size() - index)), extractable, usages);
 
     // CryptoKit can read pure compressed so no need for index++ here.
-    auto rv = PAL::Crypto::PlatformECKey::importCompressedPub(keyData.subspan(index, keyData.size() - index), curve);
+    auto rv = PAL::Crypto::PlatformECKey::importCompressedPub(keyData, index, curve);
     if (!rv)
         return nullptr;
     return create(identifier, curve, CryptoKeyType::Public, WTF::move(*rv), extractable, usages);
@@ -333,6 +335,8 @@ RefPtr<CryptoKeyEC> CryptoKeyEC::platformImportPkcs8(CryptoAlgorithmIdentifier i
     if (keyData.size() < index + 1)
         return nullptr;
     index += bytesUsedToEncodedLength(keyData[index]) + 1; // Read length, InitialOctet
+    if (keyData.size() < index)
+        return nullptr;
 
     // KeyBinary = uncompressed point + private key
     auto keyBinary = keyData.subvector(index);
@@ -340,7 +344,7 @@ RefPtr<CryptoKeyEC> CryptoKeyEC::platformImportPkcs8(CryptoAlgorithmIdentifier i
         return nullptr;
     keyBinary.append(keyData.subspan(privateKeyPos, privateKeySize));
 
-    auto rv = PAL::Crypto::PlatformECKey::importX963Private(keyBinary.span(), curve);
+    auto rv = PAL::Crypto::PlatformECKey::importX963Private(keyBinary, curve);
     if (!rv)
         return nullptr;
     return create(identifier, curve, CryptoKeyType::Private, WTF::move(*rv), extractable, usages);

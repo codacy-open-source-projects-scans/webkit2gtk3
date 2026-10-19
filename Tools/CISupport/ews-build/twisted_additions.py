@@ -30,6 +30,7 @@ import json
 import os
 import re
 import twisted
+import urllib.parse
 
 from twisted.internet import defer, error, interfaces, protocol, reactor, task
 from twisted.python import log
@@ -241,10 +242,10 @@ class TwistedAdditions(object):
         if not url:
             logger('No URL provided\n')
             defer.returnValue(None)
-        logger(f'Accessing {url} with timeout: {timeout}\n')
         hostname = '/'.join(url.split('/', 3)[:3])
         if params:
-            url = '{}?{}'.format(url, '&'.join([f'{key}={value}' for key, value in params.items()]))
+            # doseq so a list value becomes a repeated key
+            url = f'{url}?{urllib.parse.urlencode(params, doseq=True)}'
 
         headers = headers or {}
         if 'User-Agent' not in headers:
@@ -285,14 +286,12 @@ class TwistedAdditions(object):
 
             body = cls.JSONProducer(json) if json else None
             response_d = agent.request(typ, url.encode('utf-8'), Headers(headers), body)
-            response_d.addTimeout(timeout, reactor, onTimeoutCancel=lambda _1, _2: None)
+            response_d.addTimeout(timeout, reactor)
             response = yield response_d
             finished = defer.Deferred()
             response.deliverBody(cls.Printer(finished))
 
-            # Add timeout to response body delivery to prevent indefinite hanging
-            # This covers the entire response phase, not just connection establishment
-            finished.addTimeout(timeout, reactor, onTimeoutCancel=lambda _1, _2: None)
+            finished.addTimeout(timeout, reactor)
             data = yield finished
 
             headers = {}

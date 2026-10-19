@@ -50,7 +50,8 @@ struct MockWebAuthenticationConfiguration {
         WrongChannelId,
         MaliciousPayload,
         UnsupportedOptions,
-        WrongNonce
+        WrongNonce,
+        ShortInitResponse
     };
 
     enum class NfcError : uint8_t {
@@ -107,6 +108,8 @@ struct MockWebAuthenticationConfiguration {
 
     struct CcidConfiguration {
         Vector<String> payloadBase64;
+        String appletSelectionResponseBase64;
+        String u2fVersionResponseBase64;
     };
 
     bool silentFailure { false };

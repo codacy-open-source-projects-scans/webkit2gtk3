@@ -98,7 +98,6 @@ static constexpr unsigned bitWidthForMaxBytecodeStructLength = WTF::getMSBSet(ma
     macro(OpGetById) \
     macro(OpGetLength) \
     macro(OpGetByIdWithThis) \
-    macro(OpTryGetById) \
     macro(OpGetByIdDirect) \
     macro(OpGetByValWithThis) \
     macro(OpGetPrototypeOf) \
@@ -114,6 +113,7 @@ static constexpr unsigned bitWidthForMaxBytecodeStructLength = WTF::getMSBSet(ma
     macro(OpGetFromScope) \
     macro(OpGetPrivateName) \
     macro(OpNewArrayWithSpecies) \
+    macro(OpAsyncIteratorNext) \
 
 #define FOR_EACH_OPCODE_WITH_CALL_LINK_INFO(macro) \
     macro(OpCall) \
@@ -123,6 +123,8 @@ static constexpr unsigned bitWidthForMaxBytecodeStructLength = WTF::getMSBSet(ma
     macro(OpSuperConstruct) \
     macro(OpIteratorOpen) \
     macro(OpIteratorNext) \
+    macro(OpAsyncIteratorOpen) \
+    macro(OpAsyncIteratorNext) \
     macro(OpCallVarargs) \
     macro(OpTailCallVarargs) \
     macro(OpConstructVarargs) \
@@ -173,6 +175,7 @@ static constexpr unsigned bitWidthForMaxBytecodeStructLength = WTF::getMSBSet(ma
     macro(OpNegate) \
     macro(OpToNumber) \
     macro(OpToNumeric) \
+    macro(OpUnsigned) \
 
 
 IGNORE_WARNINGS_BEGIN("type-limits")
@@ -232,6 +235,7 @@ inline bool isBranch(OpcodeID opcodeID)
     case op_jnstricteq:
     case op_jbelow:
     case op_jbeloweq:
+    case op_iterator_close_check:
     case op_switch_imm:
     case op_switch_char:
     case op_switch_string:
@@ -273,8 +277,8 @@ inline bool isThrow(OpcodeID opcodeID)
     }
 }
 
-unsigned NODELETE metadataSize(OpcodeID);
-unsigned NODELETE metadataAlignment(OpcodeID);
+unsigned LEGACY_NODELETE metadataSize(OpcodeID);
+unsigned LEGACY_NODELETE metadataAlignment(OpcodeID);
 
 } // namespace JSC
 

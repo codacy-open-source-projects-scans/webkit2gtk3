@@ -52,7 +52,7 @@ struct Ray {
 
     bool operator==(const Ray&) const = default;
 };
-using RayFunction = FunctionNotation<CSSValueRay, Ray>;
+using RayFunction = FunctionNotation<CSSValueID::Ray, Ray>;
 
 template<size_t I> const auto& get(const Ray& value)
 {
@@ -70,7 +70,7 @@ DEFINE_TYPE_MAPPING(CSS::Ray, Ray)
 
 // MARK: Serialization
 
-template<> struct Serialize<Ray> { void operator()(StringBuilder&, const CSS::SerializationContext&, const RenderStyle&, const Ray&); };
+template<> struct Serialize<Ray> { void operator()(StringBuilder&, const CSS::SerializationContext&, const Style::ComputedStyle&, const Ray&); };
 
 // MARK: - Path
 

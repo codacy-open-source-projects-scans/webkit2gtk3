@@ -43,6 +43,7 @@
 #include "JSFetchResponse.h"
 #include "JSNode.h"
 #include "JSTrustedScript.h"
+#include "LocalDOMWindow.h"
 #include "LocalFrame.h"
 #include "Logging.h"
 #include "Microtasks.h"
@@ -63,6 +64,7 @@
 #include <JavaScriptCore/MicrotaskQueueInlines.h>
 #include <JavaScriptCore/StrongInlines.h>
 #include <JavaScriptCore/VMTrapsInlines.h>
+#include <JavaScriptCore/VariableWriteFireDetailInlines.h>
 #include <wtf/Language.h>
 #include <wtf/MainThread.h>
 #include <wtf/RuntimeApplicationChecks.h>
@@ -93,6 +95,7 @@ const GlobalObjectMethodTable* JSDOMWindowBase::globalObjectMethodTable()
         shouldInterruptScript,
         javaScriptRuntimeFlags,
         shouldInterruptScriptBeforeTimeout,
+        moduleTypeIsAllowed,
         moduleLoaderImportModule,
         moduleLoaderResolve,
         moduleLoaderFetch,
@@ -111,7 +114,6 @@ const GlobalObjectMethodTable* JSDOMWindowBase::globalObjectMethodTable()
         nullptr,
         nullptr,
 #endif
-        deriveShadowRealmGlobalObject,
         codeForEval,
         canCompileStrings,
         trustedScriptStructure,
@@ -150,8 +152,13 @@ void JSDOMWindowBase::finishCreation(VM& vm, JSWindowProxy* proxy)
     if (m_wrapped->frame() && m_wrapped->frame()->settings().needsSiteSpecificQuirks())
         setNeedsSiteSpecificQuirks(true);
 
-    if ((m_wrapped->frame() && m_wrapped->frame()->settings().showModalDialogEnabled()) || (m_wrapped->documentIfLocal() && m_wrapped->documentIfLocal()->quirks().shouldExposeShowModalDialog()))
+    if ((m_wrapped->frame() && m_wrapped->frame()->settings().showModalDialogEnabled()) || (m_wrapped->documentIfLocal() && protect(m_wrapped->documentIfLocal())->quirks().shouldExposeShowModalDialog()))
         putDirectCustomAccessor(vm, builtinNames(vm).showModalDialogPublicName(), CustomGetterSetter::create(vm, showModalDialogGetter, nullptr), std::to_underlying(PropertyAttribute::CustomValue));
+
+    if (worldIsNormal()) {
+        if (auto* window = dynamicDowncast<LocalDOMWindow>(m_wrapped.get()))
+            window->setCachedMainWorldGlobalObject(this);
+    }
 }
 
 void JSDOMWindowBase::destroy(JSCell* cell)
@@ -185,17 +192,17 @@ Document* JSDOMWindowBase::scriptExecutionContext() const
 
 void JSDOMWindowBase::printErrorMessage(const String& message) const
 {
-    printErrorMessageForFrame(dynamicDowncast<LocalFrame>(wrapped().frame()), message);
+    printErrorMessageForFrame(protect(dynamicDowncast<LocalFrame>(wrapped().frame())), message);
 }
 
 bool JSDOMWindowBase::supportsRichSourceInfo(const JSGlobalObject* object)
 {
     auto* thisObject = uncheckedDowncast<JSDOMWindowBase>(object);
-    auto* frame = thisObject->wrapped().frame();
+    RefPtr frame = thisObject->wrapped().frame();
     if (!frame)
         return false;
 
-    Page* page = frame->page();
+    RefPtr page = frame->page();
     if (!page)
         return false;
 
@@ -204,7 +211,7 @@ bool JSDOMWindowBase::supportsRichSourceInfo(const JSGlobalObject* object)
     return enabled;
 }
 
-static inline bool NODELETE shouldInterruptScriptToPreventInfiniteRecursionWhenClosingPage(Page* page)
+static inline bool LEGACY_NODELETE shouldInterruptScriptToPreventInfiniteRecursionWhenClosingPage(Page* page)
 {
     // See <rdar://problem/5479443>. We don't think that page can ever be NULL
     // in this case, but if it is, we've gotten into a lexicalGlobalObject where we may have
@@ -228,7 +235,7 @@ bool JSDOMWindowBase::shouldInterruptScriptBeforeTimeout(const JSGlobalObject* o
 {
     auto* thisObject = uncheckedDowncast<JSDOMWindowBase>(object);
     ASSERT(thisObject->wrapped().frame());
-    Page* page = thisObject->wrapped().frame()->page();
+    RefPtr page = thisObject->wrapped().frame()->page();
 
     if (shouldInterruptScriptToPreventInfiniteRecursionWhenClosingPage(page))
         return true;
@@ -303,15 +310,15 @@ JSWindowProxy& JSDOMWindowBase::proxy() const
 
 JSValue toJS(JSGlobalObject* lexicalGlobalObject, DOMWindow& domWindow)
 {
-    auto* frame = domWindow.frame();
+    RefPtr frame = domWindow.frame();
     if (!frame)
         return jsNull();
-    return toJS(lexicalGlobalObject, frame->windowProxy());
+    return toJS(lexicalGlobalObject, protect(frame->windowProxy()));
 }
 
 JSDOMWindow* toJSDOMWindow(LocalFrame& frame, DOMWrapperWorld& world)
 {
-    return uncheckedDowncast<JSDOMWindow>(frame.script().globalObject(world));
+    return uncheckedDowncast<JSDOMWindow>(protect(frame.script())->globalObject(world));
 }
 
 LocalDOMWindow& incumbentDOMWindow(JSGlobalObject& fallbackGlobalObject, CallFrame& callFrame)

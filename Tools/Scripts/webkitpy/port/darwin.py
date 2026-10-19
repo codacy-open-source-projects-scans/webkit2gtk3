@@ -28,10 +28,17 @@ import time
 from webkitpy.common.memoized import memoized
 from webkitpy.common.system.crashlogs import CrashLogs
 from webkitpy.common.system.executive import ScriptError
+from webkitpy.common.version_name_map import PUBLIC_TABLE, VersionNameMap
 from webkitpy.port.apple import ApplePort
+from webkitpy.port.driver import DriverInput
 from webkitpy.port.leakdetector import LeakDetector
 
 from webkitcorepy import decorators, Version
+
+from webkitexpectationspy.parser import ExpectationParser
+from webkitexpectationspy.suites.api_tests import APITestSuite
+
+from webkitpy.common.version_name_map import DARWIN_CURRENT_VERSION
 
 
 _log = logging.getLogger(__name__)
@@ -39,7 +46,7 @@ _log = logging.getLogger(__name__)
 
 class DarwinPort(ApplePort):
 
-    CURRENT_VERSION = Version(26)
+    CURRENT_VERSION = DARWIN_CURRENT_VERSION
     SDK = None
 
     API_TEST_BINARY_NAMES = ['TestWTF', 'TestWebKitAPI', 'TestIPC', 'TestWGSL']
@@ -54,21 +61,42 @@ class DarwinPort(ApplePort):
             self.set_option_default("batch_size", 1000)
 
     def _load_api_test_suite_allowlist(self):
-        """Load the allowlist of test suites that should not go to the system shard."""
+        """Load the allowlist of test suites that should not go to the system shard.
+
+        Accepts optional configuration gates at the start of a line, e.g.:
+            TestIPC.PortableTest            # applies to every port
+            [ ios ] TestIPC.IOSOnlyTest     # only allowlisted on iOS ports
+            [ mac debug ] TestFoo.Bar       # only on macOS debug builds
+        Entries without a gate behave the same as before. Expectations or modifiers
+        (Pass/Fail/Skip/etc.) are not meaningful here and will be warned on by the parser.
+        """
         allowlist_path = os.path.join(os.path.dirname(__file__), '..', 'api_tests', 'allowlist.txt')
         if not self._filesystem.exists(allowlist_path):
             return []
 
-        allowlist = set()
         try:
             content = self._filesystem.read_text_file(allowlist_path)
-            for line in content.splitlines():
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    allowlist.add(line)
         except OSError:
-            pass
-        return sorted(list(allowlist))
+            return []
+
+        config = self.api_test_current_configuration()
+        current_tokens = {v.lower() for v in config.values() if v}
+        current_version = config.get('version')
+        current_version = current_version.lower() if current_version else None
+        version_order = self.api_test_version_order()
+
+        parser = ExpectationParser(APITestSuite())
+        patterns = set()
+        for expectation, warnings in parser.parse(allowlist_path, content):
+            for warning in warnings:
+                _log.warning(str(warning))
+            if expectation is None:
+                continue
+            if not expectation.matches_configuration(current_tokens, current_version, version_order):
+                continue
+            patterns.add(expectation.test_pattern)
+
+        return sorted(patterns)
 
     @memoized
     def _allowlist_as_set(self):
@@ -110,6 +138,18 @@ class DarwinPort(ApplePort):
         if self.get_option('guard_malloc'):
             return 350 * 1000
         return super(DarwinPort, self).default_timeout_ms()
+
+    def _warm_up_runner(self, worker_number=0):
+        # Skipped under --no-timeout so `lldb --wait-for --attach-name ...` doesn't latch onto the warmup process.
+        if self.get_option('no_timeout'):
+            return
+        _log.debug('Warming up the runner for worker {} ...'.format(worker_number))
+        warmup_driver = self.create_driver(worker_number)
+        warmup_driver.run_test(DriverInput('file:///warmup-does-not-exist', 60000., None, should_run_pixel_test=False), stop_when_done=True)
+
+    def _api_test_version_name(self, version, table=PUBLIC_TABLE):
+        name = VersionNameMap.map(self.host.platform).to_name(version, platform=self.port_name, table=table)
+        return name.lower().replace(' ', '') if name else None
 
     def _port_specific_expectations_files(self, device_type=None):
         return list(reversed([self._filesystem.join(self._webkit_baseline_path(p), 'TestExpectations') for p in self.baseline_search_path(device_type=device_type)]))
@@ -160,6 +200,18 @@ class DarwinPort(ApplePort):
         return directories
 
     def _merge_crash_logs(self, logs, new_logs, crashed_processes):
+        def already_collected(process_name, pid):
+            # A crash report's parsed procName may be an alias of the reported crash-process
+            # name (e.g. a ServiceWorkerProcess crash is recorded under a WebContent procName).
+            # Match those the way CrashLogs._find_newest_log_darwin does, so an aliased crash
+            # already collected in the first pass is not appended again as a "new" crash.
+            for _, reported_name, reported_pid in crashed_processes:
+                if reported_pid != pid:
+                    continue
+                if process_name == reported_name or process_name in CrashLogs.PROCESS_NAME_ALIASES.get(reported_name, ()):
+                    return True
+            return False
+
         for test, crash_log in new_logs.items():
             try:
                 if test.split('-')[0] == 'Sandbox':
@@ -170,7 +222,7 @@ class DarwinPort(ApplePort):
                     pid = int(test.split('-')[1])
             except (IndexError, ValueError):
                 continue
-            if not any(entry[1] == process_name and entry[2] == pid for entry in crashed_processes):
+            if not already_collected(process_name, pid):
                 # if this is a new crash, then append the logs
                 logs[test] = crash_log
         return logs

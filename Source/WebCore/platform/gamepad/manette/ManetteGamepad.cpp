@@ -29,6 +29,7 @@
 #if ENABLE(GAMEPAD) && OS(LINUX)
 
 #include "ManetteGamepadProvider.h"
+#include "SharedGamepadValue.h"
 #include <linux/input-event-codes.h>
 #include <wtf/HexNumber.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -221,7 +222,7 @@ void ManetteGamepad::effectDelayTimerFired()
 
 void ManetteGamepad::startRumble(const GamepadEffectParameters& parameters)
 {
-#if LIBMANETTE_CHECK_VERSION(0, 2, 13)
+#if HAVE(MANETTE_NORMALIZED_RUMBLE)
     manette_device_rumble(m_device.get(), parameters.strongMagnitude, parameters.weakMagnitude, static_cast<guint>(parameters.duration));
 #else
     manette_device_rumble(m_device.get(), parameters.strongMagnitude * G_MAXUINT16, parameters.weakMagnitude * G_MAXUINT16, static_cast<guint>(parameters.duration));

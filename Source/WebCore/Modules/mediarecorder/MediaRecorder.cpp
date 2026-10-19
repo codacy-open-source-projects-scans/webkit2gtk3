@@ -35,7 +35,6 @@
 #include "Document.h"
 #include "DocumentPage.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "MediaRecorderErrorEvent.h"
 #include "MediaRecorderPrivate.h"
 #include "Page.h"
@@ -395,7 +394,7 @@ void MediaRecorder::handleTrackChange()
 
                 if (!recorder.m_isActive)
                     return;
-                recorder.dispatchEvent(createDataAvailableEvent(recorder.scriptExecutionContext(), { }, { }, 0));
+                recorder.dispatchEvent(createDataAvailableEvent(protect(recorder.scriptExecutionContext()), { }, { }, 0));
 
                 if (!recorder.m_isActive)
                     return;
@@ -428,7 +427,7 @@ void MediaRecorder::trackEnded(MediaStreamTrackPrivate&)
             queueTaskKeepingObjectAlive(pendingActivity->object(), TaskSource::Networking, [](auto& recorder) {
                 if (!recorder.m_isActive)
                     return;
-                recorder.dispatchEvent(createDataAvailableEvent(recorder.scriptExecutionContext(), { }, { }, 0));
+                recorder.dispatchEvent(createDataAvailableEvent(protect(recorder.scriptExecutionContext()), { }, { }, 0));
 
                 if (!recorder.m_isActive)
                     return;

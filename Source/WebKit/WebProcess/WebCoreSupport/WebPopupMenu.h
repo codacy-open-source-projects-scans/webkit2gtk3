@@ -41,7 +41,7 @@ public:
     static Ref<WebPopupMenu> create(WebPage*, WebCore::PopupMenuClient*);
     ~WebPopupMenu();
 
-    WebPage* NODELETE page();
+    WebPage* LEGACY_NODELETE page();
 
     void disconnectFromPage() { m_page = nullptr; }
 #if !PLATFORM(IOS_FAMILY)
@@ -50,7 +50,7 @@ public:
 #if !PLATFORM(COCOA)
     void setTextForIndex(int newIndex);
 #endif
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
     WebCore::PopupMenuClient* client() const { return m_popupClient.get(); }
 #endif
 

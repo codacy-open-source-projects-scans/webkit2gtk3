@@ -64,7 +64,7 @@ private:
             // Validate the raw pattern syntax first since wrapping with ^(?:...)$
             // can turn an invalid pattern into a valid one (e.g. "a)(b" becomes "^(?:a)(b)$").
             auto syntaxCheckFlags = flagsString(flags);
-            if (checkSyntax(patternString, StringView::fromLatin1(syntaxCheckFlags.data())) != ErrorCode::NoError)
+            if (checkSyntax(patternString, StringView { syntaxCheckFlags.span() }) != ErrorCode::NoError)
                 return nullptr;
             auto anchoredPattern = makeString("^(?:"_s, patternString, ")$"_s);
             return compile(anchoredPattern, flags, MatchMode::Partial);
@@ -109,7 +109,7 @@ int RegularExpression::match(StringView str, unsigned startFrom, int* matchLengt
     if (str.isNull())
         return -1;
 
-    int offsetVectorSize = (d->m_numSubpatterns + 1) * 2;
+    int offsetVectorSize = d->m_regExpByteCode->m_offsetsSize;
     unsigned* offsetVector;
     Vector<unsigned, 32> nonReturnedOvector;
 

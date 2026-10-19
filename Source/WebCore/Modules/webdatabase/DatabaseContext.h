@@ -33,10 +33,6 @@
 #include <wtf/RefPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
-#if PLATFORM(IOS_FAMILY)
-#include <wtf/Threading.h>
-#endif
-
 namespace WebCore {
 
 class Database;
@@ -66,7 +62,7 @@ public:
     bool allowDatabaseAccess() const;
     void databaseExceededQuota(const String& name, DatabaseDetails);
 
-    Document* NODELETE document() const;
+    Document* LEGACY_NODELETE document() const;
     const SecurityOriginData& securityOrigin() const;
 
     bool isContextThread() const;

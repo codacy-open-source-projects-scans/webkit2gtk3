@@ -40,12 +40,13 @@
 #include <algorithm>
 #include <array>
 #include <ranges>
+#include <wtf/Borrow.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Scope.h>
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/MakeString.h>
 
 #if PLATFORM(COCOA)
-#include "CoreIPCSecureCoding.h"
 #include "SandboxUtilities.h"
 #include <sys/sysctl.h>
 #include <wtf/cf/TypeCastsCF.h>
@@ -68,13 +69,35 @@
 
 namespace WebKit {
 
-static HashMap<IPC::Connection::UniqueID, WeakPtr<AuxiliaryProcessProxy>>& NODELETE connectionToProcessMap()
+// This class wraps a ProcessThrottlerActivity - which is not thread safe - to guarantee its destruction
+// is run on the main thread no matter which thread the wrapper is destroyed on.
+class MainThreadActivityReleaser {
+public:
+    explicit MainThreadActivityReleaser(Ref<ProcessThrottler::Activity>&& activity)
+        : m_activity(WTF::move(activity)) { }
+    MainThreadActivityReleaser(MainThreadActivityReleaser&&) = default;
+    MainThreadActivityReleaser& operator=(MainThreadActivityReleaser&&) = default;
+    MainThreadActivityReleaser(const MainThreadActivityReleaser&) = delete;
+    MainThreadActivityReleaser& operator=(const MainThreadActivityReleaser&) = delete;
+
+    ~MainThreadActivityReleaser()
+    {
+        if (!m_activity || isMainRunLoop())
+            return;
+        RunLoop::mainSingleton().dispatch([activity = WTF::move(m_activity)] { });
+    }
+
+private:
+    RefPtr<ProcessThrottler::Activity> m_activity;
+};
+
+static HashMap<IPC::Connection::UniqueID, WeakPtr<AuxiliaryProcessProxy>>& LEGACY_NODELETE connectionToProcessMap()
 {
     static MainRunLoopNeverDestroyed<HashMap<IPC::Connection::UniqueID, WeakPtr<AuxiliaryProcessProxy>>> map;
     return map.get();
 }
 
-static Seconds NODELETE adjustedTimeoutForThermalState(Seconds timeout)
+static Seconds LEGACY_NODELETE adjustedTimeoutForThermalState(Seconds timeout)
 {
 #if PLATFORM(VISION)
     return WebCore::ThermalMitigationNotifier::isThermalMitigationEnabled() ? (timeout * 20) : timeout;
@@ -85,10 +108,11 @@ static Seconds NODELETE adjustedTimeoutForThermalState(Seconds timeout)
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(AuxiliaryProcessProxy);
 
-AuxiliaryProcessProxy::AuxiliaryProcessProxy(ShouldTakeUIBackgroundAssertion shouldTakeUIBackgroundAssertion, AlwaysRunsAtBackgroundPriority alwaysRunsAtBackgroundPriority, Seconds responsivenessTimeout)
+AuxiliaryProcessProxy::AuxiliaryProcessProxy(ASCIILiteral clientName, ShouldTakeUIBackgroundAssertion shouldTakeUIBackgroundAssertion, AlwaysRunsAtBackgroundPriority alwaysRunsAtBackgroundPriority, Seconds responsivenessTimeout)
     : m_responsivenessTimer(ResponsivenessTimer::create(*this, adjustedTimeoutForThermalState(responsivenessTimeout)))
     , m_alwaysRunsAtBackgroundPriority(alwaysRunsAtBackgroundPriority == AlwaysRunsAtBackgroundPriority::Yes)
     , m_throttler(*this, shouldTakeUIBackgroundAssertion == ShouldTakeUIBackgroundAssertion::Yes)
+    , m_clientName(clientName)
 {
 }
 
@@ -126,10 +150,11 @@ void AuxiliaryProcessProxy::populateOverrideLanguagesLaunchOptions(ProcessLaunch
     }
     if (!overrideLanguages.isEmpty()) {
         StringBuilder languageString;
-        for (size_t i = 0; i < overrideLanguages.size(); ++i) {
+        Borrow borrowedLanguages = overrideLanguages;
+        for (size_t i = 0; i < borrowedLanguages->size(); ++i) {
             if (i)
                 languageString.append(',');
-            languageString.append(overrideLanguages[i]);
+            languageString.append(borrowedLanguages[i]);
         }
         LOG_WITH_STREAM(Language, stream << "Setting WebProcess's launch OverrideLanguages to " << languageString);
         launchOptions.extraInitializationData.add<HashTranslatorASCIILiteral>("OverrideLanguages"_s, languageString.toString());
@@ -191,7 +216,7 @@ void AuxiliaryProcessProxy::connect()
     m_processLauncher = ProcessLauncher::create(this, WTF::move(launchOptions));
 }
 
-void AuxiliaryProcessProxy::terminate()
+void AuxiliaryProcessProxy::terminate(std::optional<IPC::MessageName> invalidMessageName)
 {
     RELEASE_LOG(Process, "AuxiliaryProcessProxy::terminate: PID=%d", processID());
 
@@ -200,14 +225,18 @@ void AuxiliaryProcessProxy::terminate()
 
 #if PLATFORM(COCOA) && !USE(EXTENSIONKIT_PROCESS_TERMINATION)
     if (RefPtr connection = m_connection) {
-        if (connection->kill())
+        if (connection->kill(invalidMessageName))
             return;
     }
 #endif
 
     // FIXME: We should really merge process launching into IPC connection creation and get rid of the process launcher.
-    if (RefPtr processLauncher = m_processLauncher)
-        processLauncher->terminateProcess();
+    if (RefPtr processLauncher = m_processLauncher) {
+        String terminationReason;
+        if (invalidMessageName)
+            terminationReason = makeString("Received invalid IPC message: "_s, IPC::description(*invalidMessageName));
+        processLauncher->terminateProcess(terminationReason);
+    }
 }
 
 String AuxiliaryProcessProxy::stateString() const
@@ -252,20 +281,46 @@ bool AuxiliaryProcessProxy::wasTerminated() const
 
 bool AuxiliaryProcessProxy::sendMessage(UniqueRef<IPC::Encoder>&& encoder, OptionSet<IPC::SendOption> sendOptions, std::optional<IPC::Connection::AsyncReplyHandler> asyncReplyHandler, ShouldStartProcessThrottlerActivity shouldStartProcessThrottlerActivity)
 {
+    ReplyHandler handler;
+    if (asyncReplyHandler)
+        handler = WTF::move(*asyncReplyHandler);
+    return sendMessageImpl(WTF::move(encoder), sendOptions, WTF::move(handler), shouldStartProcessThrottlerActivity);
+}
+
+bool AuxiliaryProcessProxy::sendMessageWithDispatcher(UniqueRef<IPC::Encoder>&& encoder, OptionSet<IPC::SendOption> sendOptions, IPC::Connection::AsyncReplyHandlerWithDispatcher&& asyncReplyHandler, ShouldStartProcessThrottlerActivity shouldStartProcessThrottlerActivity)
+{
+    return sendMessageImpl(WTF::move(encoder), sendOptions, ReplyHandler { WTF::move(asyncReplyHandler) }, shouldStartProcessThrottlerActivity);
+}
+
+bool AuxiliaryProcessProxy::sendMessageImpl(UniqueRef<IPC::Encoder>&& encoder, OptionSet<IPC::SendOption> sendOptions, ReplyHandler&& asyncReplyHandler, ShouldStartProcessThrottlerActivity shouldStartProcessThrottlerActivity)
+{
     // FIXME: We should turn this into a RELEASE_ASSERT().
     ASSERT(isMainRunLoop());
     if (!isMainRunLoop()) {
         callOnMainRunLoop([protectedThis = Ref { *this }, encoder = WTF::move(encoder), sendOptions, asyncReplyHandler = WTF::move(asyncReplyHandler), shouldStartProcessThrottlerActivity]() mutable {
-            protectedThis->sendMessage(WTF::move(encoder), sendOptions, WTF::move(asyncReplyHandler), shouldStartProcessThrottlerActivity);
+            protectedThis->sendMessageImpl(WTF::move(encoder), sendOptions, WTF::move(asyncReplyHandler), shouldStartProcessThrottlerActivity);
         });
         return true;
     }
 
-    if (asyncReplyHandler && canSendMessage() && shouldStartProcessThrottlerActivity == ShouldStartProcessThrottlerActivity::Yes) {
-        auto completionHandler = WTF::move(asyncReplyHandler->completionHandler);
-        asyncReplyHandler->completionHandler = [activity = protect(throttler())->quietBackgroundActivity(description(encoder->messageName())), completionHandler = WTF::move(completionHandler)](IPC::Connection* connection, IPC::Decoder* decoder) mutable {
-            completionHandler(connection, decoder);
-        };
+    if (!std::holds_alternative<std::monostate>(asyncReplyHandler) && canSendMessage() && shouldStartProcessThrottlerActivity == ShouldStartProcessThrottlerActivity::Yes) {
+        auto activity = protect(throttler())->quietBackgroundActivity(description(encoder->messageName()));
+        WTF::switchOn(asyncReplyHandler,
+            [](std::monostate&) { },
+            [&](IPC::Connection::AsyncReplyHandler& handler) {
+                auto inner = WTF::move(handler.completionHandler);
+                handler.completionHandler = [activity = WTF::move(activity), inner = WTF::move(inner)](IPC::Connection* connection, IPC::Decoder* decoder) mutable {
+                    inner(connection, decoder);
+                };
+            },
+            [&](IPC::Connection::AsyncReplyHandlerWithDispatcher& handler) {
+                // Wrap the activity in a MainThreadActivityReleaser so the activity destruction can be scheduled
+                // on the main thread whether or not the completion handler is actually called.
+                auto inner = WTF::move(handler.completionHandler);
+                handler.completionHandler = { [activityReleaser = MainThreadActivityReleaser { WTF::move(activity) }, inner = WTF::move(inner)](IPC::Connection* connection, std::unique_ptr<IPC::Decoder>&& decoder) mutable {
+                    inner(connection, WTF::move(decoder));
+                }, CompletionHandlerCallThread::AnyThread };
+            });
     }
 
     switch (state()) {
@@ -275,26 +330,47 @@ bool AuxiliaryProcessProxy::sendMessage(UniqueRef<IPC::Encoder>&& encoder, Optio
         return true;
 
     case State::Running:
-        if (asyncReplyHandler) {
-            if (protect(connection())->sendMessageWithAsyncReply(WTF::move(encoder), WTF::move(*asyncReplyHandler), sendOptions) == IPC::Error::NoError)
-                return true;
-        } else {
-            if (protect(connection())->sendMessage(WTF::move(encoder), sendOptions) == IPC::Error::NoError)
-                return true;
-        }
+        if (sendOverConnection(protect(this->connection()), WTF::move(encoder), asyncReplyHandler, sendOptions) == IPC::Error::NoError)
+            return true;
         break;
 
     case State::Terminated:
         break;
     }
 
-    if (asyncReplyHandler && asyncReplyHandler->completionHandler) {
-        RunLoop::currentSingleton().dispatch([completionHandler = WTF::move(asyncReplyHandler->completionHandler)]() mutable {
-            completionHandler(nullptr, nullptr);
+    WTF::switchOn(asyncReplyHandler,
+        [](std::monostate&) { },
+        [](IPC::Connection::AsyncReplyHandler& handler) {
+            if (handler.completionHandler) {
+                RunLoop::currentSingleton().dispatch([completionHandler = WTF::move(handler.completionHandler)]() mutable {
+                    completionHandler(nullptr, nullptr);
+                });
+            }
+        },
+        [](IPC::Connection::AsyncReplyHandlerWithDispatcher& handler) {
+            // The handler internally dispatches onto its dispatcher, so this is safe to call from main.
+            if (handler.completionHandler)
+                handler.completionHandler(nullptr, nullptr);
         });
-    }
 
     return false;
+}
+
+IPC::Error AuxiliaryProcessProxy::sendOverConnection(IPC::Connection& connection, UniqueRef<IPC::Encoder>&& encoder, ReplyHandler& asyncReplyHandler, OptionSet<IPC::SendOption> sendOptions)
+{
+    return WTF::switchOn(asyncReplyHandler,
+        [&](std::monostate&) { return connection.sendMessage(WTF::move(encoder), sendOptions); },
+        [&](IPC::Connection::AsyncReplyHandler& handler) { return connection.sendMessageWithAsyncReply(WTF::move(encoder), WTF::move(handler), sendOptions); },
+        [&](IPC::Connection::AsyncReplyHandlerWithDispatcher& handler) { return connection.sendMessageWithAsyncReplyWithDispatcher(WTF::move(encoder), WTF::move(handler), sendOptions); });
+}
+
+void AuxiliaryProcessProxy::drainPendingMessages(IPC::Connection& connection)
+{
+    for (auto&& message : std::exchange(m_pendingMessages, { })) {
+        if (!shouldSendPendingMessage(message.encoder.get()))
+            continue;
+        sendOverConnection(connection, WTF::move(message.encoder), message.asyncReplyHandler, message.sendOptions);
+    }
 }
 
 bool AuxiliaryProcessProxy::sendMessageAfterResuming(Vector<uint8_t>&& coalescingKey, UniqueRef<IPC::Encoder>&& encoder)
@@ -386,19 +462,12 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::C
         });
     });
 
-    for (auto&& pendingMessage : std::exchange(m_pendingMessages, { })) {
-        if (!shouldSendPendingMessage(pendingMessage))
-            continue;
-        if (pendingMessage.asyncReplyHandler)
-            connection->sendMessageWithAsyncReply(WTF::move(pendingMessage.encoder), WTF::move(*pendingMessage.asyncReplyHandler), pendingMessage.sendOptions);
-        else
-            connection->sendMessage(WTF::move(pendingMessage.encoder), pendingMessage.sendOptions);
-    }
+    drainPendingMessages(*connection);
 
 #if USE(RUNNINGBOARD)
     protect(throttler())->didConnectToProcess(*this);
 #if PLATFORM(MAC)
-    m_boostedJetsamAssertion = ProcessAssertion::create(*this, "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
+    updateJetsamBoostAssertion();
 #endif
 #if USE(EXTENSIONKIT)
     ASSERT(launcher);
@@ -431,9 +500,13 @@ void AuxiliaryProcessProxy::wakeUpTemporarilyForIPC()
 void AuxiliaryProcessProxy::replyToPendingMessages()
 {
     ASSERT(isMainRunLoop());
-    for (auto& pendingMessage : std::exchange(m_pendingMessages, { })) {
-        if (pendingMessage.asyncReplyHandler)
-            pendingMessage.asyncReplyHandler->completionHandler(nullptr, nullptr);
+    for (auto&& message : std::exchange(m_pendingMessages, { })) {
+        WTF::switchOn(message.asyncReplyHandler,
+            [](std::monostate&) { },
+            [](auto& handler) {
+                if (handler.completionHandler)
+                    handler.completionHandler(nullptr, nullptr);
+            });
     }
 }
 
@@ -441,6 +514,9 @@ void AuxiliaryProcessProxy::shutDownProcess()
 {
     auto scopeExit = WTF::makeScopeExit([protectedThis = Ref { *this }] {
         protect(protectedThis->throttler())->didDisconnectFromProcess();
+#if USE(RUNNINGBOARD) && PLATFORM(MAC)
+        protectedThis->m_boostedJetsamAssertion = nullptr;
+#endif
     });
 
     switch (state()) {
@@ -495,7 +571,11 @@ void AuxiliaryProcessProxy::connectionWillOpen(IPC::Connection&)
 
 void AuxiliaryProcessProxy::logInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
 {
-    RELEASE_LOG_FAULT_WITH_PAYLOAD(IPC, makeString("Received an invalid message '"_s, description(messageName), "' from the "_s, processName(), " process with PID "_s, processID()).utf8().data());
+    RELEASE_LOG_FAULT_WITH_PAYLOAD(IPC, "Received an invalid message %s from %s process with PID %d", description(messageName), processName(), processID());
+#if ASAN_ENABLED
+    // Also log to stderr so test harnesses can attribute the resulting termination.
+    WTFLogAlways("Killing %s for invalid message %s with PID %d", processName().characters(), IPC::description(messageName).characters(), processID());
+#endif
 }
 
 bool AuxiliaryProcessProxy::platformIsBeingDebugged() const
@@ -578,12 +658,6 @@ AuxiliaryProcessCreationParameters AuxiliaryProcessProxy::auxiliaryProcessParame
     parameters.webKitLoggingChannels = UIProcess::webKitLogLevelString();
 #endif
 
-#if PLATFORM(COCOA)
-    auto* exemptClassNames = SecureCoding::classNamesExemptFromSecureCodingCrash();
-    if (exemptClassNames)
-        parameters.classNamesExemptFromSecureCodingCrash = WTF::makeUnique<HashSet<String>>(*exemptClassNames);
-#endif
-
 #if ENABLE(CORE_IPC_SIGNPOSTS)
     parameters.shouldEnableIPCSignposts = IPC::Connection::signpostsEnabled();
     parameters.shouldEnableStreamingIPCSignposts = IPC::StreamClientConnection::signpostsEnabled();
@@ -633,6 +707,28 @@ bool AuxiliaryProcessProxy::runningBoardThrottlingEnabled()
 {
     return !m_lifetimeActivity;
 }
+
+void AuxiliaryProcessProxy::setJetsamBoostEnabled(bool enabled)
+{
+    if (m_isJetsamBoostEnabled == enabled)
+        return;
+    m_isJetsamBoostEnabled = enabled;
+
+    updateJetsamBoostAssertion();
+    protect(throttler())->setShouldBackgroundActivitiesUseIdleJetsamBand(!enabled);
+}
+
+void AuxiliaryProcessProxy::updateJetsamBoostAssertion()
+{
+    bool shouldHoldAssertion = m_isJetsamBoostEnabled && processID();
+    if (shouldHoldAssertion == !!m_boostedJetsamAssertion)
+        return;
+
+    if (shouldHoldAssertion)
+        m_boostedJetsamAssertion = ProcessAssertion::create(*this, "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
+    else
+        m_boostedJetsamAssertion = nullptr;
+}
 #endif
 
 void AuxiliaryProcessProxy::didChangeThrottleState(ProcessThrottleState state)
@@ -653,7 +749,7 @@ void AuxiliaryProcessProxy::didChangeThrottleState(ProcessThrottleState state)
         // Send messages in the order that they were enqueued after coalescing.
         std::ranges::sort(indexMessagePairs, { }, &PairType::first);
 
-        for (auto& indexMessagePair : indexMessagePairs) {
+        for (auto& indexMessagePair : borrow(indexMessagePairs)) {
             auto& encoder = indexMessagePair.second;
             LOG(ProcessSuspension, "%p - AuxiliaryProcessProxy::didChangeThrottleState: sending deferred message %s to destination %" PRIu64 " in pid %i because it resumed", this, description(encoder->messageName()).characters(), encoder->destinationID(), processID());
             sendMessage(makeUniqueRefFromNonNullUniquePtr(WTF::move(encoder)), { });
@@ -678,7 +774,7 @@ String AuxiliaryProcessProxy::environmentIdentifier()
 {
     if (m_environmentIdentifier.isEmpty()) {
         StringBuilder builder;
-        builder.append(clientName());
+        builder.append(m_clientName);
         builder.append(processID());
         m_environmentIdentifier = builder.toString();
     }

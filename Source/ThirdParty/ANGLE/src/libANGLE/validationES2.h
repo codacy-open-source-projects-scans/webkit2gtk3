@@ -491,8 +491,8 @@ ANGLE_INLINE bool ValidateReadPixels(const Context *context,
                                      GLenum type,
                                      const void *pixels)
 {
-    return ValidateReadPixelsBase(context, entryPoint, x, y, width, height, format, type, -1,
-                                  nullptr, nullptr, nullptr, pixels);
+    return ValidateReadPixelsBase(context, entryPoint, x, y, width, height, format, type,
+                                  std::numeric_limits<GLsizei>::max(), pixels);
 }
 
 ANGLE_INLINE bool ValidateTexParameterf(const Context *context,
@@ -565,7 +565,7 @@ ANGLE_INLINE bool ValidateDrawElements(const Context *context,
                                        DrawElementsType type,
                                        const void *indices)
 {
-    return ValidateDrawElementsCommon(context, entryPoint, mode, count, type, indices, 1);
+    return ValidateDrawElementsCommon(context, entryPoint, mode, count, type, indices, 1, 0);
 }
 
 ANGLE_INLINE bool ValidateVertexAttribPointer(const Context *context,
@@ -678,33 +678,6 @@ ANGLE_INLINE bool ValidateBindTexture(const Context *context,
 
     return true;
 }
-
-// Validation of all Tex[Sub]Image2D parameters except TextureTarget.
-bool ValidateES2TexImageParametersBase(const Context *context,
-                                       angle::EntryPoint entryPoint,
-                                       TextureTarget target,
-                                       GLint level,
-                                       GLenum internalformat,
-                                       bool isCompressed,
-                                       bool isSubImage,
-                                       GLint xoffset,
-                                       GLint yoffset,
-                                       GLsizei width,
-                                       GLsizei height,
-                                       GLint border,
-                                       GLenum format,
-                                       GLenum type,
-                                       GLsizei imageSize,
-                                       const void *pixels);
-
-// Validation of TexStorage*2DEXT
-bool ValidateES2TexStorageParametersBase(const Context *context,
-                                         angle::EntryPoint entryPoint,
-                                         TextureType target,
-                                         GLsizei levels,
-                                         GLenum internalformat,
-                                         GLsizei width,
-                                         GLsizei height);
 
 // Validation of [Push,Pop]DebugGroup
 bool ValidatePushDebugGroupBase(const Context *context,

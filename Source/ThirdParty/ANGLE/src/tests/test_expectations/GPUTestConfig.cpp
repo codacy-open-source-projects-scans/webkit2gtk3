@@ -13,6 +13,7 @@
 #include "common/debug.h"
 #include "common/platform_helpers.h"
 #include "common/string_utils.h"
+#include "common/system_utils.h"
 #include "gpu_info_util/SystemInfo.h"
 
 #if defined(ANGLE_PLATFORM_APPLE)
@@ -449,12 +450,6 @@ inline bool IsNVIDIAGTX1660()
     return (IsNVIDIA() && IsDeviceIdGPU("0x2184"));
 }
 
-// Check whether the backend API has been set to D3D9 in the constructor
-inline bool IsD3D9(const GPUTestConfig::API &api)
-{
-    return (api == GPUTestConfig::kAPID3D9);
-}
-
 // Check whether the backend API has been set to D3D11 in the constructor
 inline bool IsD3D11(const GPUTestConfig::API &api)
 {
@@ -527,6 +522,7 @@ GPUTestConfig::GPUTestConfig(bool isSwiftShader)
     mConditions[kConditionMacMojave]       = IsMacMojave();
     mConditions[kConditionMac]             = IsMac();
     mConditions[kConditionIOS]             = IsIOS();
+    mConditions[kConditionIOSSimulator]    = IsIOSSimulator();
     mConditions[kConditionLinux]           = IsLinux();
     mConditions[kConditionAndroid]         = IsAndroid();
     // HW vendors are irrelevant if we are running on SW
@@ -542,8 +538,12 @@ GPUTestConfig::GPUTestConfig(bool isSwiftShader)
 
     mConditions[kConditionRelease] = IsRelease();
     mConditions[kConditionDebug]   = IsDebug();
+#if defined(ANGLE_PLATFORM_APPLE)
+    mConditions[kConditionDebugLayers] = GetEnvironmentVar("MTL_DEBUG_LAYER") == "1";
+#else
+    mConditions[kConditionDebugLayers] = false;
+#endif
     // If no API provided, pass these conditions by default
-    mConditions[kConditionD3D9]      = true;
     mConditions[kConditionD3D11]     = true;
     mConditions[kConditionGLDesktop] = true;
     mConditions[kConditionGLES]      = true;
@@ -596,7 +596,6 @@ GPUTestConfig::GPUTestConfig(bool isSwiftShader)
 GPUTestConfig::GPUTestConfig(const API &api, uint32_t preRotation)
     : GPUTestConfig(IsSwiftShader(api))
 {
-    mConditions[kConditionD3D9]      = IsD3D9(api);
     mConditions[kConditionD3D11]     = IsD3D11(api);
     mConditions[kConditionGLDesktop] = IsGLDesktop(api);
     mConditions[kConditionGLES]      = IsGLES(api);

@@ -38,7 +38,6 @@
 #include "Logging.h"
 #include "MediaOverridesForTesting.h"
 #include "MediaPlayerPrivateRemoteMessages.h"
-#include "MediaSourcePrivateRemoteMessageReceiverMessages.h"
 #include "RemoteAudioHardwareListenerMessages.h"
 #include "RemoteAudioSourceProviderManager.h"
 #include "RemoteAudioSourceProviderManagerMessages.h"
@@ -50,7 +49,6 @@
 #include "RemoteSharedResourceCacheProxy.h"
 #include "SampleBufferDisplayLayerManager.h"
 #include "SampleBufferDisplayLayerMessages.h"
-#include "SourceBufferPrivateRemoteMessageReceiverMessages.h"
 #include "WebPage.h"
 #include "WebPageCreationParameters.h"
 #include "WebPageMessages.h"
@@ -115,7 +113,7 @@ using namespace WebCore;
 Ref<GPUProcessConnection> GPUProcessConnection::create(Ref<IPC::Connection>&& connection)
 {
     Ref instance = adoptRef(*new GPUProcessConnection(WTF::move(connection)));
-    RELEASE_LOG(Process, "GPUProcessConnection::create - %p", instance.ptr());
+    RELEASE_LOG_FORWARDABLE(Process, GpuProcessConnectionCreate, instance->identifier().toUInt64());
     return instance;
 }
 
@@ -132,8 +130,8 @@ GPUProcessConnection::~GPUProcessConnection()
 {
     m_connection->invalidate();
 #if PLATFORM(COCOA) && ENABLE(WEB_AUDIO)
-    if (RefPtr audioSourceProviderManager = m_audioSourceProviderManager)
-        audioSourceProviderManager->stopListeningForIPC();
+    if (m_audioSourceProviderManager)
+        m_audioSourceProviderManager->stopListeningForIPC();
 #endif
 }
 
@@ -161,7 +159,7 @@ std::optional<audit_token_t> GPUProcessConnection::auditToken()
 Ref<RemoteSharedResourceCacheProxy> GPUProcessConnection::sharedResourceCache()
 {
     if (!m_sharedResourceCache)
-        m_sharedResourceCache = RemoteSharedResourceCacheProxy::create();
+        lazyInitialize(m_sharedResourceCache, RemoteSharedResourceCacheProxy::create(connection()));
     return *m_sharedResourceCache;
 }
 
@@ -212,7 +210,7 @@ void GPUProcessConnection::resetAudioMediaStreamTrackRendererInternalUnit(AudioM
 RemoteVideoFrameObjectHeapProxy& GPUProcessConnection::videoFrameObjectHeapProxy()
 {
     if (!m_videoFrameObjectHeapProxy)
-        m_videoFrameObjectHeapProxy = RemoteVideoFrameObjectHeapProxy::create(*this);
+        lazyInitialize(m_videoFrameObjectHeapProxy, RemoteVideoFrameObjectHeapProxy::create(*this));
     return *m_videoFrameObjectHeapProxy;
 }
 
@@ -226,7 +224,7 @@ RemoteMediaPlayerManager& GPUProcessConnection::mediaPlayerManager()
 RemoteAudioSourceProviderManager& GPUProcessConnection::audioSourceProviderManager()
 {
     if (!m_audioSourceProviderManager)
-        m_audioSourceProviderManager = RemoteAudioSourceProviderManager::create(m_connection);
+        lazyInitialize(m_audioSourceProviderManager, RemoteAudioSourceProviderManager::create(m_connection));
     return *m_audioSourceProviderManager;
 }
 #endif
@@ -274,18 +272,6 @@ bool GPUProcessConnection::dispatchMessage(IPC::Connection& connection, IPC::Dec
     }
 #endif
 
-#if ENABLE(MEDIA_SOURCE)
-    if (decoder.messageReceiverName() == Messages::MediaSourcePrivateRemoteMessageReceiver::messageReceiverName()) {
-        RELEASE_LOG_ERROR(Media, "The MediaSourcePrivateRemote object has beed destroyed");
-        return true;
-    }
-
-    if (decoder.messageReceiverName() == Messages::SourceBufferPrivateRemoteMessageReceiver::messageReceiverName()) {
-        RELEASE_LOG_ERROR(Media, "The SourceBufferPrivateRemote object has beed destroyed");
-        return true;
-    }
-#endif
-
     if (decoder.messageReceiverName() == Messages::RemoteAudioHardwareListener::messageReceiverName()) {
         RELEASE_LOG_ERROR(Media, "The RemoteAudioHardwareListener object has beed destroyed");
         return true;
@@ -312,7 +298,7 @@ void GPUProcessConnection::didInitialize(std::optional<GPUProcessConnectionInfo>
         return;
     }
     m_hasInitialized = true;
-    RELEASE_LOG(Process, "%p - GPUProcessConnection::didInitialize", this);
+    RELEASE_LOG_FORWARDABLE(Process, GpuProcessConnectionDidInitialize, identifier().toUInt64());
 
 #if PLATFORM(COCOA)
 #if USE(LIBWEBRTC)
@@ -349,10 +335,10 @@ bool GPUProcessConnection::waitForDidInitialize()
     return m_connection->isValid();
 }
 
-void GPUProcessConnection::didReceiveRemoteCommand(PlatformMediaSession::RemoteControlCommandType type, const PlatformMediaSession::RemoteCommandArgument& argument)
+void GPUProcessConnection::didReceiveRemoteCommand(PlatformMediaSession::RemoteControlCommandType type, const PlatformMediaSession::RemoteCommandArgument& argument, std::optional<WebCore::MediaSessionIdentifier> targetSession)
 {
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
-    WebProcess::singleton().didReceiveRemoteCommand(type, argument);
+    WebProcess::singleton().didReceiveRemoteCommand(type, argument, targetSession);
 #endif
 }
 

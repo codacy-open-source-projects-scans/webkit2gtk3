@@ -23,6 +23,7 @@
 #include <WebCore/DictationContext.h>
 #include <WebCore/SimpleRange.h>
 #include <wtf/Forward.h>
+#include <wtf/Markable.h>
 #include <wtf/OptionSet.h>
 #include <wtf/Platform.h>
 #include <wtf/UUID.h>
@@ -142,11 +143,16 @@ public:
 
     struct TransparentContentData {
         RefPtr<Node> node;
-        WTF::UUID uuid;
+        Markable<WTF::UUID> uuid;
     };
 
     struct DictationStreamingOpacityData {
         float opacity { 0 };
+    };
+
+    struct GrammarData {
+        String description;
+        String uuid;
     };
 
     using Data = Variant<
@@ -165,6 +171,7 @@ public:
 #endif
         , TransparentContentData // TransparentContent
         , DictationStreamingOpacityData // DictationStreamingOpacity
+        , GrammarData // Grammar
     >;
 
     DocumentMarker(DocumentMarkerType, OffsetRange, Data&& = { });
@@ -241,6 +248,9 @@ inline String DocumentMarker::description() const
 {
     if (auto* description = std::get_if<String>(&m_data))
         return *description;
+
+    if (auto* data = std::get_if<DocumentMarker::GrammarData>(&m_data))
+        return data->description;
 
 #if ENABLE(WRITING_TOOLS)
     if (auto* data = std::get_if<DocumentMarker::WritingToolsTextSuggestionData>(&m_data))

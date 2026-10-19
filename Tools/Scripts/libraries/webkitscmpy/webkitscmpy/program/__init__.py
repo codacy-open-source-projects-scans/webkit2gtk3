@@ -23,11 +23,14 @@
 import argparse
 import logging
 import os
+import re
 import sys
+import traceback
 
+from .apply import Apply
 from .blame import Blame
 from .branch import Branch
-from .canonicalize import Canonicalize
+from .canonicalize import Canonicalize, IdentifierTrailer
 from .cherry_pick import CherryPick
 from .clean import Clean, DeletePRBranches
 from .clone import Clone
@@ -66,7 +69,7 @@ from webkitscmpy import local, log, remote
 def main(
     args=None, path=None, loggers=None, contributors=None,
     identifier_template=None, subversion=None, additional_setup=None, hooks=None,
-    canonical_svn=None, programs=None, classifier=None, **kwargs
+    canonical_svn=None, programs=None, classifier=None, fallback_path=None, **kwargs
 ):
     logging.basicConfig(level=logging.WARNING)
 
@@ -96,7 +99,7 @@ def main(
     subparser.set_defaults(main=lambda *args, **kwargs: parser.print_help())
 
     programs = [
-        Blame, Branch, Canonicalize, Checkout,
+        Apply, Blame, Branch, Canonicalize, Checkout,
         Clean, Clone, Conflict, CreateBug, Diff, Find, Info, Land, Log, Pull,
         PullRequest, Revert, Review, Setup, InstallGitLFS,
         Credentials, Commit, DeletePRBranches, Squash,
@@ -168,6 +171,8 @@ def main(
         repository.classifier = classifier(repository) or repository.classifier
     if callable(identifier_template):
         identifier_template = identifier_template(repository) if repository else None
+    if isinstance(identifier_template, str):
+        identifier_template = IdentifierTrailer.from_template(identifier_template)
     if callable(subversion):
         subversion = subversion(repository) if repository else None
     if callable(hooks):
@@ -183,13 +188,22 @@ def main(
         parser.print_help()
         return -1
 
+    # Bugzilla's REST API embeds credentials as plain-text query parameters (login= and
+    # password=), which means they can appear in exception tracebacks when requests fail.
+    # Scrub them here at the top level so they're never printed to the terminal.
+    # This can be removed once Bugzilla auth no longer uses credentials in URLs.
     with Terminal.disable_keyboard_interrupt_stacktracktrace():
-        return parsed.main(
-            args=parsed,
-            repository=repository,
-            identifier_template=identifier_template,
-            subversion=subversion,
-            additional_setup=additional_setup,
-            hooks=hooks,
-            canonical_svn=canonical_svn,
-        )
+        try:
+            return parsed.main(
+                args=parsed,
+                repository=repository,
+                identifier_template=identifier_template,
+                subversion=subversion,
+                additional_setup=additional_setup,
+                hooks=hooks,
+                canonical_svn=canonical_svn,
+                fallback_path=fallback_path,
+            )
+        except Exception:
+            sys.stderr.write(re.sub(r'(login|password)=[^&]+', r'\1=<REDACTED>', traceback.format_exc()))
+            return -1

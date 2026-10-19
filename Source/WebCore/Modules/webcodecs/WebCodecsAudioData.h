@@ -51,10 +51,11 @@ public:
         BufferSource data;
         size_t numberOfFrames;
         size_t numberOfChannels;
+        Vector<Ref<JSC::ArrayBuffer>> transfer { };
     };
 
     static ExceptionOr<Ref<WebCodecsAudioData>> create(ScriptExecutionContext&, Init&&);
-    static Ref<WebCodecsAudioData> create(ScriptExecutionContext&, Ref<PlatformRawAudioData>&&);
+    static Ref<WebCodecsAudioData> LEGACY_NODELETE create(ScriptExecutionContext&, Ref<PlatformRawAudioData>&&);
     static Ref<WebCodecsAudioData> create(ScriptExecutionContext& context, WebCodecsAudioInternalData&& data) { return adoptRef(*new WebCodecsAudioData(context, WTF::move(data))); }
 
     // ContextDestructionObserver.
@@ -84,13 +85,16 @@ public:
 
     const WebCodecsAudioInternalData& data() const LIFETIME_BOUND { return m_data; }
 
-    size_t memoryCost() const { return m_data.memoryCost(); }
+    // memoryCost() may be called from a GC thread by the JS wrapper's visitChildren, so it must
+    // not touch m_data.audioData (which close() may concurrently null on the main thread).
+    size_t memoryCost() const { return m_memoryCost.load(std::memory_order_relaxed); }
 
 private:
     explicit WebCodecsAudioData(ScriptExecutionContext&);
     WebCodecsAudioData(ScriptExecutionContext&, WebCodecsAudioInternalData&&);
 
     WebCodecsAudioInternalData m_data;
+    std::atomic<size_t> m_memoryCost { 0 };
     bool m_isDetached { false };
 };
 

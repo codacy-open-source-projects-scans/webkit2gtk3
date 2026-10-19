@@ -67,6 +67,10 @@ enum class CaretVisibility : bool { Hidden, Visible };
 - (BOOL)_shouldSimulateKeyboardInputOnTextInsertion;
 @end
 
+@interface WKKeyboardScrollViewAnimator : NSObject
+- (BOOL)beginWithEvent:(id)event scrollView:(id)scrollView;
+@end
+
 @interface InputAssistantItemTestingWebView : TestWKWebView
 + (UIBarButtonItemGroup *)leadingItemsForWebView:(WKWebView *)webView;
 + (UIBarButtonItemGroup *)trailingItemsForWebView:(WKWebView *)webView;
@@ -251,6 +255,8 @@ static RetainPtr<TestWKWebView> webViewWithAutofocusedInput(const RetainPtr<Test
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
 
+    [webView focusInWindow];
+
     __block bool doneWaiting = false;
     [inputDelegate setFocusStartsInputSessionPolicyHandler:^_WKFocusStartsInputSessionPolicy(WKWebView *, id <_WKFocusedElementInfo>) {
         doneWaiting = true;
@@ -384,6 +390,33 @@ TEST(KeyboardInputTests, CanHandleKeyEventInCompletionHandler)
 
     TestWebKitAPI::Util::run(&doneWaiting);
     EXPECT_WK_STREQ("a", [webView stringByEvaluatingJavaScript:@"document.querySelector('input').value"]);
+}
+
+TEST(KeyboardInputTests, ReentrantKeyEventDuringInterpretKeyEventDoesNotCrash)
+{
+    RetainPtr inputDelegate = adoptNS([TestInputDelegate new]);
+    RetainPtr webView = webViewWithAutofocusedInput(inputDelegate);
+    __block bool didReenter = false;
+    InstanceMethodSwizzler swizzler {
+        NSClassFromString(@"WKKeyboardScrollViewAnimator"),
+        @selector(beginWithEvent:scrollView:),
+        imp_implementationWithBlock(^BOOL(id, WebEvent *, id) {
+            if (std::exchange(didReenter, true))
+                return NO;
+            for (unsigned i = 0; i < 32; ++i) {
+                RetainPtr extraEvent = adoptNS([[WebEvent alloc] initWithKeyEventType:WebEventKeyDown timeStamp:CFAbsoluteTimeGetCurrent() characters:@"b" charactersIgnoringModifiers:@"b" modifiers:0 isRepeating:NO withFlags:0 withInputManagerHint:nil keyCode:0 isTabKey:NO]);
+                [webView handleKeyEvent:extraEvent completion:^(WebEvent *, BOOL) { }];
+            }
+            return NO;
+        })
+    };
+    RetainPtr keyDown = adoptNS([[WebEvent alloc] initWithKeyEventType:WebEventKeyDown timeStamp:CFAbsoluteTimeGetCurrent() characters:@"a" charactersIgnoringModifiers:@"a" modifiers:0 isRepeating:NO withFlags:0 withInputManagerHint:nil keyCode:0 isTabKey:NO]);
+    __block bool done = false;
+    [webView handleKeyEvent:keyDown completion:^(WebEvent *, BOOL) {
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+    EXPECT_TRUE(didReenter); // Proves _interpretKeyEvent was reached; passes if no ASan use-after-free in the queued event.
 }
 
 TEST(KeyboardInputTests, ResigningFirstResponderCancelsKeyEvents)
@@ -570,6 +603,28 @@ TEST(KeyboardInputTests, IsSingleLineDocument)
     // Content editable
     [webView evaluateJavaScriptAndWaitForInputSessionToChange:@"document.getElementById('third').focus()"];
     EXPECT_FALSE([webView effectiveTextInputTraits].isSingleLineDocument);
+}
+
+TEST(KeyboardInputTests, SecureTextEntryAfterChangingInputTypeFromPassword)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
+    RetainPtr inputDelegate = adoptNS([[TestInputDelegate alloc] init]);
+    [inputDelegate setFocusStartsInputSessionPolicyHandler:[](WKWebView *, id<_WKFocusedElementInfo>) -> _WKFocusStartsInputSessionPolicy {
+        return _WKFocusStartsInputSessionPolicyAllow;
+    }];
+    [webView _setInputDelegate:inputDelegate];
+
+    [webView synchronouslyLoadHTMLString:@"<body><input id='first' type='password'><input id='second' type='text'></body>"];
+
+    [webView evaluateJavaScriptAndWaitForInputSessionToChange:@"document.getElementById('first').focus()"];
+    EXPECT_TRUE([webView effectiveTextInputTraits].secureTextEntry);
+
+    [webView evaluateJavaScriptAndWaitForInputSessionToChange:@"document.getElementById('first').blur()"];
+    [webView evaluateJavaScriptAndWaitForInputSessionToChange:@"let first = document.getElementById('first'); first.type = 'text'; first.focus()"];
+    EXPECT_TRUE([webView effectiveTextInputTraits].secureTextEntry);
+
+    [webView evaluateJavaScriptAndWaitForInputSessionToChange:@"document.getElementById('second').focus()"];
+    EXPECT_FALSE([webView effectiveTextInputTraits].secureTextEntry);
 }
 
 TEST(KeyboardInputTests, KeyboardTypeForInput)
@@ -808,6 +863,7 @@ TEST(KeyboardInputTests, TestWebViewAdditionalContextForNonAutofillCredentialTyp
 TEST(KeyboardInputTests, AsyncFocusRequiresStrongPasswordAssistanceAfterBlurNoStartSession)
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
+    [webView focusInWindow];
     RetainPtr inputDelegate = adoptNS([[TestInputDelegate alloc] init]);
 
     [inputDelegate setFocusStartsInputSessionPolicyHandler:[&] (WKWebView *, id<_WKFocusedElementInfo>) -> _WKFocusStartsInputSessionPolicy {
@@ -951,6 +1007,7 @@ TEST(KeyboardInputTests, DoNotRegisterActionsInOverriddenUndoManager)
 TEST(KeyboardInputTests, NewUndoGroupClosesPreviousTypingCommand)
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 400, 400)]);
+    [webView focusInWindow];
     RetainPtr inputDelegate = adoptNS([TestInputDelegate new]);
     [inputDelegate setFocusStartsInputSessionPolicyHandler:[](WKWebView *, id<_WKFocusedElementInfo>) {
         return _WKFocusStartsInputSessionPolicyAllow;
@@ -1022,6 +1079,7 @@ TEST(KeyboardInputTests, EditableWebViewRequiresKeyboardWhenFirstResponder)
     ClassMethodSwizzler hardwareKeyboardModeSwizzler { UIKeyboard.class, @selector(isInHardwareKeyboardMode), returnNo };
 
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
+    [webView focusInWindow];
     RetainPtr delegate = adoptNS([TestInputDelegate new]);
     [webView _setInputDelegate:delegate.get()];
     [delegate setFocusStartsInputSessionPolicyHandler:[](WKWebView *, id <_WKFocusedElementInfo>) {
@@ -1159,6 +1217,7 @@ TEST(KeyboardInputTests, NoCrashWithEmptyAttributedMarkedText)
 TEST(KeyboardInputTests, CharactersAroundCaretSelection)
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
+    [webView focusInWindow];
     RetainPtr delegate = adoptNS([TestInputDelegate new]);
     [webView _setInputDelegate:delegate.get()];
 
@@ -1257,6 +1316,7 @@ TEST(KeyboardInputTests, MarkedTextSegmentsWithUnderlines)
 TEST(KeyboardInputTests, HasTextAfterFocusingTextField)
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 600)]);
+    [webView focusInWindow];
 
     enum class HasText : bool { No, Yes };
     __block Vector<std::pair<WKInputType, HasText>, 3> results;
@@ -1389,6 +1449,7 @@ TEST(KeyboardInputTests, AutocorrectionIndicatorColorNotAffectedByAuthorDefinedA
 TEST(KeyboardInputTests, SetConversationContext)
 {
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 400, 400)]);
+    [webView focusInWindow];
     RetainPtr conversationContext = adoptNS([UIMailConversationContext new]);
     [webView setConversationContext:conversationContext.get()];
 
@@ -1438,6 +1499,7 @@ TEST(KeyboardInputTests, DeviceEIDAndIMEIAutoFill)
     [WKWebView _setApplicationBundleIdentifier:@"org.webkit.SomeTelephonyApp"];
 
     RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
+    [webView focusInWindow];
     RetainPtr navigationDelegate = adoptNS([TestNavigationDelegate new]);
     RetainPtr inputDelegate = adoptNS([TestInputDelegate new]);
     [inputDelegate setFocusStartsInputSessionPolicyHandler:[](WKWebView *, id<_WKFocusedElementInfo>) {
@@ -1486,6 +1548,78 @@ TEST(KeyboardInputTests, DeviceEIDAndIMEIAutoFill)
     focusElementWithID(@"eid");
     EXPECT_NULL([webView effectiveTextInputTraits].textContentType);
 }
+
+#if HAVE(ADDITIONAL_ESIM_AUTOFILL_IDENTIFIERS)
+TEST(KeyboardInputTests, AdditionalEsimDeviceAutoFill)
+{
+    InstanceMethodSwizzler swizzler {
+        CoreTelephonyClient.class,
+        @selector(isAutofilleSIMIdAllowedForDomain:error:),
+        reinterpret_cast<IMP>(allowESIMAutoFillForWebKit)
+    };
+    [WKWebView _setApplicationBundleIdentifier:@"org.webkit.SomeTelephonyApp"];
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 500)]);
+    [webView focusInWindow];
+    RetainPtr navigationDelegate = adoptNS([TestNavigationDelegate new]);
+    RetainPtr inputDelegate = adoptNS([TestInputDelegate new]);
+    [inputDelegate setFocusStartsInputSessionPolicyHandler:[](WKWebView *, id<_WKFocusedElementInfo>) {
+        return _WKFocusStartsInputSessionPolicyAllow;
+    }];
+    __block bool didStartInputSession = false;
+    [inputDelegate setDidStartInputSessionHandler:^(WKWebView *, id<_WKFormInputSession>) {
+        didStartInputSession = true;
+    }];
+
+    [webView setNavigationDelegate:navigationDelegate];
+    [webView _setInputDelegate:inputDelegate];
+
+    auto loadSimulatedRequest = ^(NSString *urlString) {
+        [webView loadSimulatedRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]] responseHTMLString:@"<body>"
+            "<input id='imei1' type='number' placeholder='imei1' autocomplete='device-imei1' />"
+            "<input id='imei2' type='number' placeholder='imei2' autocomplete='device-imei2' />"
+            "<input id='nal' type='number' placeholder='nal' autocomplete='device-nal' />"
+            "</body>"];
+        [navigationDelegate waitForDidFinishNavigation];
+    };
+
+    auto focusElementWithID = ^(NSString *identifier) {
+        [webView objectByEvaluatingJavaScript:[NSString stringWithFormat:@"document.getElementById('%@').focus()", identifier]];
+        Util::run(&didStartInputSession);
+    };
+
+    auto blurActiveElement = ^{
+        [webView objectByEvaluatingJavaScript:@"document.activeElement.blur()"];
+        [webView waitForNextPresentationUpdate];
+        didStartInputSession = false;
+    };
+
+    // FIXME: rdar://180464666 (Replace additional eSIM identifier strings with their actual constants)
+    loadSimulatedRequest(@"https://login.webkit.org"); // AutoFill is allowed here.
+    focusElementWithID(@"imei1");
+    EXPECT_WK_STREQ("esim-imei1", [webView effectiveTextInputTraits].textContentType);
+
+    blurActiveElement();
+    focusElementWithID(@"imei2");
+    EXPECT_WK_STREQ("esim-imei2", [webView effectiveTextInputTraits].textContentType);
+
+    blurActiveElement();
+    focusElementWithID(@"nal");
+    EXPECT_WK_STREQ("esim-nal", [webView effectiveTextInputTraits].textContentType);
+
+    loadSimulatedRequest(@"https://apple.com"); // AutoFill is not allowed here.
+    focusElementWithID(@"imei1");
+    EXPECT_NULL([webView effectiveTextInputTraits].textContentType);
+
+    blurActiveElement();
+    focusElementWithID(@"imei2");
+    EXPECT_NULL([webView effectiveTextInputTraits].textContentType);
+
+    blurActiveElement();
+    focusElementWithID(@"nal");
+    EXPECT_NULL([webView effectiveTextInputTraits].textContentType);
+}
+#endif
 
 #endif // HAVE(ESIM_AUTOFILL_SYSTEM_SUPPORT)
 

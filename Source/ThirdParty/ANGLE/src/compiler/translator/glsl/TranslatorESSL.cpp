@@ -122,7 +122,7 @@ bool TranslatorESSL::translate(TIntermBlock *root,
 
     if (compileOptions.removeDynamicIndexingOfSwizzledVector)
     {
-        if (!sh::RemoveDynamicIndexingOfSwizzledVector(this, root, &getSymbolTable(), nullptr))
+        if (!RemoveDynamicIndexingOfSwizzledVector(this, root, &getSymbolTable(), nullptr))
         {
             return false;
         }
@@ -340,12 +340,6 @@ void TranslatorESSL::writeExtensionBehavior(const ShCompileOptions &compileOptio
             else if (iter->first == TExtension::ANGLE_texture_multisample)
             {
                 // Don't emit anything. This functionality is core in ESSL 3.10.
-                continue;
-            }
-            else if (iter->first == TExtension::WEBGL_video_texture)
-            {
-                // Don't emit anything. This extension is emulated
-                // TODO(crbug.com/776222): support external image.
                 continue;
             }
             else

@@ -28,7 +28,7 @@
 
 #include <JavaScriptCore/CachedCallInlines.h>
 #include <JavaScriptCore/IterationModeMetadata.h>
-#include <JavaScriptCore/JSArrayIterator.h>
+#include <JavaScriptCore/JSArrayIteratorInlines.h>
 #include <JavaScriptCore/JSCJSValue.h>
 #include <JavaScriptCore/JSGlobalObjectInlines.h>
 #include <JavaScriptCore/JSMapInlines.h>
@@ -56,16 +56,28 @@ JS_EXPORT_PRIVATE bool iteratorCompleteExported(JSGlobalObject*, JSValue iterRes
 JS_EXPORT_PRIVATE JSValue iteratorStep(JSGlobalObject*, IterationRecord);
 JS_EXPORT_PRIVATE JSValue iteratorStepWithCachedCall(JSGlobalObject*, IterationRecord, CachedCall*);
 JS_EXPORT_PRIVATE void iteratorClose(JSGlobalObject*, JSValue iterator);
+
+// Property offsets in objects with the iteratorResultObjectStructure (see createIteratorResultObjectStructure).
+static constexpr PropertyOffset iteratorResultObjectValuePropertyOffset = 0;
+static constexpr PropertyOffset iteratorResultObjectDonePropertyOffset = 1;
+
 JS_EXPORT_PRIVATE JSObject* createIteratorResultObject(JSGlobalObject*, JSValue, bool done);
 
 Structure* createIteratorResultObjectStructure(VM&, JSGlobalObject&);
 
-JS_EXPORT_PRIVATE JSValue iteratorMethod(JSGlobalObject*, JSObject*);
+// https://tc39.es/ecma262/multipage/abstract-operations.html#sec-getiterator, SYNC kind
 JS_EXPORT_PRIVATE IterationRecord iteratorForIterable(JSGlobalObject*, JSObject*, JSValue iteratorMethod);
 JS_EXPORT_PRIVATE IterationRecord iteratorForIterable(JSGlobalObject*, JSValue iterable);
+
 JS_EXPORT_PRIVATE IterationRecord iteratorDirect(JSGlobalObject*, JSValue);
 IterationRecord getAsyncIterator(JSGlobalObject&, JSValue);
 JS_EXPORT_PRIVATE IterationRecord getAsyncIteratorExported(JSGlobalObject&, JSValue);
+
+class JSAsyncFromSyncIterator;
+JSAsyncFromSyncIterator* createAsyncFromSyncIterator(JSGlobalObject*, JSObject* syncIterator, std::optional<IterationMode> knownMode = std::nullopt);
+JSAsyncFromSyncIterator* createAsyncFromSyncIteratorForIterable(JSGlobalObject*, JSValue iterable);
+IterationRecord createAsyncFromSyncIteratorRecord(JSGlobalObject&, JSValue iterable);
+JSC_DECLARE_HOST_FUNCTION(asyncFromSyncIteratorCreatePrivate);
 
 JS_EXPORT_PRIVATE JSValue iteratorMethod(JSGlobalObject*, JSObject*);
 JS_EXPORT_PRIVATE bool hasIteratorMethod(JSGlobalObject*, JSValue);
@@ -84,11 +96,22 @@ enum class IterableValidationResult : uint8_t {
 JS_EXPORT_PRIVATE IterableValidationResult validateIterable(VM&, JSValue iterable, JSValue symbolIterator);
 JS_EXPORT_PRIVATE ASCIILiteral getIteratorErrorMessage(IterableValidationResult, JSValue iterable);
 
-JS_EXPORT_PRIVATE IterationMode NODELETE getIterationMode(VM&, JSGlobalObject*, JSValue iterable);
+JS_EXPORT_PRIVATE IterationMode getIterationMode(JSValue iterable);
 JS_EXPORT_PRIVATE IterationMode getIterationMode(VM&, JSGlobalObject*, JSValue iterable, JSValue symbolIterator);
 
+ALWAYS_INLINE bool iteratorNextFastArray(JSGlobalObject* globalObject, JSArray* array, JSValue& indexValue, JSValue& value)
+{
+    int64_t index = indexValue.asAnyInt();
+    auto indexToLoad = JSArrayIterator::nextWithAdvance(array, index);
+    indexValue = jsNumber(index);
+    if (!indexToLoad)
+        return false;
 
-static ALWAYS_INLINE void forEachInMapStorage(VM& vm, JSGlobalObject* globalObject, JSCell* storageCell, JSMap::Helper::Entry startEntry, IterationKind iterationKind, NOESCAPE const Invocable<void(VM&, JSGlobalObject*, JSValue)> auto& callback)
+    value = array->getIndex(globalObject, *indexToLoad);
+    return true;
+}
+
+static ALWAYS_INLINE void forEachInMapStorage(VM& vm, JSGlobalObject* globalObject, JSCell* storageCell, JSMap::Helper::Entry startEntry, IterationKind iterationKind, NOESCAPE const auto& callback, NOESCAPE const auto& callbackExceptionHandler)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -121,12 +144,32 @@ static ALWAYS_INLINE void forEachInMapStorage(VM& vm, JSGlobalObject* globalObje
         }
         }
 
-        callback(vm, globalObject, value);
-        RETURN_IF_EXCEPTION(scope, void());
+        if constexpr (std::same_as<IterationStatus, std::invoke_result_t<decltype(callback), VM&, JSGlobalObject*, JSValue>>) {
+            auto result = callback(vm, globalObject, value);
+            if (scope.exception()) [[unlikely]] {
+                scope.release();
+                callbackExceptionHandler(storageCell, entry);
+                return;
+            }
+            if (result == IterationStatus::Done)
+                break;
+        } else {
+            callback(vm, globalObject, value);
+            if (scope.exception()) [[unlikely]] {
+                scope.release();
+                callbackExceptionHandler(storageCell, entry);
+                return;
+            }
+        }
     }
 }
 
-static ALWAYS_INLINE void forEachInSetStorage(VM& vm, JSGlobalObject* globalObject, JSCell* storageCell, JSSet::Helper::Entry startEntry, NOESCAPE const Invocable<void(VM&, JSGlobalObject*, JSValue)> auto& callback)
+static ALWAYS_INLINE void forEachInMapStorage(VM& vm, JSGlobalObject* globalObject, JSCell* storageCell, JSMap::Helper::Entry startEntry, IterationKind iterationKind, NOESCAPE const auto& callback)
+{
+    forEachInMapStorage(vm, globalObject, storageCell, startEntry, iterationKind, callback, [](JSCell*, JSMap::Helper::Entry) { });
+}
+
+static ALWAYS_INLINE void forEachInSetStorage(VM& vm, JSGlobalObject* globalObject, JSCell* storageCell, JSSet::Helper::Entry startEntry, NOESCAPE const auto& callback, NOESCAPE const auto& callbackExceptionHandler)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -142,9 +185,29 @@ static ALWAYS_INLINE void forEachInSetStorage(VM& vm, JSGlobalObject* globalObje
         entry = JSSet::Helper::iterationEntry(*storage) + 1;
         JSValue entryKey = JSSet::Helper::getIterationEntryKey(*storage);
 
-        callback(vm, globalObject, entryKey);
-        RETURN_IF_EXCEPTION(scope, void());
+        if constexpr (std::same_as<IterationStatus, std::invoke_result_t<decltype(callback), VM&, JSGlobalObject*, JSValue>>) {
+            auto result = callback(vm, globalObject, entryKey);
+            if (scope.exception()) [[unlikely]] {
+                scope.release();
+                callbackExceptionHandler(storageCell, entry);
+                return;
+            }
+            if (result == IterationStatus::Done)
+                break;
+        } else {
+            callback(vm, globalObject, entryKey);
+            if (scope.exception()) [[unlikely]] {
+                scope.release();
+                callbackExceptionHandler(storageCell, entry);
+                return;
+            }
+        }
     }
+}
+
+static ALWAYS_INLINE void forEachInSetStorage(VM& vm, JSGlobalObject* globalObject, JSCell* storageCell, JSSet::Helper::Entry startEntry, NOESCAPE const auto& callback)
+{
+    forEachInSetStorage(vm, globalObject, storageCell, startEntry, callback, [](JSCell*, JSSet::Helper::Entry) { });
 }
 
 static ALWAYS_INLINE void forEachInFastArray(JSGlobalObject* globalObject, JSValue iterable, JSArray* array, NOESCAPE const Invocable<void(VM&, JSGlobalObject*, JSValue)> auto& callback)
@@ -152,7 +215,7 @@ static ALWAYS_INLINE void forEachInFastArray(JSGlobalObject* globalObject, JSVal
     UNUSED_PARAM(iterable);
 
     auto& vm = getVM(globalObject);
-    ASSERT(getIterationMode(vm, globalObject, iterable) == IterationMode::FastArray);
+    ASSERT(getIterationMode(iterable) == IterationMode::FastArray);
 
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -162,8 +225,8 @@ static ALWAYS_INLINE void forEachInFastArray(JSGlobalObject* globalObject, JSVal
         callback(vm, globalObject, nextValue);
         if (scope.exception()) [[unlikely]] {
             scope.release();
-            JSArrayIterator* iterator = JSArrayIterator::create(vm, globalObject->arrayIteratorStructure(), array, IterationKind::Values);
-            iterator->internalField(JSArrayIterator::Field::Index).setWithoutWriteBarrier(jsNumber(index + 1));
+            JSArrayIterator* iterator = JSArrayIterator::create(vm, array->realm()->arrayIteratorStructure(), array, IterationKind::Values);
+            iterator->setIndex(index + 1);
             iteratorClose(globalObject, iterator);
             return;
         }
@@ -216,7 +279,7 @@ void forEachInIterable(JSGlobalObject* globalObject, JSValue iterable, NOESCAPE 
     auto& vm = getVM(globalObject);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    if (getIterationMode(vm, globalObject, iterable) == IterationMode::FastArray) {
+    if (getIterationMode(iterable) == IterationMode::FastArray) {
         auto* array = uncheckedDowncast<JSArray>(iterable);
         forEachInFastArray(globalObject, iterable, array, callback);
         RETURN_IF_EXCEPTION(scope, void());
@@ -227,7 +290,12 @@ void forEachInIterable(JSGlobalObject* globalObject, JSValue iterable, NOESCAPE 
         if (jsMap->isIteratorProtocolFastAndNonObservable()) {
             JSCell* storageCell = jsMap->storageOrSentinel(vm);
             if (storageCell != vm.orderedHashTableSentinel()) {
-                forEachInMapStorage(vm, globalObject, storageCell, 0, IterationKind::Entries, callback);
+                forEachInMapStorage(vm, globalObject, storageCell, 0, IterationKind::Entries, callback, [&](JSCell* currentStorageCell, JSMap::Helper::Entry entry) {
+                    JSMapIterator* iterator = JSMapIterator::create(vm, jsMap->realm()->mapIteratorStructure(), jsMap, IterationKind::Entries);
+                    iterator->setStorage(vm, currentStorageCell);
+                    iterator->setEntry(vm, entry);
+                    iteratorClose(globalObject, iterator);
+                });
                 RETURN_IF_EXCEPTION(scope, void());
             }
             return;
@@ -236,7 +304,12 @@ void forEachInIterable(JSGlobalObject* globalObject, JSValue iterable, NOESCAPE 
         if (jsSet->isIteratorProtocolFastAndNonObservable()) {
             JSCell* storageCell = jsSet->storageOrSentinel(vm);
             if (storageCell != vm.orderedHashTableSentinel()) {
-                forEachInSetStorage(vm, globalObject, storageCell, 0, callback);
+                forEachInSetStorage(vm, globalObject, storageCell, 0, callback, [&](JSCell* currentStorageCell, JSSet::Helper::Entry entry) {
+                    JSSetIterator* iterator = JSSetIterator::create(vm, jsSet->realm()->setIteratorStructure(), jsSet, IterationKind::Values);
+                    iterator->setStorage(vm, currentStorageCell);
+                    iterator->setEntry(vm, entry);
+                    iteratorClose(globalObject, iterator);
+                });
                 RETURN_IF_EXCEPTION(scope, void());
             }
             return;
@@ -264,7 +337,7 @@ void forEachInIterable(JSGlobalObject& globalObject, JSObject* iterable, JSValue
             if (scope.exception()) [[unlikely]] {
                 scope.release();
                 JSArrayIterator* iterator = JSArrayIterator::create(vm, globalObject.arrayIteratorStructure(), array, IterationKind::Values);
-                iterator->internalField(JSArrayIterator::Field::Index).setWithoutWriteBarrier(jsNumber(index + 1));
+                iterator->setIndex(index + 1);
                 iteratorClose(&globalObject, iterator);
                 return;
             }
@@ -324,26 +397,35 @@ void forEachInIteratorProtocol(JSGlobalObject* globalObject, JSValue iterable, N
 
     if (auto* mapIterator = dynamicDowncast<JSMapIterator>(iterable)) {
         if (mapIteratorProtocolIsFastAndNonObservable(vm, mapIterator)) {
-            if (JSMap* iteratedMap = mapIterator->iteratedObject()) {
-                JSCell* storageCell = iteratedMap->storageOrSentinel(vm);
-                if (storageCell != vm.orderedHashTableSentinel()) {
-                    JSMap::Helper::Entry startEntry = mapIterator->entry();
-                    IterationKind iterationKind = mapIterator->kind();
-                    forEachInMapStorage(vm, globalObject, storageCell, startEntry, iterationKind, callback);
+            if (mapIterator->iteratedObject()) {
+                JSValue value;
+                while (mapIterator->next(globalObject, value)) {
                     RETURN_IF_EXCEPTION(scope, void());
+                    callback(vm, globalObject, value);
+                    if (scope.exception()) [[unlikely]] {
+                        scope.release();
+                        iteratorClose(globalObject, mapIterator);
+                        return;
+                    }
                 }
+                RETURN_IF_EXCEPTION(scope, void());
                 return;
             }
         }
     } else if (auto* setIterator = dynamicDowncast<JSSetIterator>(iterable)) {
         if (setIteratorProtocolIsFastAndNonObservable(vm, setIterator)) {
-            if (JSSet* iteratedSet = setIterator->iteratedObject()) {
-                JSCell* storageCell = iteratedSet->storageOrSentinel(vm);
-                if (storageCell != vm.orderedHashTableSentinel()) {
-                    JSSet::Helper::Entry startEntry = setIterator->entry();
-                    forEachInSetStorage(vm, globalObject, storageCell, startEntry, callback);
+            if (setIterator->iteratedObject()) {
+                JSValue value;
+                while (setIterator->next(globalObject, value)) {
                     RETURN_IF_EXCEPTION(scope, void());
+                    callback(vm, globalObject, value);
+                    if (scope.exception()) [[unlikely]] {
+                        scope.release();
+                        iteratorClose(globalObject, setIterator);
+                        return;
+                    }
                 }
+                RETURN_IF_EXCEPTION(scope, void());
                 return;
             }
         }

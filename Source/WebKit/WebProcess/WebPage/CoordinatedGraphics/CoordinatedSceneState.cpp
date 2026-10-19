@@ -64,14 +64,20 @@ void CoordinatedSceneState::setRootLayerChildren(Vector<Ref<CoordinatedPlatformL
 void CoordinatedSceneState::addLayer(CoordinatedPlatformLayer& layer)
 {
     ASSERT(isMainRunLoop());
-    m_layers.add(layer);
+    {
+        Locker locker { m_layersLock };
+        m_layers.add(layer);
+    }
     m_didChangeLayers = true;
 }
 
 void CoordinatedSceneState::removeLayer(CoordinatedPlatformLayer& layer)
 {
     ASSERT(isMainRunLoop());
-    m_layers.remove(layer);
+    {
+        Locker locker { m_layersLock };
+        m_layers.remove(layer);
+    }
     m_layersToRemove.add(layer);
     m_didChangeLayers = true;
 }
@@ -79,33 +85,67 @@ void CoordinatedSceneState::removeLayer(CoordinatedPlatformLayer& layer)
 bool CoordinatedSceneState::flush()
 {
     ASSERT(isMainRunLoop());
-    if (!m_didChangeLayers)
-        return false;
 
-    m_didChangeLayers = false;
+    bool didChangeLayers = m_didChangeLayers.exchange(false);
+    if (didChangeLayers) {
+        Locker pendingLayersLock { m_pendingLayersLock };
+        {
+            Locker locker { m_layersLock };
+            m_pendingLayers = m_layers;
+        }
+        if (m_pendingLayersToRemove.isEmpty())
+            m_pendingLayersToRemove = WTF::move(m_layersToRemove);
+        else
+            m_pendingLayersToRemove.addAll(std::exchange(m_layersToRemove, { }));
+    }
 
-    Locker pendingLayersLock { m_pendingLayersLock };
-    m_pendingLayers = m_layers;
-    m_pendingLayersToRemove.addAll(WTF::move(m_layersToRemove));
+    flushPendingState();
 
-    return true;
+    return didChangeLayers;
+}
+
+void CoordinatedSceneState::flushPendingState()
+{
+    Locker stateLock { m_stateLock };
+    Locker layersLock { m_layersLock };
+    for (Ref layer : m_layers)
+        layer->flushPendingState();
 }
 
 void CoordinatedSceneState::commitPendingLayers()
 {
     ASSERT(!isMainRunLoop());
     Locker pendingLayersLock { m_pendingLayersLock };
-    for (auto& layer : m_pendingLayersToRemove)
+    while (!m_pendingLayersToRemove.isEmpty()) {
+        auto layer = m_pendingLayersToRemove.takeAny();
         layer->invalidateTarget();
-    m_pendingLayersToRemove.clear();
+    }
+
     if (!m_pendingLayers.isEmpty())
         m_committedLayers = WTF::move(m_pendingLayers);
 }
 
-const HashSet<Ref<CoordinatedPlatformLayer>>& CoordinatedSceneState::committedLayers()
+void CoordinatedSceneState::flushCompositingState(const OptionSet<CompositionReason>& reasons)
 {
     commitPendingLayers();
-    return m_committedLayers;
+
+    {
+        Locker stateLock { m_stateLock };
+        m_rootLayer->flushPositionChanges(reasons);
+        for (auto& layer : m_committedLayers)
+            layer->flushPositionChanges(reasons);
+    }
+
+    Vector<Ref<CoordinatedPlatformLayer>, 16> layersWithPendingTileUpdates;
+    m_rootLayer->flushCompositingState(reasons);
+    for (auto& layer : m_committedLayers) {
+        layer->flushCompositingState(reasons);
+        if (layer->hasPendingBackingStoreTileUpdates())
+            layersWithPendingTileUpdates.append(Ref { layer });
+    }
+
+    for (auto& layer : layersWithPendingTileUpdates)
+        layer->processPendingBackingStoreTileUpdates();
 }
 
 void CoordinatedSceneState::invalidateCommittedLayers()
@@ -123,10 +163,13 @@ void CoordinatedSceneState::invalidate()
 {
     ASSERT(isMainRunLoop());
     // Root layer doesn't have client nor backing stores to invalidate.
-    while (!m_layers.isEmpty()) {
-        auto layer = m_layers.takeAny();
-        layer->invalidateClient();
+    HashSet<Ref<CoordinatedPlatformLayer>> layers;
+    {
+        Locker locker { m_layersLock };
+        layers = WTF::move(m_layers);
     }
+    for (Ref layer : layers)
+        layer->invalidateClient();
 
     Locker pendingLayersLock { m_pendingLayersLock };
     m_pendingLayers = { };

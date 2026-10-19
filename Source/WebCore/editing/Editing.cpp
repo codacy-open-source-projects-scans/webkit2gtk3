@@ -63,12 +63,12 @@
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderTableCell.h"
 #include "RenderTextControlSingleLine.h"
 #include "RenderTextFragment.h"
 #include "RenderedPosition.h"
 #include "ShadowRoot.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "Text.h"
 #include "TextControlInnerElements.h"
 #include "TextIterator.h"
@@ -131,7 +131,7 @@ static bool isEditableToAccessibility(const Node& node)
     ASSERT(AXObjectCache::accessibilityEnabled());
     ASSERT(node.document().existingAXObjectCache());
 
-    if (CheckedPtr cache = node.document().existingAXObjectCache())
+    if (CheckedPtr cache = protect(node.document())->existingAXObjectCache())
         return cache->rootAXEditableElement(&node);
 
     return false;
@@ -188,8 +188,10 @@ Element* editableRootForPosition(const Position& position, EditableType editable
 
     switch (editableType) {
     case HasEditableAXRole:
-        if (CheckedPtr cache = node->document().existingAXObjectCache())
-            return const_cast<Element*>(cache->rootAXEditableElement(node.get()));
+        if (CheckedPtr cache = protect(node->document())->existingAXObjectCache()) {
+            // FIXME: Remove suppression once rdar://189998365 is fixed.
+            SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<Element*>(cache->rootAXEditableElement(node.get()));
+        }
         [[fallthrough]];
     case ContentIsEditable:
         return node->rootEditableElement();
@@ -209,11 +211,11 @@ RefPtr<Element> unsplittableElementForPosition(const Position& position)
     return editableRootForPosition(position);
 }
 
-Position nextCandidate(const Position& position)
+Position nextCandidate(const Position& position, AllowUserSelectNone allowUserSelectNone)
 {
     for (PositionIterator nextPosition = position; !nextPosition.atEnd(); ) {
         nextPosition.increment();
-        if (nextPosition.isCandidate())
+        if (nextPosition.isCandidate(allowUserSelectNone))
             return nextPosition;
     }
     return { };
@@ -231,7 +233,7 @@ Position nextVisuallyDistinctCandidate(const Position& position, SkipDisplayCont
         if (RefPtr node = nextPosition.containerNode()) {
             if (!node->renderer()) {
                 if (skipDisplayContents == SkipDisplayContents::No) {
-                    if (auto element = dynamicDowncast<Element>(node); element && element->hasDisplayContents())
+                    if (auto* element = dynamicDowncast<Element>(node); element && element->hasDisplayContents())
                         continue;
                 }
                 nextPosition = lastPositionInOrAfterNode(node.get());
@@ -241,12 +243,12 @@ Position nextVisuallyDistinctCandidate(const Position& position, SkipDisplayCont
     return { };
 }
 
-Position previousCandidate(const Position& position)
+Position previousCandidate(const Position& position, AllowUserSelectNone allowUserSelectNone)
 {
     PositionIterator previousPosition = position;
     while (!previousPosition.atStart()) {
         previousPosition.decrement();
-        if (previousPosition.isCandidate())
+        if (previousPosition.isCandidate(allowUserSelectNone))
             return previousPosition;
     }
     return { };
@@ -289,7 +291,7 @@ Position firstEditablePositionAfterPositionInRoot(const Position& position, Cont
     }
 
     while (candidate.deprecatedNode() && !isEditablePosition(candidate) && candidate.deprecatedNode()->isDescendantOf(*highestRoot))
-        candidate = isAtomicNode(candidate.deprecatedNode()) ? positionInParentAfterNode(*candidate.deprecatedNode()) : nextVisuallyDistinctCandidate(candidate);
+        candidate = isAtomicNode(protect(candidate.deprecatedNode())) ? positionInParentAfterNode(protect(*candidate.deprecatedNode())) : nextVisuallyDistinctCandidate(candidate);
 
     if (candidate.deprecatedNode() && !candidate.deprecatedNode()->isInclusiveDescendantOf(*highestRoot))
         return { };
@@ -317,7 +319,7 @@ Position lastEditablePositionBeforePositionInRoot(const Position& position, Cont
     }
 
     while (candidate.deprecatedNode() && !isEditablePosition(candidate) && candidate.deprecatedNode()->isDescendantOf(*highestRoot))
-        candidate = isAtomicNode(candidate.deprecatedNode()) ? positionInParentBeforeNode(*candidate.deprecatedNode()) : previousVisuallyDistinctCandidate(candidate);
+        candidate = isAtomicNode(protect(candidate.deprecatedNode())) ? positionInParentBeforeNode(protect(*candidate.deprecatedNode())) : previousVisuallyDistinctCandidate(candidate);
 
     if (candidate.deprecatedNode() && !candidate.deprecatedNode()->isInclusiveDescendantOf(*highestRoot))
         return { };
@@ -505,13 +507,13 @@ bool isListItem(const Node& node)
     return isListHTMLElement(node.parentNode()) || (node.renderer() && node.renderer()->isRenderListItem());
 }
 
-Element* enclosingElementWithTag(const Position& position, const QualifiedName& tagName)
+RefPtr<Element> enclosingElementWithTag(const Position& position, const QualifiedName& tagName)
 {
     auto root = highestEditableRoot(position);
     for (RefPtr node = position.deprecatedNode(); node; node = node->parentNode()) {
         if (root && !node->hasEditableStyle())
             continue;
-        auto* element = dynamicDowncast<Element>(*node);
+        RefPtr element = dynamicDowncast<Element>(*node);
         if (!element)
             continue;
         if (element->hasTagName(tagName))
@@ -555,7 +557,7 @@ RefPtr<Node> highestEnclosingNodeOfType(const Position& position, bool (*nodeIsO
     return highest;
 }
 
-static bool NODELETE hasARenderedDescendant(Node* node, Node* excludedNode)
+static bool LEGACY_NODELETE hasARenderedDescendant(Node* node, Node* excludedNode)
 {
     for (auto* n = node->firstChild(); n;) {
         if (n == excludedNode) {
@@ -992,7 +994,8 @@ int indexForVisiblePosition(const VisiblePosition& visiblePosition, RefPtr<Conta
     auto position = visiblePosition.deepEquivalent();
     Ref document = *position.document();
 
-    auto editableRoot = highestEditableRoot(position, AXObjectCache::accessibilityEnabled() ? HasEditableAXRole : ContentIsEditable);
+    bool useAccessibilityEditability = AXObjectCache::accessibilityEnabled() && document->existingAXObjectCache();
+    auto editableRoot = highestEditableRoot(position, useAccessibilityEditability ? HasEditableAXRole : ContentIsEditable);
     if (editableRoot && !document->inDesignMode())
         scope = editableRoot;
     else {
@@ -1026,11 +1029,11 @@ VisiblePosition visiblePositionForPositionWithOffset(const VisiblePosition& posi
     return visiblePositionForIndex(startIndex + offset, root.get());
 }
 
-VisiblePosition visiblePositionForIndex(int index, Node* scope, TextIteratorBehaviors behaviors)
+VisiblePosition visiblePositionForIndex(int index, Node* scope, TextIteratorBehaviors behaviors, AllowUserSelectNone allowUserSelectNone)
 {
     if (!scope)
         return { };
-    return { makeDeprecatedLegacyPosition(resolveCharacterLocation(makeRangeSelectingNodeContents(*scope), index, behaviors)) };
+    return { makeDeprecatedLegacyPosition(resolveCharacterLocation(makeRangeSelectingNodeContents(*scope), index, behaviors)), VisiblePosition::defaultAffinity, allowUserSelectNone };
 }
 
 VisiblePosition visiblePositionForIndexUsingCharacterIterator(Node& node, int index)
@@ -1138,7 +1141,7 @@ Position adjustedSelectionStartForStyleComputation(const VisibleSelection& selec
 }
 
 // FIXME: Should this be deprecated like deprecatedEnclosingBlockFlowElement is?
-static Element* NODELETE elementIfBlockFlow(Node& node)
+static Element* LEGACY_NODELETE elementIfBlockFlow(Node& node)
 {
     auto* element = dynamicDowncast<Element>(node);
     if (!element)
@@ -1152,7 +1155,7 @@ bool isBlockFlowElement(const Node& node)
     return elementIfBlockFlow(const_cast<Node&>(node));
 }
 
-Element* NODELETE deprecatedEnclosingBlockFlowElement(Node* node)
+Element* LEGACY_NODELETE deprecatedEnclosingBlockFlowElement(Node* node)
 {
     if (!node)
         return nullptr;
@@ -1195,7 +1198,7 @@ LayoutRect localCaretRectInRendererForCaretPainting(const VisiblePosition& caret
         return LayoutRect();
     ASSERT(caretPosition.deepEquivalent().deprecatedNode()->renderer());
     auto [localRect, renderer] = caretPosition.localCaretRect();
-    return localCaretRectInRendererForRect(localRect, caretPosition.deepEquivalent().deprecatedNode(), renderer.get(), caretPainter);
+    return localCaretRectInRendererForRect(localRect, protect(caretPosition.deepEquivalent().deprecatedNode()), renderer.get(), caretPainter);
 }
 
 LayoutRect localCaretRectInRendererForRect(LayoutRect& localRect, Node* node, RenderObject* renderer, RenderBlock*& caretPainter)
@@ -1205,12 +1208,13 @@ LayoutRect localCaretRectInRendererForRect(LayoutRect& localRect, Node* node, Re
     caretPainter = rendererForCaretPainting(node);
 
     // Compute an offset between the renderer and the caretPainter.
-    while (renderer != caretPainter) {
-        CheckedPtr containerObject = renderer->container();
+    CheckedPtr currentRenderer = renderer;
+    while (currentRenderer != caretPainter) {
+        CheckedPtr containerObject = currentRenderer->container();
         if (!containerObject)
             return LayoutRect();
-        localRect.move(renderer->offsetFromContainer(*containerObject, localRect.location()));
-        renderer = containerObject.get();
+        localRect.move(currentRenderer->offsetFromContainer(*containerObject, localRect.location()));
+        currentRenderer = containerObject;
     }
 
     return localRect;
@@ -1226,7 +1230,8 @@ IntRect absoluteBoundsForLocalCaretRect(RenderBlock* rendererForCaretPainting, c
 
     LayoutRect localRect(rect);
     rendererForCaretPainting->flipForWritingMode(localRect);
-    return rendererForCaretPainting->localToAbsoluteQuad(FloatRect(localRect), MapCoordinatesMode::UseTransforms, insideFixed).enclosingBoundingBox();
+    // FIXME: Remove suppression once rdar://189998444 is fixed.
+    SUPPRESS_MEMORY_UNSAFE_CAST return rendererForCaretPainting->localToAbsoluteQuad(FloatRect(localRect), MapCoordinatesMode::UseTransforms, insideFixed).enclosingBoundingBox();
 }
 
 HashSet<Ref<HTMLImageElement>> visibleImageElementsInRangeWithNonLoadedImages(const SimpleRange& range)
@@ -1318,7 +1323,7 @@ static std::optional<BoundaryPoint> findBidiBoundary(const RenderedPosition& pos
 }
 
 enum class BoxIterationDirection : bool { SameAsLine, OppositeOfLine };
-static InlineIterator::LeafBoxIterator advanceInDirection(InlineIterator::LeafBoxIterator box, TextDirection direction, BoxIterationDirection iterationDirection)
+static InlineIterator::LeafBoxIterator LEGACY_NODELETE advanceInDirection(InlineIterator::LeafBoxIterator box, TextDirection direction, BoxIterationDirection iterationDirection)
 {
     bool shouldMoveRight = (iterationDirection == BoxIterationDirection::SameAsLine) == (direction == TextDirection::LTR);
     return shouldMoveRight ? box->nextLineRightwardOnLine() : box->nextLineLeftwardOnLine();

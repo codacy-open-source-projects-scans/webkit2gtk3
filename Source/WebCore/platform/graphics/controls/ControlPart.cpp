@@ -41,10 +41,22 @@ ControlFactory& ControlPart::controlFactory() const
     return m_overrideControlFactory ? *m_overrideControlFactory : ControlFactory::singleton();
 }
 
+void ControlPart::setOverrideControlFactory(RefPtr<ControlFactory>&& controlFactory)
+{
+    if (m_overrideControlFactory == controlFactory)
+        return;
+
+    m_overrideControlFactory = WTF::move(controlFactory);
+
+    m_platformControl = nullptr;
+}
+
 PlatformControl* ControlPart::platformControl() const
 {
-    if (!m_platformControl)
-        m_platformControl = const_cast<ControlPart&>(*this).createPlatformControl();
+    if (!m_platformControl) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST m_platformControl = const_cast<ControlPart&>(*this).createPlatformControl();
+    }
     return m_platformControl.get();
 }
 

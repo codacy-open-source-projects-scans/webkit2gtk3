@@ -34,6 +34,7 @@
 #import <WebCore/IntRect.h>
 #import <WebCore/LocalizedStrings.h>
 #import <pal/spi/mac/NSColorSPI.h>
+#import <wtf/Borrow.h>
 
 constexpr CGFloat dropdownTopMargin = 3;
 constexpr CGFloat dropdownVerticalPadding = 4;
@@ -145,8 +146,11 @@ void WebDataListSuggestionsDropdownMac::close()
 
     self.hasShadow = YES;
 #if HAVE(LIQUID_GLASS)
-    if (WebKit::isLiquidGlassEnabled())
-        _backdropView = adoptNS([[NSGlassEffectView alloc] initWithFrame:contentRect]);
+    if (WebKit::isLiquidGlassEnabled()) {
+        RetainPtr glassView = adoptNS([[NSGlassEffectView alloc] initWithFrame:contentRect]);
+        [glassView set_adaptiveAppearance:_NSGlassEffectViewAdaptiveAppearanceOff];
+        _backdropView = WTF::move(glassView);
+    }
 #endif
 
     if (!_backdropView) {
@@ -461,7 +465,7 @@ static BOOL shouldShowDividersBetweenCells(const Vector<WebCore::DataListSuggest
         return NSZeroRect;
 
     CGFloat totalCellHeight = 0;
-    for (auto& suggestion : _suggestions)
+    for (auto& suggestion : borrow(_suggestions))
         totalCellHeight += suggestion.label.isEmpty() ? dropdownRowHeightWithoutLabel : dropdownRowHeightWithLabel;
 
     CGFloat totalIntercellSpacingAndPadding = dropdownVerticalPadding * 2;
@@ -470,8 +474,8 @@ static BOOL shouldShowDividersBetweenCells(const Vector<WebCore::DataListSuggest
 
     CGFloat width = std::min<CGFloat>(std::max(rect.width(), rect.height()), screenRect.size.width);
     CGFloat height = std::min<CGFloat>(totalIntercellSpacingAndPadding + std::min(totalCellHeight, maximumTotalHeightForDropdownCells), screenRect.size.height);
-    CGFloat originX = std::max<CGFloat>(NSMinX(windowRect), 0);
-    CGFloat originY = std::max<CGFloat>(NSMinY(windowRect) - height - dropdownTopMargin, 0);
+    CGFloat originX = std::clamp<CGFloat>(NSMinX(windowRect), NSMinX(screenRect), NSMaxX(screenRect) - width);
+    CGFloat originY = std::clamp<CGFloat>(NSMinY(windowRect) - height - dropdownTopMargin, NSMinY(screenRect), NSMaxY(screenRect) - height);
 
     return NSMakeRect(originX, originY, width, height);
 }
@@ -529,7 +533,8 @@ static BOOL shouldShowDividersBetweenCells(const Vector<WebCore::DataListSuggest
         [result setIdentifier:suggestionCellReuseIdentifier];
     }
 
-    auto& suggestion = _suggestions.at(row);
+    Borrow borrowedSuggestions = _suggestions;
+    auto& suggestion = borrowedSuggestions->at(row);
     [result setShouldShowBottomDivider:_showDividersBetweenCells && row < static_cast<NSInteger>(_suggestions.size() - 1)];
     [result setValue:suggestion.value.createNSString().get() label:suggestion.label.createNSString().get()];
 

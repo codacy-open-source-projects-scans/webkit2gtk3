@@ -93,11 +93,15 @@ void WebInjectedScriptManager::discardInjectedScripts()
     InjectedScriptManager::discardInjectedScripts();
 
     if (m_commandLineAPIHost)
-        m_commandLineAPIHost->clearAllWrappers();
+        protect(m_commandLineAPIHost)->clearAllWrappers();
 }
 
 void WebInjectedScriptManager::didCreateInjectedScript(const Inspector::InjectedScript& injectedScript)
 {
+    // A manager that was never connected to a frontend has no CommandLineAPIHost.
+    if (!m_commandLineAPIHost)
+        return;
+
     CommandLineAPIModule::injectIfNeeded(this, injectedScript);
 }
 

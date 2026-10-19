@@ -88,8 +88,10 @@ CaptureSourceOrError CoreAudioCaptureSource::create(const CaptureDevice& device,
     auto source = adoptRef(*new CoreAudioCaptureSource(device, coreAudioDevice->deviceID(), WTF::move(hashSalts), pageIdentifier));
 #elif PLATFORM(IOS_FAMILY)
     auto coreAudioDevice = AVAudioSessionCaptureDeviceManager::singleton().audioSessionDeviceWithUID(device.persistentId());
-    if (!coreAudioDevice)
+    if (!coreAudioDevice && !device.isDefault()) {
+        AVAudioSessionCaptureDeviceManager::singleton().scheduleUpdateCaptureDevices();
         return CaptureSourceOrError({ "No AVAudioSessionCaptureDevice device"_s, MediaAccessDenialReason::PermissionDenied });
+    }
 
     auto source = adoptRef(*new CoreAudioCaptureSource(device, 0, WTF::move(hashSalts), pageIdentifier));
 #endif
@@ -282,7 +284,7 @@ const RealtimeMediaSourceCapabilities& CoreAudioCaptureSource::capabilities()
         capabilities.setGroupId(hashedGroupId());
         capabilities.setEchoCancellation(m_echoCancellationCapability ? (*m_echoCancellationCapability ? RealtimeMediaSourceCapabilities::EchoCancellation::On : RealtimeMediaSourceCapabilities::EchoCancellation::Off) : RealtimeMediaSourceCapabilities::EchoCancellation::OnOrOff);
         capabilities.setVolume({ 0.0, 1.0 });
-        capabilities.setSampleRate(m_unit->sampleRateCapacities());
+        capabilities.setSampleRate(protect(m_unit)->sampleRateCapacities());
         m_capabilities = WTF::move(capabilities);
     }
     return m_capabilities.value();
@@ -386,7 +388,7 @@ void CoreAudioCaptureSource::handleNewCurrentMicrophoneDevice(const CaptureDevic
     if (!isProducingData() || persistentID() == device.persistentId())
         return;
 
-    RELEASE_LOG_INFO(WebRTC, "CoreAudioCaptureSource switching from '%s' to '%s'", name().utf8().data(), device.label().utf8().data());
+    RELEASE_LOG_INFO(WebRTC, "CoreAudioCaptureSource switching from '%s' to '%s'", name().utf8(), device.label().utf8());
 
     setName(AtomString { device.label() });
     setPersistentId(device.persistentId());

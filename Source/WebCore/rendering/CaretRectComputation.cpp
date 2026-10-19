@@ -30,14 +30,12 @@
 #include "InlineIteratorBoxInlines.h"
 #include "InlineIteratorLineBox.h"
 #include "InlineIteratorTextBox.h"
-#include "InlineIteratorTextBoxInlines.h"
 #include "InlineIteratorSVGTextBox.h"
 #include "LayoutIntegrationLineLayout.h"
 #include "LineSelection.h"
 #include "RenderBlockFlow.h"
 #include "RenderBoxInlines.h"
 #include "RenderBoxModelObjectInlines.h"
-#include "RenderInline.h"
 #include "RenderLineBreak.h"
 #include "RenderObjectInlines.h"
 #include "RenderSVGInlineText.h"
@@ -118,7 +116,7 @@ static LayoutRect computeCaretRectForEmptyElement(const RenderBoxModelObject& re
     }
     x = std::min(x, std::max<LayoutUnit>(maxX - caretWidth(), 0));
 
-    auto lineHeight = LayoutUnit::fromFloatCeil(currentStyle->computedLineHeight());
+    auto lineHeight = LayoutUnit::fromFloatCeil(currentStyle->usedLineHeight());
     auto height = std::min(lineHeight, LayoutUnit { currentStyle->metricsOfPrimaryFont().height() });
     auto y = renderer.borderAndPaddingBefore() + (lineHeight > height ? (lineHeight - height) / 2 : LayoutUnit { });
 
@@ -274,11 +272,11 @@ static LayoutRect computeCaretRectForBox(const RenderBox& renderer, const Inline
     // They never refer to children.
     // FIXME: Paint the carets inside empty blocks differently than the carets before/after elements.
 
-    LayoutRect rect(renderer.location(), LayoutSize(caretWidth(), renderer.height()));
+    LayoutRect rect(renderer.location(), LayoutSize(caretWidth(), renderer.borderBoxHeight()));
     auto writingMode = boxAndOffset.box ? boxAndOffset.box->writingMode() : renderer.writingMode();
 
     if ((!boxAndOffset.offset) == writingMode.isInlineFlipped())
-        rect.move(LayoutSize(renderer.width() - caretWidth(), 0_lu));
+        rect.move(LayoutSize(renderer.borderBoxWidth() - caretWidth(), 0_lu));
 
     if (boxAndOffset.box) {
         auto lineBox = boxAndOffset.box->lineBox();
@@ -305,13 +303,13 @@ static LayoutRect computeCaretRectForBox(const RenderBox& renderer, const Inline
     // FIXME: Border/padding should be added for all elements but this workaround
     // is needed because we use offsets inside an "atomic" element to represent
     // positions before and after the element in deprecated editing offsets.
-    if (renderer.element() && !(editingIgnoresContent(*renderer.element()) || isRenderedTable(renderer.element()))) {
+    if (renderer.element() && !(editingIgnoresContent(protect(*renderer.element())) || isRenderedTable(renderer.element()))) {
         rect.setX(rect.x() + renderer.borderLeft() + renderer.paddingLeft());
         rect.setY(rect.y() + renderer.paddingTop() + renderer.borderTop());
     }
 
     if (caretRectMode == CaretRectMode::ExpandToEndOfLine)
-        rect.shiftMaxXEdgeTo(renderer.x() + renderer.width());
+        rect.shiftMaxXEdgeTo(renderer.x() + renderer.borderBoxWidth());
 
     return writingMode.isHorizontal() ? rect : rect.transposedRect();
 }
@@ -325,10 +323,10 @@ static LayoutRect computeCaretRectForBlock(const RenderBlock& renderer, const In
     return computeCaretRectForEmptyElement(renderer, renderer.logicalWidth(), renderer.textIndentOffset(), caretRectMode);
 }
 
-static LayoutRect computeCaretRectForInline(const RenderInline& renderer)
+static LayoutRect computeCaretRectForInline(const RenderBoxModelObject& renderer)
 {
     if (renderer.firstChild()) {
-        // This condition is possible if the RenderInline is at an editing boundary,
+        // This condition is possible if the inline box is at an editing boundary,
         // i.e. the VisiblePosition is:
         //   <RenderInline editingBoundary=true>|<RenderText> </RenderText></RenderInline>
         // FIXME: need to figure out how to make this return a valid rect, note that
@@ -361,8 +359,8 @@ LayoutRect computeLocalCaretRect(const RenderObject& renderer, const InlineBoxAn
     if (auto* box = dynamicDowncast<RenderBox>(renderer))
         return computeCaretRectForBox(*box, boxAndOffset, caretRectMode);
 
-    if (auto* renderInline = dynamicDowncast<RenderInline>(renderer))
-        return computeCaretRectForInline(*renderInline);
+    if (renderer.isInlineBox())
+        return computeCaretRectForInline(downcast<RenderBoxModelObject>(renderer));
 
     return { };
 }

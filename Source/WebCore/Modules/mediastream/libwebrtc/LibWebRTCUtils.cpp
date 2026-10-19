@@ -28,6 +28,7 @@
 #if ENABLE(WEB_RTC) && USE(LIBWEBRTC)
 
 #include "LibWebRTCMacros.h"
+#include "MediaStreamTrackHintValue.h"
 #include "RTCDtlsTransportState.h"
 #include "RTCError.h"
 #include "RTCIceCandidate.h"
@@ -91,7 +92,7 @@ RTCPriorityType toRTCPriorityType(webrtc::Priority priority)
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-static inline double NODELETE toWebRTCBitRatePriority(RTCPriorityType priority)
+static inline double LEGACY_NODELETE toWebRTCBitRatePriority(RTCPriorityType priority)
 {
     switch (priority) {
     case RTCPriorityType::VeryLow:
@@ -107,7 +108,7 @@ static inline double NODELETE toWebRTCBitRatePriority(RTCPriorityType priority)
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-static inline RTCPriorityType NODELETE fromWebRTCBitRatePriority(double priority)
+static inline RTCPriorityType LEGACY_NODELETE fromWebRTCBitRatePriority(double priority)
 {
     if (priority < 0.7)
         return RTCPriorityType::VeryLow;
@@ -192,9 +193,9 @@ static inline webrtc::RtpCodec fromRTCRtpCodec(const RTCRtpCodec& codec, webrtc:
     for (auto parameter : StringView(codec.sdpFmtpLine).split(';')) {
         auto position = parameter.find('=');
         if (position != notFound)
-            rtcCodec.parameters.emplace(parameter.left(position).utf8().data(), parameter.substring(position + 1).utf8().data());
+            rtcCodec.parameters.emplace(parameter.left(position).utf8().toStdString(), parameter.substring(position + 1).utf8().toStdString());
         else
-            rtcCodec.parameters.emplace("", parameter.utf8().data());
+            rtcCodec.parameters.emplace("", parameter.utf8().toStdString());
     }
 
     return rtcCodec;
@@ -214,7 +215,7 @@ static inline webrtc::RtpEncodingParameters fromRTCEncodingParameters(const RTCR
         rtcParameters.max_bitrate_bps = parameters.maxBitrate;
     if (parameters.maxFramerate)
         rtcParameters.max_framerate = parameters.maxFramerate;
-    rtcParameters.rid = parameters.rid.utf8().data();
+    rtcParameters.rid = parameters.rid.utf8().toStdString();
     if (parameters.scaleResolutionDownBy)
         rtcParameters.scale_resolution_down_by = parameters.scaleResolutionDownBy;
 
@@ -229,7 +230,7 @@ static inline RTCRtpHeaderExtensionParameters toRTCHeaderExtensionParameters(con
     RTCRtpHeaderExtensionParameters parameters;
 
     parameters.uri = fromStdString(rtcParameters.uri);
-    parameters.id = rtcParameters.id;
+    parameters.id = rtcParameters.id.value();
     parameters.encrypted = rtcParameters.encrypt;
 
     return parameters;
@@ -239,8 +240,8 @@ static inline webrtc::RtpExtension fromRTCHeaderExtensionParameters(const RTCRtp
 {
     webrtc::RtpExtension rtcParameters;
 
-    rtcParameters.uri = parameters.uri.utf8().data();
-    rtcParameters.id = parameters.id;
+    rtcParameters.uri = parameters.uri.utf8().toStdString();
+    rtcParameters.id = webrtc::RtpHeaderExtensionId { parameters.id };
     rtcParameters.encrypt = parameters.encrypted;
 
     return rtcParameters;
@@ -297,7 +298,7 @@ RTCRtpSendParameters toRTCRtpSendParameters(const webrtc::RtpParameters& rtcPara
 
 void updateRTCRtpSendParameters(const RTCRtpSendParameters& parameters, webrtc::RtpParameters& rtcParameters, webrtc::MediaType mediaType)
 {
-    rtcParameters.transaction_id = parameters.transactionId.utf8().data();
+    rtcParameters.transaction_id = parameters.transactionId.utf8().toStdString();
 
     if (parameters.encodings.size() != rtcParameters.encodings.size()) {
         // If encodings size is different, setting parameters will fail. Let's make it so.
@@ -353,7 +354,7 @@ void updateRTCRtpSendParameters(const RTCRtpSendParameters& parameters, webrtc::
     if (parameters.rtcp.reducedSize)
         rtcParameters.rtcp.reduced_size = *parameters.rtcp.reducedSize;
     if (!parameters.rtcp.cname.isNull())
-        rtcParameters.rtcp.cname = parameters.rtcp.cname.utf8().data();
+        rtcParameters.rtcp.cname = parameters.rtcp.cname.utf8().toStdString();
 }
 
 RTCRtpTransceiverDirection toRTCRtpTransceiverDirection(webrtc::RtpTransceiverDirection rtcDirection)
@@ -397,7 +398,7 @@ webrtc::RtpTransceiverInit fromRtpTransceiverInit(const RTCRtpTransceiverInit& i
     webrtc::RtpTransceiverInit rtcInit;
     rtcInit.direction = fromRTCRtpTransceiverDirection(init.direction);
     for (auto& stream : init.streams)
-        rtcInit.stream_ids.push_back(stream->id().utf8().data());
+        rtcInit.stream_ids.push_back(stream->id().utf8().toStdString());
 
     if (type == webrtc::MediaType::AUDIO) {
         if (!init.sendEncodings.isEmpty())
@@ -436,7 +437,7 @@ Exception toException(const webrtc::RTCError& error)
     return Exception { toExceptionCode(error.type()), String::fromLatin1(error.message()) };
 }
 
-static inline RTCIceComponent NODELETE toRTCIceComponent(int component)
+static inline RTCIceComponent LEGACY_NODELETE toRTCIceComponent(int component)
 {
     return component == webrtc::ICE_CANDIDATE_COMPONENT_RTP ? RTCIceComponent::Rtp : RTCIceComponent::Rtcp;
 }
@@ -529,6 +530,27 @@ RefPtr<RTCError> toRTCError(const webrtc::RTCError& rtcError)
     if (!detail)
         return nullptr;
     return RTCError::create(*detail, String::fromLatin1(rtcError.message()));
+}
+
+webrtc::VideoTrackInterface::ContentHint toWebRTCContentHint(MediaStreamTrackHintValue value)
+{
+    ASSERT(value != MediaStreamTrackHintValue::Speech);
+    ASSERT(value != MediaStreamTrackHintValue::Music);
+    switch (value) {
+    case MediaStreamTrackHintValue::Speech:
+        return webrtc::VideoTrackInterface::ContentHint::kNone;
+    case MediaStreamTrackHintValue::Music:
+        return webrtc::VideoTrackInterface::ContentHint::kNone;
+    case MediaStreamTrackHintValue::Empty:
+        return webrtc::VideoTrackInterface::ContentHint::kNone;
+    case MediaStreamTrackHintValue::Motion:
+        return webrtc::VideoTrackInterface::ContentHint::kFluid;
+    case MediaStreamTrackHintValue::Detail:
+        return webrtc::VideoTrackInterface::ContentHint::kDetailed;
+    case MediaStreamTrackHintValue::Text:
+        return webrtc::VideoTrackInterface::ContentHint::kText;
+    }
+    return webrtc::VideoTrackInterface::ContentHint::kNone;
 }
 
 } // namespace WebCore

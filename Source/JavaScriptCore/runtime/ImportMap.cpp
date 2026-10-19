@@ -70,7 +70,7 @@ ImportMap::ImportMap(SpecifierMap&& imports, ScopesMap&& scopesMap, IntegrityMap
     });
 }
 
-Expected<URL, String> ImportMap::resolveImportMatch(const AtomString& normalizedSpecifier, const URL& asURL, const SpecifierMap& specifierMap)
+std::expected<URL, String> ImportMap::resolveImportMatch(const AtomString& normalizedSpecifier, const URL& asURL, const SpecifierMap& specifierMap)
 {
     // https://html.spec.whatwg.org/C#resolving-an-imports-match
 
@@ -141,8 +141,10 @@ URL ImportMap::resolve(const String& specifier, const URL& baseURL)
             auto result = resolveImportMatch(normalizedSpecifier, asURL, m_scopesMap.get(scope));
             if (!result)
                 return { };
-            if (!result.value().isNull())
+            if (!result.value().isNull()) {
                 resolvedURL = WTF::move(result.value());
+                break;
+            }
         }
     }
 

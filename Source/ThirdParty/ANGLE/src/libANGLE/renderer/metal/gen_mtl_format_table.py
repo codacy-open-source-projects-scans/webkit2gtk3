@@ -102,6 +102,14 @@ void FormatTable::initNativeFormatCapsAutogen(const DisplayMtl *display)
 {metal_format_caps}
     // clang-format on
 
+#if !(TARGET_OS_OSX || TARGET_OS_MACCATALYST)
+    const bool supportsiOS2 = SupportsAppleGPUFamily(display->getMetalDevice(), 2);
+    const bool supportsiOS4 = SupportsAppleGPUFamily(display->getMetalDevice(), 4);
+    for (auto &entry : mNativePixelFormatCapsTable)
+    {{
+        adjustFormatCapsForDevice(entry.first, supportsiOS2, supportsiOS4);
+    }}
+#endif
 }}
 
 }}  // namespace mtl
@@ -253,7 +261,9 @@ def get_mtl_format_info(mtl_format):
         'Depth32Float': (0, 4, 4),
         'Depth16Unorm': (0, 2, 2),
         'Stencil8': (0, 1, 1),
-        'Depth32Float_Stencil8': (0, 5, 4), # "When using this format, some Metal device objects allocate 64-bits per pixel."
+        'Depth32Float_Stencil8':
+            (0, 5, 4
+            ),  # "When using this format, some Metal device objects allocate 64-bits per pixel."
         'Depth24Unorm_Stencil8': (0, 4, 4),
         'BGR10A2Unorm': (4, 4, 4),
         'RGB10A2Unorm': (4, 4, 4),

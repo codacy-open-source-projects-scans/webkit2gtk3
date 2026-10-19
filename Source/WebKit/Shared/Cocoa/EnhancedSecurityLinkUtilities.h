@@ -27,16 +27,13 @@
 
 #include <wtf/Forward.h>
 
-#if HAVE(ENHANCED_SECURITY_LINKS)
-
 namespace WTF {
 class URL;
 }
 
 namespace WebKit {
 
+bool hasURLsRequiringEnhancedSecurityCheck();
 void isEnhancedSecurityEnabledForURL(const WTF::URL&, CompletionHandler<void(bool)>&&);
 
 } // namespace WebKit
-
-#endif // HAVE(ENHANCED_SECURITY_LINKS)

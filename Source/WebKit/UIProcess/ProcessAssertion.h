@@ -47,7 +47,7 @@
 #if USE(RUNNINGBOARD)
 #include <wtf/RetainPtr.h>
 
-OBJC_CLASS WKRBSAssertion;
+OBJC_CLASS RBSAssertion;
 OBJC_CLASS WKRBSAssertionDelegate;
 #endif // USE(RUNNINGBOARD)
 
@@ -69,6 +69,7 @@ enum class ProcessAssertionType : uint8_t {
     FinishTaskCanSleep,
     FinishTaskInterruptable,
     BoostedJetsam,
+    BackgroundIdleJetsam,
 };
 
 ASCIILiteral processAssertionTypeDescription(ProcessAssertionType);
@@ -121,7 +122,7 @@ private:
     const ProcessID m_pid;
     const String m_reason;
 #if USE(RUNNINGBOARD)
-    RetainPtr<WKRBSAssertion> m_rbsAssertion;
+    const RetainPtr<RBSAssertion> m_rbsAssertion;
     RetainPtr<WKRBSAssertionDelegate> m_delegate;
     bool m_wasInvalidated { false };
 #endif

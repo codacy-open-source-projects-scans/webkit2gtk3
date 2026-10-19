@@ -29,9 +29,16 @@
 
 @class NSURLRequest;
 @class WKWebView;
+@class _WKFrameHandle;
+
+@interface DeferredPrintUIDelegate : NSObject <WKUIDelegatePrivate>
+- (_WKFrameHandle *)waitForPrintFrame;
+- (void)finishPrinting;
+@end
 
 @interface TestPDFPrintDelegate : NSObject <WKUIDelegatePrivate>
 - (void)waitForPrintFrameCall;
+@property (nonatomic, readonly) NSUInteger printFrameCallCount;
 @end
 
 namespace TestWebKitAPI {
@@ -40,8 +47,11 @@ class PrintWithJSExecutionOptionTests : public ::testing::TestWithParam<bool> {
 public:
     bool allowsContentJavascript() const { return GetParam(); }
     static NSURLRequest *pdfRequest();
+    static NSURLRequest *openActionPDFRequest();
+    static NSURLRequest *namedPDFRequest(NSString *resourceName);
     static std::string testNameGenerator(testing::TestParamInfo<bool>);
-    void runTest(WKWebView *);
+    void runTest(WKWebView *, NSURLRequest *);
+    void runNonPrintingOpenActionTest(WKWebView *);
 };
 
 } // namespace TestWebKitAPI

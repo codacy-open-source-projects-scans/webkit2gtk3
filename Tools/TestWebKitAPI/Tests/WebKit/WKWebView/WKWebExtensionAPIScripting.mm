@@ -28,9 +28,11 @@
 #if ENABLE(WK_WEB_EXTENSIONS)
 
 #import "Helpers/cocoa/HTTPServer.h"
+#import "Helpers/cocoa/TestNavigationDelegate.h"
 #import "Helpers/cocoa/WebExtensionUtilities.h"
 #import <WebKit/WKProcessPoolPrivate.h>
 #import <WebKit/WKUserContentControllerPrivate.h>
+#import <wtf/SetForScope.h>
 
 namespace TestWebKitAPI {
 
@@ -49,6 +51,25 @@ static auto *scriptingManifest = @{
         @"type": @"module",
         @"persistent": @NO,
     },
+};
+
+static auto *scriptingActionManifest = @{
+    @"manifest_version": @3,
+
+    @"name": @"Scripting Test",
+    @"description": @"Scripting Test",
+    @"version": @"1",
+
+    @"permissions": @[ @"scripting" ],
+    @"host_permissions": @[ @"*://localhost/*" ],
+
+    @"background": @{
+        @"scripts": @[ @"background.js" ],
+        @"type": @"module",
+        @"persistent": @NO,
+    },
+
+    @"action": @{ },
 };
 
 static auto *changeBackgroundColorScript = @"document.body.style.background = 'pink'";
@@ -270,6 +291,49 @@ TEST(WKWebExtensionAPIScripting, ExecuteScriptJSONTypes)
     [manager run];
 }
 
+TEST(WKWebExtensionAPIScripting, ExecuteScriptResultDoesNotAliasEmptyContainers)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } }
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.webNavigation.onCompleted.addListener(async (details) => {",
+        @"  function returnEmptyContainers() {",
+        @"    return { firstArray: [], secondArray: [], firstObject: {}, secondObject: {}, nested: { array: [], object: {} }, list: [[], []] }",
+        @"  }",
+
+        @"  const results = await browser.scripting.executeScript({ target: { tabId: details.tabId }, func: returnEmptyContainers })",
+        @"  const result = results?.[0]?.result",
+
+        @"  const containers = [result.firstArray, result.secondArray, result.firstObject, result.secondObject, result.nested.array, result.nested.object, result.list[0], result.list[1]]",
+        @"  for (let i = 0; i < containers.length; ++i) {",
+        @"    for (let j = i + 1; j < containers.length; ++j)",
+        @"      browser.test.assertFalse(containers[i] === containers[j], `Result containers ${i} and ${j} should be distinct`)",
+        @"  }",
+
+        @"  result.firstArray.push(1)",
+        @"  browser.test.assertEq(result.secondArray.length, 0, 'Mutating one empty array should not change the other')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')",
+    ]);
+
+    auto manager = Util::loadExtension(scriptingManifest, @{ @"background.js": backgroundScript });
+
+    auto *urlRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forPermission:WKWebExtensionPermissionWebNavigation];
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
+    [manager.get().defaultTab.webView loadRequest:urlRequest];
+
+    [manager run];
+}
+
 TEST(WKWebExtensionAPIScripting, ExecuteScriptWithFrameIds)
 {
     TestWebKitAPI::HTTPServer server({
@@ -410,6 +474,86 @@ TEST(WKWebExtensionAPIScripting, ExecuteScriptWithDocumentIds)
     [manager run];
 }
 
+TEST(WKWebExtensionAPIScripting, ExecuteScriptWithUserGesture)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.action.setPopup({ popup: '' })",
+
+        @"browser.tabs.onUpdated.addListener((tabId, changeInfo) => {",
+        @"  if (changeInfo.status === 'complete')",
+        @"    browser.test.sendMessage('Page Ready')",
+        @"})",
+
+        @"browser.action.onClicked.addListener(async (tab) => {",
+        @"  browser.test.assertTrue(navigator.userActivation.isActive, 'User gesture should be active at the scripting.executeScript call site')",
+
+        @"  function checkUserGesture() { return navigator.userActivation.isActive }",
+
+        @"  const results = await browser.test.assertSafeResolve(() => browser.scripting.executeScript({",
+        @"    target: { tabId: tab.id },",
+        @"    func: checkUserGesture",
+        @"  }))",
+
+        @"  browser.test.assertTrue(results?.[0]?.result, 'Injected script should run with an active user gesture when executeScript is called from a user action')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Background Ready')"
+    ]);
+
+    auto manager = Util::loadExtension(scriptingActionManifest, @{ @"background.js": backgroundScript });
+
+    [manager runUntilTestMessage:@"Background Ready"];
+
+    [manager.get().defaultTab.webView loadRequest:server.requestWithLocalhost()];
+
+    [manager runUntilTestMessage:@"Page Ready"];
+
+    [manager.get().context performActionForTab:manager.get().defaultTab];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIScripting, ExecuteScriptWithoutUserGesture)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {",
+        @"  if (changeInfo.status !== 'complete')",
+        @"    return",
+
+        @"  function checkUserGesture() { return navigator.userActivation.isActive }",
+
+        @"  const results = await browser.test.assertSafeResolve(() => browser.scripting.executeScript({",
+        @"    target: { tabId },",
+        @"    func: checkUserGesture",
+        @"  }))",
+
+        @"  browser.test.assertFalse(results?.[0]?.result, 'Injected script should not have an active user gesture when executeScript is called without a prior user action')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Background Ready')"
+    ]);
+
+    auto manager = Util::loadExtension(scriptingActionManifest, @{ @"background.js": backgroundScript });
+
+    [manager runUntilTestMessage:@"Background Ready"];
+
+    [manager.get().defaultTab.webView loadRequest:server.requestWithLocalhost()];
+
+    [manager run];
+}
+
 TEST(WKWebExtensionAPIScripting, InsertAndRemoveCSS)
 {
     TestWebKitAPI::HTTPServer server({
@@ -503,6 +647,92 @@ TEST(WKWebExtensionAPIScripting, InsertAndRemoveCSS)
 
     auto *matchPattern = [WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
     [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+
+    [manager runUntilTestMessage:@"Load Tab"];
+
+    [manager.get().defaultTab.webView loadRequest:urlRequest];
+
+    [manager run];
+}
+
+// The main frame is served from 127.0.0.1 and the subframe from localhost, so with site isolation the
+// subframe gets its own web content process.
+TEST(WKWebExtensionAPIScripting, InsertCSSInAllFramesWithCrossSiteFrame)
+{
+    SetForScope siteIsolation { Util::shouldEnableSiteIsolationForWebExtensionsTest, true };
+
+    auto *manifest = @{
+        @"manifest_version": @3,
+
+        @"name": @"Scripting Test",
+        @"description": @"Scripting Test",
+        @"version": @"1",
+
+        @"permissions": @[ @"scripting" ],
+        @"host_permissions": @[ @"*://localhost/*", @"*://127.0.0.1/*" ],
+
+        @"background": @{
+            @"scripts": @[ @"background.js" ],
+            @"type": @"module",
+            @"persistent": @NO,
+        },
+    };
+
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, "<script>onload = () => { const frame = document.createElement('iframe'); frame.src = 'http://localhost:' + window.location.port + '/frame.html'; document.body.appendChild(frame); }</script>"_s } },
+        { "/frame.html"_s, { { { "Content-Type"_s, "text/html"_s } }, "<body style='background-color: blue'></body>"_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"const pinkValue = 'rgb(255, 192, 203)'",
+        @"const blueValue = 'rgb(0, 0, 255)'",
+
+        @"function getBackgroundColor() { return window.getComputedStyle(document.body).getPropertyValue('background-color') }",
+
+        @"function readAllFrames(tabId) {",
+        @"  return browser.scripting.executeScript({ target: { tabId, allFrames: true }, func: getBackgroundColor })",
+        @"}",
+
+        // The cross-site subframe is not loaded yet when the main frame reaches 'complete'.
+        @"async function readBothFrames(tabId) {",
+        @"  for (let attempt = 0; attempt < 200; ++attempt) {",
+        @"    const results = await readAllFrames(tabId)",
+        @"    if (results.length === 2)",
+        @"      return results",
+        @"    await new Promise((resolve) => setTimeout(resolve, 50))",
+        @"  }",
+        @"  browser.test.notifyFail('Timed out waiting for the cross-site subframe to appear')",
+        @"}",
+
+        @"browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {",
+        @"  if (tab.status !== 'complete')",
+        @"    return",
+
+        @"  let results = await readBothFrames(tabId)",
+        @"  browser.test.assertTrue(results.some((result) => result.result === blueValue), 'The cross-site subframe should start out blue')",
+
+        @"  await browser.scripting.insertCSS({ target: { tabId, allFrames: true }, css: 'body { background-color: pink !important }' })",
+
+        @"  results = await readAllFrames(tabId)",
+        @"  browser.test.assertEq(results.length, 2, 'Both frames should be reachable')",
+
+        @"  for (const result of results)",
+        @"    browser.test.assertEq(result.result, pinkValue, `Frame ${result.frameId} should be styled by insertCSS with allFrames`)",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.sendMessage('Load Tab')",
+    ]);
+
+    auto manager = Util::loadExtension(manifest, @{ @"background.js": backgroundScript });
+
+    auto *urlRequest = server.request();
+
+    for (NSURL *url in @[ urlRequest.URL, server.requestWithLocalhost().URL ]) {
+        auto *matchPattern = [WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
+        [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+    }
 
     [manager runUntilTestMessage:@"Load Tab"];
 
@@ -658,6 +888,22 @@ TEST(WKWebExtensionAPIScripting, CSSAuthorOrigin)
     [manager.get().defaultTab.webView loadRequest:urlRequest];
 
     [manager run];
+}
+
+TEST(WKWebExtensionAPIScripting, ExecutionWorld)
+{
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.test.assertEq(typeof browser.scripting.ExecutionWorld, 'object', 'ExecutionWorld should be an object')",
+
+        @"browser.test.assertEq(browser.scripting.ExecutionWorld.ISOLATED, 'ISOLATED', 'ISOLATED should be defined')",
+        @"browser.test.assertEq(browser.scripting.ExecutionWorld.MAIN, 'MAIN', 'MAIN should be defined')",
+
+        @"browser.test.assertDeepEq(Object.keys(browser.scripting.ExecutionWorld).sort(), [ 'ISOLATED', 'MAIN' ], 'ExecutionWorld should only define ISOLATED and MAIN')",
+
+        @"browser.test.notifyPass()"
+    ]);
+
+    Util::loadAndRunExtension(scriptingManifest, @{ @"background.js": backgroundScript });
 }
 
 TEST(WKWebExtensionAPIScripting, World)
@@ -1945,6 +2191,80 @@ TEST(WKWebExtensionAPIScripting, ContentScriptsAndStyleSheetsWithManyMatchPatter
 
     constexpr size_t maxExpectedFootprint = 100 * 1024 * 1024;
     EXPECT_LT(totalFootprint, maxExpectedFootprint);
+}
+
+TEST(WKWebExtensionAPIScripting, ContentScriptsRespectDeniedMatchPatterns)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } }
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *manifest = @{
+        @"manifest_version": @3,
+
+        @"name": @"Content Scripts Test",
+        @"description": @"Content Scripts Test",
+        @"version": @"1.0",
+
+        @"content_scripts": @[ @{
+            @"matches": @[ @"*://*/*" ],
+            @"js": @[ @"content.js" ],
+            @"css": @[ @"content.css" ],
+            @"run_at": @"document_end"
+        } ]
+    };
+
+    auto *contentScript = Util::constructScript(@[
+        @"document.body.dataset.scriptInjected = 'true'"
+    ]);
+
+    auto *contentStyle = @"body { background-color: rgb(255, 0, 0) !important; }";
+
+    auto *resources = @{
+        @"content.js": contentScript,
+        @"content.css": contentStyle
+    };
+
+    auto manager = Util::loadExtension(manifest, resources);
+
+    // Grant all hosts and schemes, but deny localhost specifically
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:WKWebExtensionMatchPattern.allHostsAndSchemesMatchPattern];
+
+    auto *localhostRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:WKWebExtensionContextPermissionStatusDeniedExplicitly forURL:localhostRequest.URL];
+
+    // Test 1: Load localhost, verify script and style are NOT injected due to denied pattern
+    [manager.get().defaultTab.webView loadRequest:localhostRequest];
+    [manager.get().defaultTab.webView _test_waitForDidFinishNavigation];
+
+    // Verify the script and style were NOT injected by checking the page
+    __block bool doneCheckingLocalhost = false;
+    [manager.get().defaultTab.webView evaluateJavaScript:@"({ scriptInjected: document.body.dataset.scriptInjected === 'true', backgroundColor: getComputedStyle(document.body).backgroundColor })" completionHandler:^(id result, NSError *error) {
+        EXPECT_NULL(error);
+        EXPECT_NS_EQUAL([result objectForKey:@"scriptInjected"], @NO);
+        EXPECT_FALSE([[result objectForKey:@"backgroundColor"] isEqualToString:@"rgb(255, 0, 0)"]);
+        doneCheckingLocalhost = true;
+    }];
+
+    TestWebKitAPI::Util::run(&doneCheckingLocalhost);
+
+    // Test 2: Load 127.0.0.1 (loopback), verify script and style ARE injected
+    // This should work because allHostsAndSchemesMatchPattern is granted and loopback is not denied
+    auto *loopbackRequest = server.request();
+
+    [manager.get().defaultTab.webView loadRequest:loopbackRequest];
+    [manager.get().defaultTab.webView _test_waitForDidFinishNavigation];
+
+    // Verify the script and style WERE injected
+    __block bool doneCheckingLoopback = false;
+    [manager.get().defaultTab.webView evaluateJavaScript:@"({ scriptInjected: document.body.dataset.scriptInjected === 'true', backgroundColor: getComputedStyle(document.body).backgroundColor })" completionHandler:^(id result, NSError *error) {
+        EXPECT_NULL(error);
+        EXPECT_NS_EQUAL([result objectForKey:@"scriptInjected"], @YES);
+        EXPECT_NS_EQUAL([result objectForKey:@"backgroundColor"], @"rgb(255, 0, 0)");
+        doneCheckingLoopback = true;
+    }];
+
+    TestWebKitAPI::Util::run(&doneCheckingLoopback);
 }
 
 } // namespace TestWebKitAPI

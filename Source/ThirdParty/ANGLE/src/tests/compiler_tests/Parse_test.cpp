@@ -80,6 +80,7 @@ int B[int[][](A)];)";
 
 TEST_F(ParseTest, UniformBlockNameReferenceConstructorNoCrash)
 {
+    mShaderSpec          = SH_WEBGL2_SPEC;
     const char kShader[] = R"(#version 300 es
 precision mediump float;
 out float o;
@@ -220,6 +221,7 @@ void main() {
 
 TEST_F(ParseTest, Radians320NoCrash)
 {
+    mShaderSpec          = SH_GLES3_2_SPEC;
     const char kShader[] = R"(#version 320 es
 precision mediump float;
 vec4 s() { writeonly vec4 color; radians(color); return vec4(1); })";
@@ -232,6 +234,7 @@ vec4 s() { writeonly vec4 color; radians(color); return vec4(1); })";
 
 TEST_F(ParseTest, CoherentCoherentNoCrash)
 {
+    mShaderSpec          = SH_GLES3_1_SPEC;
     const char kShader[] = R"(#version 310 es
 uniform highp coherent coherent readonly image2D image1;\n"
 void main() {
@@ -341,6 +344,7 @@ testFunction();
 // Tests that imod of const void variable does not crash during parsing.
 TEST_F(ParseTest, ConstStructVoidAndImodAndNoCrash)
 {
+    mShaderSpec          = SH_GLES3_1_SPEC;
     const char kShader[] = R"(#version 310 es
 const struct s { void i; } ss = s();
 void main() {
@@ -484,6 +488,7 @@ TEST_F(ParseTest, UniformBlockInstanceNameOpIsError)
 
 TEST_F(ParseTest, UniformBlockReferenceIsError)
 {
+    mShaderSpec          = SH_WEBGL2_SPEC;
     const char kShader[] = R"(#version 300 es
         uniform B { uint e; } b;
         void main() { B; })";
@@ -704,56 +709,6 @@ TEST_F(ParseTest, SeparateStructStructSpecificationFunctionNoCrash)
     EXPECT_TRUE(compile(kShader));
 }
 
-// Test showing that prototypes get the function definition variable names.
-// An example where parser loses information.
-TEST_F(ParseTest, VariableNamesInPrototypesUnnamedOut)
-{
-    const char kShader[]   = R"(
-precision highp float;
-void f(out float, out float);
-void main()
-{
-    gl_FragColor = vec4(0.5);
-    f(gl_FragColor.r, gl_FragColor.g);
-}
-void f(out float r, out float)
-{
-    r = 1.0;
-}
-)";
-    const char kExpected[] = R"(0:2: Code block
-0:3:   Function Prototype: 'f' (symbol id 3001) (void)
-0:3:     parameter: 'r' (symbol id 3006) (out highp float)
-0:3:     parameter: '' (symbol id 3007) (out highp float)
-0:4:   Function Definition:
-0:4:     Function Prototype: 'main' (symbol id 3004) (void)
-0:5:     Code block
-0:6:       move second child to first child (mediump 4-component vector of float)
-0:6:         gl_FragColor (symbol id 1917) (FragColor mediump 4-component vector of float)
-0:6:         Constant union (const mediump 4-component vector of float)
-0:6:           0.5 (const float)
-0:6:           0.5 (const float)
-0:6:           0.5 (const float)
-0:6:           0.5 (const float)
-0:7:       Call a function: 'f' (symbol id 3001) (void)
-0:7:         vector swizzle (x) (mediump float)
-0:7:           gl_FragColor (symbol id 1917) (FragColor mediump 4-component vector of float)
-0:7:         vector swizzle (y) (mediump float)
-0:7:           gl_FragColor (symbol id 1917) (FragColor mediump 4-component vector of float)
-0:9:   Function Definition:
-0:9:     Function Prototype: 'f' (symbol id 3001) (void)
-0:9:       parameter: 'r' (symbol id 3006) (out highp float)
-0:9:       parameter: '' (symbol id 3007) (out highp float)
-0:10:     Code block
-0:11:       move second child to first child (highp float)
-0:11:         'r' (symbol id 3006) (out highp float)
-0:11:         Constant union (const highp float)
-0:11:           1.0 (const float)
-)";
-    EXPECT_TRUE(compile(kShader));
-    EXPECT_EQ(kExpected, intermediateTree());
-}
-
 TEST_F(ParseTest, ConstInSamplerParamNoCrash)
 {
     mCompileOptions.validateAST = 1;
@@ -779,6 +734,7 @@ TEST_F(ParseTest, InConstSamplerParamIsError)
 
 TEST_F(ParseTest, UniformBlockInstanceUnsizedArrayIsError)
 {
+    mShaderSpec          = SH_GLES3_SPEC;
     const char kShader[] = R"(#version 300 es
 precision mediump float;out vec4 o;uniform a{float r;}u[];void main(){o=vec4(u[0].r+u[1].r+u[1].r);})";
     EXPECT_FALSE(compile(kShader));
@@ -790,6 +746,7 @@ precision mediump float;out vec4 o;uniform a{float r;}u[];void main(){o=vec4(u[0
 
 TEST_F(ParseTest, InputBlockInstanceUnsizedArrayIsError)
 {
+    mShaderSpec          = SH_GLES3_SPEC;
     const char kShader[] = R"(#version 300 es
 precision mediump float;out vec4 o;in a{float r;}i[];void main(){o=vec4(i[0].r+i[1].r+i[1].r);})";
     EXPECT_FALSE(compile(kShader));
@@ -801,6 +758,7 @@ precision mediump float;out vec4 o;in a{float r;}i[];void main(){o=vec4(i[0].r+i
 
 TEST_F(ParseTest, OutputBlockInstanceUnsizedArrayIsError)
 {
+    mShaderSpec          = SH_GLES3_SPEC;
     const char kShader[] = R"(#version 300 es
 precision mediump float;out a{float r;}o[];void main(){o[0].r=1.0; o[1].r=2.0;})";
     EXPECT_FALSE(compile(kShader));

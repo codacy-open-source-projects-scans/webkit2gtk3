@@ -30,40 +30,19 @@
 #import "WebFrameProxy.h"
 #import "WebPageProxy.h"
 #import "_WKFrameHandleInternal.h"
-#import <WebCore/WebCoreObjCExtras.h>
 
 #if PLATFORM(MAC) || HAVE(UIKIT_WITH_MOUSE_SUPPORT)
 
 @implementation _WKHitTestResult
 
-- (void)dealloc
-{
-    if (WebCoreObjCScheduleDeallocateOnMainRunLoop(_WKHitTestResult.class, self))
-        return;
-
-    SUPPRESS_UNCOUNTED_ARG _hitTestResult->~HitTestResult();
-
-    [super dealloc];
-}
-
-static NSURL *URLFromString(const WTF::String& urlString)
-{
-    return urlString.isEmpty() ? nil : [NSURL URLWithString:urlString.createNSString().get()];
-}
-
 - (NSURL *)absoluteImageURL
 {
-    return URLFromString(_hitTestResult->absoluteImageURL());
+    return WebKit::URLFromHitTestResultString(_hitTestResult->absoluteImageURL());
 }
 
 - (NSURL *)absolutePDFURL
 {
-    return URLFromString(_hitTestResult->absolutePDFURL());
-}
-
-- (NSURL *)absoluteLinkURL
-{
-    return URLFromString(_hitTestResult->absoluteLinkURL());
+    return WebKit::URLFromHitTestResultString(_hitTestResult->absolutePDFURL());
 }
 
 - (BOOL)hasLocalDataForLinkURL
@@ -78,22 +57,12 @@ static NSURL *URLFromString(const WTF::String& urlString)
 
 - (NSURL *)absoluteMediaURL
 {
-    return URLFromString(_hitTestResult->absoluteMediaURL());
+    return WebKit::URLFromHitTestResultString(_hitTestResult->absoluteMediaURL());
 }
 
 - (NSURL *)absoluteModelURL
 {
-    return URLFromString(_hitTestResult->absoluteModelURL());
-}
-
-- (NSString *)linkLabel
-{
-    return _hitTestResult->linkLabel().createNSString().autorelease();
-}
-
-- (NSString *)linkTitle
-{
-    return _hitTestResult->linkTitle().createNSString().autorelease();
+    return WebKit::URLFromHitTestResultString(_hitTestResult->absoluteModelURL());
 }
 
 - (NSString *)lookupText
@@ -193,18 +162,6 @@ static NSURL *URLFromString(const WTF::String& urlString)
     if (!targetFrame)
         return NO;
     return frame->page() != targetFrame->page();
-}
-
-- (id)copyWithZone:(NSZone *)zone
-{
-    return [self retain];
-}
-
-#pragma mark WKObject protocol implementation
-
-- (API::Object&)_apiObject
-{
-    return *_hitTestResult;
 }
 
 @end

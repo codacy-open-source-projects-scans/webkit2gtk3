@@ -80,7 +80,7 @@ Element& NamedNodeMap::element() const
 
 Vector<String> NamedNodeMap::supportedPropertyNames() const
 {
-    Vector<String> names = m_element->getAttributeNames();
+    Vector<String> names = protect(m_element.get())->getAttributeNames();
     if (is<HTMLElement>(m_element.get()) && m_element->document().isHTMLDocument()) {
         names.removeAllMatching([](String& name) {
             for (auto character : StringView { name }.codeUnits()) {
@@ -119,9 +119,10 @@ RefPtr<Attr> NamedNodeMap::item(unsigned index) const
 
 unsigned NamedNodeMap::length() const
 {
-    if (!m_element->hasAttributes())
+    Ref element = m_element;
+    if (!element->hasAttributes())
         return 0;
-    return m_element->attributeCount();
+    return element->attributeCount();
 }
 
 } // namespace WebCore

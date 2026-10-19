@@ -57,7 +57,7 @@ template<typename> class ExceptionOr;
 class MutationObserver final : public RefCounted<MutationObserver> {
     WTF_MAKE_TZONE_ALLOCATED(MutationObserver);
 public:
-    static Ref<MutationObserver> create(Ref<MutationCallback>&&);
+    static Ref<MutationObserver> LEGACY_NODELETE create(Ref<MutationCallback>&&);
 
     ~MutationObserver();
 
@@ -84,7 +84,7 @@ public:
     void observationEnded(MutationObserverRegistration&);
     void enqueueMutationRecord(Ref<MutationRecord>&&);
     void setHasTransientRegistration(Document&);
-    bool canDeliver();
+    bool LEGACY_NODELETE canDeliver();
 
     bool isReachableFromOpaqueRoots(JSC::AbstractSlotVisitor&) const;
 
@@ -103,13 +103,15 @@ private:
     explicit MutationObserver(Ref<MutationCallback>&&);
     void deliver();
 
-    static bool NODELETE validateOptions(MutationObserverOptions);
+    static bool LEGACY_NODELETE validateOptions(MutationObserverOptions);
 
     const Ref<MutationCallback> m_callback;
     Vector<Ref<MutationRecord>> m_records;
     HashSet<GCReachableRef<Node>> m_pendingTargets;
     WeakHashSet<MutationObserverRegistration> m_registrations;
-    unsigned m_priority;
+    unsigned m_priority : 30;
+    unsigned m_isInNonNormalWorld : 1;
+    unsigned m_isAutoFillWorld : 1;
 };
 
 } // namespace WebCore

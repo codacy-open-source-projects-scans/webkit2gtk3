@@ -57,7 +57,7 @@ static inline const AtomString& eventTypeForKeyboardEventType(PlatformEvent::Typ
     return eventNames().keydownEvent;
 }
 
-static inline int NODELETE windowsVirtualKeyCodeWithoutLocation(int keycode)
+static inline int LEGACY_NODELETE windowsVirtualKeyCodeWithoutLocation(int keycode)
 {
     switch (keycode) {
     case VK_LCONTROL:
@@ -74,7 +74,15 @@ static inline int NODELETE windowsVirtualKeyCodeWithoutLocation(int keycode)
     }
 }
 
-static inline KeyboardEvent::KeyLocationCode NODELETE keyLocationCode(const PlatformKeyboardEvent& key)
+bool KeyboardEvent::isEnterKeyKeydownEvent(Event& event)
+{
+    if (event.type() != eventNames().keydownEvent)
+        return false;
+    auto* keyboardEvent = dynamicDowncast<KeyboardEvent>(event);
+    return keyboardEvent && keyboardEvent->keyIdentifier() == "Enter"_s;
+}
+
+static inline KeyboardEvent::KeyLocationCode LEGACY_NODELETE keyLocationCode(const PlatformKeyboardEvent& key)
 {
     if (key.isKeypad())
         return KeyboardEvent::DOM_KEY_LOCATION_NUMPAD;

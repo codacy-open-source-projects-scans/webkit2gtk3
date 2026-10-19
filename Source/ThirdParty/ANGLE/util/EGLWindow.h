@@ -44,6 +44,7 @@ struct ANGLE_UTIL_EXPORT ConfigParameters
     int stencilBits;
 
     bool webGLCompatibility;
+    bool hardenedContext;
     bool robustResourceInit;
 
     // EGLWindow-specific.
@@ -55,6 +56,7 @@ struct ANGLE_UTIL_EXPORT ConfigParameters
     bool bindGeneratesResource;
     bool clientArraysEnabled;
     bool robustAccess;
+    bool pbuffer;
     bool mutableRenderBuffer;
     EGLint samples;
     bool contextProgramCacheEnabled;
@@ -165,6 +167,8 @@ class ANGLE_UTIL_EXPORT GLWindowBase : angle::NonCopyable
 
     EGLint mClientMajorVersion;
     EGLint mClientMinorVersion;
+    EGLint mRequestedClientMajorVersion;
+    EGLint mRequestedClientMinorVersion;
     EGLPlatformParameters mPlatform;
     ConfigParameters mConfigParams;
 };

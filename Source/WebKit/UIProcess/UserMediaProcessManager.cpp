@@ -31,6 +31,7 @@
 #include "WebProcessMessages.h"
 #include "WebProcessProxy.h"
 #include <WebCore/MediaProducer.h>
+#include <wtf/Borrow.h>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/TranslatedProcess.h>
@@ -41,10 +42,14 @@ namespace WebKit {
 static const ASCIILiteral audioExtensionPath { "com.apple.webkit.microphone"_s };
 static const ASCIILiteral videoExtensionPath { "com.apple.webkit.camera"_s };
 static const ASCIILiteral appleCameraServicePath { "com.apple.applecamerad"_s };
+#if USE(APPLE_INTERNAL_SDK) && HAVE(ADDITIONAL_APPLE_CAMERA_SERVICE)
 static const ASCIILiteral additionalAppleCameraServicePath { "com.apple.appleh13camerad"_s };
+#endif
+#if USE(APPLE_INTERNAL_SDK) && HAVE(APPLE_CAMERA_USER_CLIENT)
 static const ASCIILiteral appleCameraUserClientPath { "com.apple.aneuserd"_s };
 static const ASCIILiteral appleCameraUserClientIOKitClientClass { "H11ANEInDirectPathClient"_s };
 static const ASCIILiteral appleCameraUserClientIOKitServiceClass { "H11ANEIn"_s };
+#endif
 #endif
 
 UserMediaProcessManager& UserMediaProcessManager::singleton()
@@ -56,7 +61,7 @@ UserMediaProcessManager& UserMediaProcessManager::singleton()
 UserMediaProcessManager::UserMediaProcessManager() = default;
 
 #if ENABLE(SANDBOX_EXTENSIONS)
-static bool NODELETE needsAppleCameraService()
+static bool LEGACY_NODELETE needsAppleCameraService()
 {
 #if !PLATFORM(MAC) && !PLATFORM(MACCATALYST)
     return false;
@@ -119,17 +124,18 @@ bool UserMediaProcessManager::willCreateMediaStream(UserMediaPermissionRequestMa
         if (!proxyPage->preferences().mockCaptureDevicesEnabled()) {
             handles.grow(extensionCount);
             ids.reserveInitialCapacity(extensionCount);
+            Borrow borrowedHandles = handles;
 
             if (needsAudioSandboxExtension) {
                 if (auto handle = SandboxExtension::createHandleForGenericExtension(audioExtensionPath)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(audioExtensionPath);
                 }
             }
 
             if (needsVideoSandboxExtension) {
                 if (auto handle = SandboxExtension::createHandleForGenericExtension(videoExtensionPath)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(videoExtensionPath);
                 }
             }
@@ -138,28 +144,28 @@ bool UserMediaProcessManager::willCreateMediaStream(UserMediaPermissionRequestMa
             if (needsAppleCameraSandboxExtension) {
                 machBootstrapExtension = SandboxExtension::createHandleForMachBootstrapExtension();
                 if (auto handle = SandboxExtension::createHandleForMachLookup(appleCameraServicePath, auditToken)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(appleCameraServicePath);
                 }
 #if HAVE(ADDITIONAL_APPLE_CAMERA_SERVICE)
                 if (auto handle = SandboxExtension::createHandleForMachLookup(additionalAppleCameraServicePath, auditToken)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(additionalAppleCameraServicePath);
                 }
 #endif
 #if HAVE(APPLE_CAMERA_USER_CLIENT)
                 if (auto handle = SandboxExtension::createHandleForMachLookup(appleCameraUserClientPath, auditToken)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(appleCameraUserClientPath);
                 }
 
                 if (auto handle = SandboxExtension::createHandleForIOKitClassExtension(appleCameraUserClientIOKitClientClass, auditToken)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(appleCameraUserClientIOKitClientClass);
                 }
 
                 if (auto handle = SandboxExtension::createHandleForIOKitClassExtension(appleCameraUserClientIOKitServiceClass, auditToken)) {
-                    handles[--extensionCount] = WTF::move(*handle);
+                    borrowedHandles[--extensionCount] = WTF::move(*handle);
                     ids.append(appleCameraUserClientIOKitServiceClass);
                 }
 #endif
@@ -173,8 +179,8 @@ bool UserMediaProcessManager::willCreateMediaStream(UserMediaPermissionRequestMa
             // FIXME: Is it correct to ensure that the corresponding entries in `handles` and `ids` are in reverse order?
         }
 
-        for (const auto& id : ids)
-            RELEASE_LOG(WebRTC, "UserMediaProcessManager::willCreateMediaStream - granting extension %s", id.utf8().data());
+        for (const auto& id : borrow(ids))
+            RELEASE_LOG(WebRTC, "UserMediaProcessManager::willCreateMediaStream - granting extension %s", id.utf8());
 
         if (needsAudioSandboxExtension)
             process->grantAudioCaptureExtension();
@@ -242,8 +248,8 @@ void UserMediaProcessManager::revokeSandboxExtensionsIfNeeded(WebProcessProxy& p
     if (params.isEmpty())
         return;
 
-    for (const auto& id : params)
-        RELEASE_LOG(WebRTC, "UserMediaProcessManager::endedCaptureSession - revoking extension %s", id.utf8().data());
+    for (const auto& id : borrow(params))
+        RELEASE_LOG(WebRTC, "UserMediaProcessManager::endedCaptureSession - revoking extension %s", id.utf8());
 
     process.send(Messages::WebProcess::RevokeUserMediaDeviceSandboxExtensions(params), 0);
 #endif

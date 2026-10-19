@@ -30,14 +30,18 @@
 #include "AutoplayPolicy.h"
 #include "Document.h"
 #include "FrameDestructionObserverInlines.h"
-#include "HTMLFrameOwnerElement.h"
 #include "FrameInlines.h"
+#include "FrameLoader.h"
+#include "HTMLFrameOwnerElement.h"
 #include "NodeDocument.h"
-#include "NodeInlines.h"
+#include "Page.h"
+#include "PrivateClickMeasurement.h"
 #include "RemoteDOMWindow.h"
 #include "RemoteFrameClient.h"
 #include "RemoteFrameView.h"
+#include "ResourceTiming.h"
 #include "SecurityOrigin.h"
+#include "WebsitePolicies.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/HexNumber.h>
 #include <wtf/text/StringBuilder.h>
@@ -60,11 +64,25 @@ RemoteFrame::RemoteFrame(Page& page, ClientCreator&& clientCreator, FrameIdentif
     , m_client(clientCreator(*this))
     , m_layerHostingContextIdentifier(layerHostingContextIdentifier)
     , m_autoplayPolicy(AutoplayPolicy::Default)
+    , m_colorSchemePreference(ColorSchemePreference::NoPreference)
 {
     setView(RemoteFrameView::create(*this));
 }
 
-RemoteFrame::~RemoteFrame() = default;
+RemoteFrame::~RemoteFrame()
+{
+    detachFromPage();
+}
+
+ProcessIdentifier RemoteFrame::hostingProcessIdentifier() const
+{
+    if (m_hostingProcessIdentifier)
+        return *m_hostingProcessIdentifier;
+    // Fallback to the process encoded in the FrameIdentifier's upper bits when the
+    // hosting process has not been recorded. This reproduces the legacy
+    // IdentifierRegistry::protocolFrameId(FrameIdentifier) value. See webkit.org/b/310164.
+    return ObjectIdentifier<ProcessIdentifierType>(frameID().toUInt64() >> 32);
+}
 
 DOMWindow* RemoteFrame::virtualWindow() const
 {
@@ -85,8 +103,11 @@ void RemoteFrame::didFinishLoadInAnotherProcess()
 {
     m_preventsParentFromBeingComplete = false;
 
-    if (RefPtr ownerElement = this->ownerElement())
-        ownerElement->document().checkCompleted();
+    if (RefPtr ownerElement = this->ownerElement()) {
+        Ref document = ownerElement->document();
+        document->checkCompleted();
+        document->checkLoadComplete();
+    }
 }
 
 bool RemoteFrame::preventsParentFromBeingComplete() const
@@ -96,17 +117,17 @@ bool RemoteFrame::preventsParentFromBeingComplete() const
 
 void RemoteFrame::changeLocation(FrameLoadRequest&& request)
 {
-    m_client->changeLocation(WTF::move(request));
+    m_client->changeLocation(WTF::move(request), std::nullopt);
 }
 
 void RemoteFrame::loadFrameRequest(FrameLoadRequest&& request, Event*)
 {
-    m_client->changeLocation(WTF::move(request));
+    m_client->changeLocation(WTF::move(request), std::nullopt);
 }
 
-void RemoteFrame::updateRemoteFrameAccessibilityOffset(IntPoint offset)
+void RemoteFrame::updateRemoteFrameOffsetInMainFrame(IntPoint offset)
 {
-    m_client->updateRemoteFrameAccessibilityOffset(frameID(), offset);
+    m_client->updateRemoteFrameOffsetInMainFrame(frameID(), offset);
 }
 
 #if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
@@ -143,8 +164,32 @@ void RemoteFrame::setView(RefPtr<RemoteFrameView>&& view)
 
 void RemoteFrame::frameDetached()
 {
+    // Unload handlers can re-enter.
+    if (std::exchange(m_hasStartedDetaching, true))
+        return;
+
+    detachLocalDescendants();
     m_client->frameDetached();
     m_window->frameDetached();
+    detachFromPage();
+}
+
+void RemoteFrame::detachLocalDescendants()
+{
+    Vector<Ref<Frame>> children;
+    children.reserveInitialCapacity(tree().childCount());
+    for (RefPtr child = tree().lastChild(); child; child = child->tree().previousSibling())
+        children.append(*child);
+    for (auto& child : children) {
+        if (RefPtr localChild = dynamicDowncast<LocalFrame>(child.get()))
+            localChild->loader().detachFromParent();
+        else {
+            // Detaching it would unload a same-site grandchild before its parent.
+            Ref remoteChild = downcast<RemoteFrame>(child.get());
+            remoteChild->client().destroyProvisionalFrame();
+            remoteChild->detachLocalDescendants();
+        }
+    }
 }
 
 String RemoteFrame::renderTreeAsText(size_t baseIndent, OptionSet<RenderAsTextFlag> behavior)
@@ -169,12 +214,17 @@ String RemoteFrame::customNavigatorPlatform() const
 
 URL RemoteFrame::urlForConsoleLog() const
 {
-    return frameDocumentSecurityOrigin()->toURL();
+    return protect(frameDocumentSecurityOrigin())->toURL();
 }
 
 OptionSet<AdvancedPrivacyProtections> RemoteFrame::advancedPrivacyProtections() const
 {
     return m_advancedPrivacyProtections;
+}
+
+bool RemoteFrame::allowPrivacyProxy() const
+{
+    return m_allowPrivacyProxy;
 }
 
 void RemoteFrame::updateScrollingMode()
@@ -188,6 +238,11 @@ void RemoteFrame::reportMixedContentViolation(bool blocked, const URL& target) c
     m_client->reportMixedContentViolation(blocked, target);
 }
 
+void RemoteFrame::addResourceTimingFromChild(ResourceTiming&& resourceTiming)
+{
+    m_client->addResourceTimingFromChild(WTF::move(resourceTiming));
+}
+
 SecurityOrigin* RemoteFrame::frameDocumentSecurityOrigin() const
 {
     return frameTreeSyncData().frameDocumentSecurityOrigin.get();
@@ -196,6 +251,17 @@ SecurityOrigin* RemoteFrame::frameDocumentSecurityOrigin() const
 std::optional<DocumentSecurityPolicy> RemoteFrame::frameDocumentSecurityPolicy() const
 {
     return frameTreeSyncData().frameDocumentSecurityPolicy;
+}
+
+std::optional<AgentClusterIdentifier> RemoteFrame::frameAgentClusterIdentifier() const
+{
+    auto& securityPolicy = frameTreeSyncData().frameDocumentSecurityPolicy;
+    return securityPolicy ? securityPolicy->agentClusterIdentifier : std::nullopt;
+}
+
+bool RemoteFrame::frameDocumentIsSandboxedOrigin() const
+{
+    return frameTreeSyncData().frameDocumentIsSandboxedOrigin;
 }
 
 String RemoteFrame::frameURLProtocol() const
@@ -215,10 +281,17 @@ AutoplayPolicy RemoteFrame::autoplayPolicy() const
     return m_autoplayPolicy;
 }
 
-float RemoteFrame::usedZoomForChild(const Frame& child) const
+ColorSchemePreference RemoteFrame::colorSchemePreference() const
 {
-    auto maybeInfo = frameTreeSyncData().childrenFrameLayoutInfo.getOptional(child.frameID());
-    return maybeInfo.transform([] (auto& info) { return info.usedZoom; }).value_or(1.0);
+    return m_colorSchemePreference;
+}
+
+float RemoteFrame::frameScaleFactorForChild(const Frame& child) const
+{
+    if (RefPtr info = frameTreeSyncData().frameGeometry.childrenFrameLayoutInfo.get(child.frameID()))
+        return info->frameScaleFactor();
+
+    return 1.0;
 }
 
 String RemoteFrame::debugDescription() const

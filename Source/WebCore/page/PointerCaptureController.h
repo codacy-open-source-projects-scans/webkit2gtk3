@@ -41,6 +41,7 @@ class EventTarget;
 class IntPoint;
 class MouseEvent;
 class Page;
+class PlatformMouseEvent;
 class PlatformTouchEvent;
 class PointerEvent;
 class WindowProxy;
@@ -70,12 +71,18 @@ public:
     WEBCORE_EXPORT void touchWithIdentifierWasRemoved(PointerID);
     bool hasCancelledPointerEventForIdentifier(PointerID) const;
     bool preventsCompatibilityMouseEventsForIdentifier(PointerID) const;
+
+#if PLATFORM(MAC)
+    bool dispatchEventForTrackedPointer(Element& target, const MouseEvent&, PointerID, const String& pointerType);
+    void cancelTrackedPointer(PointerID);
+    bool mouseEventBelongsToTrackedPointer(const PlatformMouseEvent&) const;
+    void mouseButtonWillBePressed(const PlatformMouseEvent&);
+    void mouseButtonWasReleased(const PlatformMouseEvent&);
+#endif
+
     void dispatchEvent(PointerEvent&, EventTarget*);
     WEBCORE_EXPORT void cancelPointer(PointerID, const IntPoint&, PointerEvent* existingCancelEvent = nullptr);
     void processPendingPointerCapture(PointerID);
-
-    void resetPointerDownDefaultPrevention() { m_pointerDownDefaultPreventedDuringCurrentHandling = false; }
-    bool wasPointerDownDefaultPrevented() const { return m_pointerDownDefaultPreventedDuringCurrentHandling; }
 
     // Used for mouse presses that trigger contextmenu, causing
     // the matching release to be suppressed.
@@ -91,15 +98,9 @@ private:
         WeakPtr<Document, WeakPtrImplWithEventTargetData> activeDocument;
         RefPtr<Element> pendingTargetOverride;
         RefPtr<Element> targetOverride;
-#if ENABLE(TOUCH_EVENTS) && (PLATFORM(IOS_FAMILY) || PLATFORM(WPE) || PLATFORM(GTK))
         RefPtr<Element> previousTarget;
-#endif
         bool hasAnyElement() const {
-            return pendingTargetOverride || targetOverride
-#if ENABLE(TOUCH_EVENTS) && (PLATFORM(IOS_FAMILY) || PLATFORM(WPE) || PLATFORM(GTK))
-                || previousTarget
-#endif
-                ;
+            return pendingTargetOverride || targetOverride || previousTarget;
         }
         String pointerType;
         enum class State : uint8_t {
@@ -108,6 +109,15 @@ private:
             Cancelled,
         };
         State state { State::Ready };
+#if PLATFORM(MAC)
+        enum class TrackingState : uint8_t {
+            NotTracked,
+            Pressed,
+            Released,
+        };
+        TrackingState trackingState { TrackingState::NotTracked };
+        bool trackedPressHasMouseButtonDown { false };
+#endif
         bool isPrimary { false };
         bool preventsCompatibilityMouseEvents { false };
         bool pointerIsPressed { false };
@@ -126,8 +136,13 @@ private:
     void updateHaveAnyCapturingElement();
     void elementWasRemovedSlow(Element&);
 
+    static bool hierarchyHasCapturingEventListeners(Element*, const AtomString& eventName);
+    void dispatchBoundaryEvents(Element* previousTarget, Element* currentTarget, NOESCAPE const Function<Ref<PointerEvent>(const AtomString& eventType)>& createEvent);
     void dispatchOverOrOutEvent(const AtomString&, EventTarget*, const PlatformTouchEvent&, unsigned index, bool isPrimary, WindowProxy&, DoublePoint);
     void dispatchEnterOrLeaveEvent(const AtomString&, Element&, const PlatformTouchEvent&, unsigned index, bool isPrimary, WindowProxy&, DoublePoint);
+#if PLATFORM(MAC)
+    bool mouseEventCanBelongToTrackedPointer(const PlatformMouseEvent&) const;
+#endif
 
     WeakPtr<Page> m_page;
     // While PointerID is defined as int32_t, we use int64_t here so that we may use a value outside of the int32_t range to have safe
@@ -136,7 +151,6 @@ private:
     PointerIdToCapturingDataMap m_activePointerIdsToCapturingData;
     bool m_processingPendingPointerCapture { false };
     bool m_haveAnyCapturingElement { false };
-    bool m_pointerDownDefaultPreventedDuringCurrentHandling { false };
 };
 
 inline void PointerCaptureController::elementWasRemoved(Element& element)

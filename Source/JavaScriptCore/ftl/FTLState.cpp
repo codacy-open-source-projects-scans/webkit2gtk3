@@ -85,7 +85,7 @@ State::State(Graph& graph)
         proc->setIonGraphPasses(passes.releaseNonNull());
 }
 
-void State::dumpDisassembly(PrintStream& out, LinkBuffer& linkBuffer, const ScopedLambda<void(DFG::Node*)>& perDFGNodeCallback)
+void State::dumpDisassembly(PrintStream& out, LinkBuffer& linkBuffer, NOESCAPE const ScopedLambda<void(DFG::Node*)>& perDFGNodeCallback)
 {
     B3::Air::Disassembler* disassembler = proc->code().disassembler();
 
@@ -93,16 +93,16 @@ void State::dumpDisassembly(PrintStream& out, LinkBuffer& linkBuffer, const Scop
         out.print("Generated ", graph.m_plan.mode(), " code for ", CodeBlockWithJITType(graph.m_codeBlock, JITType::FTLJIT), ", instructions size = ", graph.m_codeBlock->instructionsSize(), ":\n");
 
         B3::Value* currentB3Value = nullptr;
-        Node* currentDFGNode = nullptr;
+        DFG::Node* currentDFGNode = nullptr;
 
         UncheckedKeyHashSet<B3::Value*> printedValues;
-        UncheckedKeyHashSet<Node*> printedNodes;
+        UncheckedKeyHashSet<DFG::Node*> printedNodes;
         const char* dfgPrefix = "DFG " "    ";
         const char* b3Prefix  = "b3  " "          ";
         const char* airPrefix = "Air " "              ";
         const char* asmPrefix = "asm " "                ";
 
-        auto printDFGNode = [&] (Node* node) {
+        auto printDFGNode = [&] (DFG::Node* node) {
             if (currentDFGNode == node)
                 return;
 
@@ -112,8 +112,8 @@ void State::dumpDisassembly(PrintStream& out, LinkBuffer& linkBuffer, const Scop
 
             perDFGNodeCallback(node);
 
-            UncheckedKeyHashSet<Node*> localPrintedNodes;
-            WTF::Function<void(Node*)> printNodeRecursive = [&] (Node* node) {
+            UncheckedKeyHashSet<DFG::Node*> localPrintedNodes;
+            WTF::Function<void(DFG::Node*)> printNodeRecursive = [&] (DFG::Node* node) {
                 if (printedNodes.contains(node) || localPrintedNodes.contains(node))
                     return;
 
@@ -155,12 +155,12 @@ void State::dumpDisassembly(PrintStream& out, LinkBuffer& linkBuffer, const Scop
         };
 
         B3::Value* prevOrigin = nullptr;
-        auto forEachInst = scopedLambda<void(B3::Air::Inst&)>([&] (B3::Air::Inst& inst) {
+        auto forEachInst = [&] (B3::Air::Inst& inst) {
             if (inst.origin != prevOrigin) {
                 printB3Value(inst.origin);
                 prevOrigin = inst.origin;
             }
-        });
+        };
 
         disassembler->dump(proc->code(), out, linkBuffer, airPrefix, asmPrefix, forEachInst);
     });

@@ -29,7 +29,7 @@
 #include "PipeWireCaptureDevice.h"
 
 #include <wtf/Lock.h>
-#include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakHashSet.h>
 
 namespace WebCore {
@@ -93,7 +93,6 @@ public:
     void stopDevice(bool disconnectSignals);
 
     struct SinkSignalsHolder {
-        unsigned long prerollSignalId;
         unsigned long newSampleSignalId;
     };
 
@@ -111,6 +110,7 @@ private:
     Lock m_lock;
     CaptureDevice::DeviceType m_deviceType;
     WeakHashSet<GStreamerCapturerObserver> m_observers;
+    RefPtr<PadProbeHandle<GStreamerCapturer>> m_pipewireProbe;
 };
 
 } // namespace WebCore

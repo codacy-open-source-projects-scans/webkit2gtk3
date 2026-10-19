@@ -79,11 +79,6 @@ public:
     void themeColorWillChange() final;
     void themeColorDidChange() final;
 
-#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
-    void spatialBackdropSourceWillChange() final;
-    void spatialBackdropSourceDidChange() final;
-#endif
-
 #if ENABLE(MODEL_ELEMENT_IMMERSIVE)
     void allowImmersiveElement(Ref<API::FrameInfo>&&, CompletionHandler<void(bool)>&&) const final;
     void presentImmersiveElement(const WebCore::LayerHostingContextIdentifier, Ref<API::FrameInfo>&&, CompletionHandler<void(bool)>&&) const final;
@@ -190,6 +185,8 @@ public:
 
     void processDidUpdateThrottleState() final;
 
+    void translateAccessibilityAnnouncementStrings(Vector<String>&&, String&&, CompletionHandler<void(Vector<String>&&)>&&) final;
+
 private:
 #if ENABLE(FULLSCREEN_API)
     void setFullScreenClientForTesting(std::unique_ptr<WebFullScreenManagerProxyClient>&&) final;
@@ -199,7 +196,7 @@ protected:
     RetainPtr<WKWebView> webView() const { return m_webView.get(); }
 
     WeakObjCPtr<WKWebView> m_webView;
-    std::unique_ptr<WebCore::AlternativeTextUIController> m_alternativeTextUIController;
+    const std::unique_ptr<WebCore::AlternativeTextUIController> m_alternativeTextUIController;
 #if ENABLE(FULLSCREEN_API)
     std::unique_ptr<WebFullScreenManagerProxyClient> m_fullscreenClientForTesting;
 #endif

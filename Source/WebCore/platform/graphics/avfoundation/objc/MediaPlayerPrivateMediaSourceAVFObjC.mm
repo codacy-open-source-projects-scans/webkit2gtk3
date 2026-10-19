@@ -94,11 +94,10 @@ namespace WebCore {
 
 Ref<AudioVideoRenderer> MediaPlayerPrivateMediaSourceAVFObjC::createRenderer(LoggerHelper& loggerHelper, HTMLMediaElementIdentifier mediaElementIdentifier, MediaPlayerIdentifier playerIdentifier)
 {
-    if (hasPlatformStrategies()) {
-        if (RefPtr renderer = platformStrategies()->mediaStrategy()->createAudioVideoRenderer(&loggerHelper, mediaElementIdentifier, playerIdentifier))
-            return renderer.releaseNonNull();
-    }
-    return AudioVideoRendererAVFObjC::create(Ref { loggerHelper.logger() }, loggerHelper.logIdentifier());
+    RELEASE_ASSERT(hasPlatformStrategies());
+    RefPtr renderer = platformStrategies()->mediaStrategy()->createAudioVideoRenderer(&loggerHelper, mediaElementIdentifier, playerIdentifier);
+    // Can't be null on cocoa platform.
+    return renderer.releaseNonNull();
 }
 
 MediaPlayerPrivateMediaSourceAVFObjC::MediaPlayerPrivateMediaSourceAVFObjC(MediaPlayer& player)
@@ -107,6 +106,7 @@ MediaPlayerPrivateMediaSourceAVFObjC::MediaPlayerPrivateMediaSourceAVFObjC(Media
     , m_waitForTargetRequest(NativePromiseRequest::create())
     , m_rendererPrepareSeekRequest(NativePromiseRequest::create())
     , m_rendererFinishSeekRequest(NativePromiseRequest::create())
+    , m_stallRequest(NativePromiseRequest::create())
     , m_networkState(MediaPlayer::NetworkState::Empty)
     , m_pageIsVisible { player.pageIsVisible() }
     , m_viewportVisibility { player.viewportVisibility() }
@@ -130,10 +130,20 @@ MediaPlayerPrivateMediaSourceAVFObjC::~MediaPlayerPrivateMediaSourceAVFObjC()
 {
     ALWAYS_LOG(LOGIDENTIFIER);
 
+    // Prevent re-entrant callbacks during member destruction. Without this,
+    // KVO notifications fired during m_mediaSourcePrivate's destruction can
+    // call back into this partially-destroyed object via WeakPtr-guarded
+    // callbacks (such as the error callback calling setNetworkState(),
+    // which accesses the already-destroyed m_logger).
+    weakPtrFactory().revokeAll();
+
+    if (m_stallRequest->hasCallback())
+        protect(m_stallRequest)->disconnect();
+
     cancelPendingSeek();
     m_seekTimer.stop();
     dispatchToRendererQueue([](auto& renderer) {
-        renderer.pause();
+        renderer.shutdown();
     });
 }
 
@@ -160,6 +170,13 @@ private:
     {
         return MediaPlayerPrivateMediaSourceAVFObjC::supportsTypeAndCodecs(parameters);
     }
+
+    // Only reached when registered locally; registerMediaEngine may instead install
+    // a remote proxy for this engine.
+    MediaPlayerScope supportedScope() const final
+    {
+        return hasPlatformStrategies() ? MediaPlayerScope::Playback : MediaPlayerScope::Supports;
+    }
 };
 
 void MediaPlayerPrivateMediaSourceAVFObjC::registerMediaEngine(MediaEngineRegistrar registrar)
@@ -184,7 +201,7 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::isAvailable()
 
 void MediaPlayerPrivateMediaSourceAVFObjC::getSupportedTypes(HashSet<String>& types)
 {
-    types = AVStreamDataParserMIMETypeCache::singleton().supportedTypes();
+    types.clear();
 }
 
 MediaPlayer::SupportsType MediaPlayerPrivateMediaSourceAVFObjC::supportsTypeAndCodecs(const MediaEngineSupportParameters& parameters)
@@ -331,7 +348,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::prepareToPlay()
 {
 }
 
-PlatformLayer* MediaPlayerPrivateMediaSourceAVFObjC::platformLayer() const
+PlatformLayer* MediaPlayerPrivateMediaSourceAVFObjC::platformLayer()
 {
     return m_renderer->platformVideoLayer();
 }
@@ -415,6 +432,16 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::hasAudio() const
     return mediaSourcePrivate && mediaSourcePrivate->hasAudio();
 }
 
+bool MediaPlayerPrivateMediaSourceAVFObjC::shouldTeardownOnVisibilityChange() const
+{
+    assertIsMainThread();
+    // Some clients continue to display the video layer they host after hiding their web view.
+    // For those, neither the page's visibility nor the element's position in the viewport
+    // indicate whether the video is on screen, and tearing the layer down would leave the
+    // client displaying a black frame.
+    return !m_loadOptions.disableTeardownOnVisibilityChange;
+}
+
 void MediaPlayerPrivateMediaSourceAVFObjC::setPageIsVisible(bool visible)
 {
     assertIsMainThread();
@@ -442,7 +469,11 @@ void MediaPlayerPrivateMediaSourceAVFObjC::updateRendererVisibility()
     assertIsMainThread();
     bool visible = m_pageIsVisible && m_viewportVisibility != ViewportVisibility::NotVisible;
     m_renderer->setIsVisible(visible);
-    acceleratedRenderingStateChanged();
+    // 311380@main started letting the page's and the element's visibility release the video
+    // renderer. Some clients keep displaying the video layer they host after hiding their web
+    // view, so for those restore the previous behaviour where visibility had no such effect.
+    if (shouldTeardownOnVisibilityChange())
+        acceleratedRenderingStateChanged();
 }
 
 MediaTime MediaPlayerPrivateMediaSourceAVFObjC::duration() const
@@ -501,8 +532,6 @@ void MediaPlayerPrivateMediaSourceAVFObjC::stall()
     dispatchToRendererQueue([](auto& renderer) {
         renderer.stall();
     });
-    if (shouldBePlaying())
-        timeChanged();
 }
 
 bool MediaPlayerPrivateMediaSourceAVFObjC::playAtHostTime(const MonotonicTime& time)
@@ -529,7 +558,7 @@ MediaTime MediaPlayerPrivateMediaSourceAVFObjC::initialTime() const
     return MediaTime::zeroTime();
 }
 
-void MediaPlayerPrivateMediaSourceAVFObjC::seekToTarget(const SeekTarget& target)
+Ref<MediaTimePromise> MediaPlayerPrivateMediaSourceAVFObjC::seekToTarget(const SeekTarget& target)
 {
     assertIsMainThread();
     ALWAYS_LOG(LOGIDENTIFIER, "time = ", target.time, ", negativeThreshold = ", target.negativeThreshold, ", positiveThreshold = ", target.positiveThreshold);
@@ -539,6 +568,9 @@ void MediaPlayerPrivateMediaSourceAVFObjC::seekToTarget(const SeekTarget& target
     if (m_seekTimer.isActive())
         m_seekTimer.stop();
     m_seekTimer.startOneShot(0_s);
+
+    m_seekPromise.emplace(PlatformMediaError::Cancelled);
+    return *m_seekPromise;
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::seekInternal()
@@ -558,9 +590,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::seekInternal()
 
     cancelPendingSeek();
 
-    dispatchToRendererQueue([](auto& renderer) {
-        renderer.stall();
-    });
+    stall();
 
     ALWAYS_LOG(LOGIDENTIFIER);
 
@@ -614,6 +644,11 @@ void MediaPlayerPrivateMediaSourceAVFObjC::reenqueueMediaForTimeAndFinishSeek(co
     assertIsMainThread();
     ALWAYS_LOG(LOGIDENTIFIER, seekTime);
 
+    // Refresh the renderer's stall cap before finishSeek, since finishSeek
+    // may resume playback on the GPU side. The cap programmed for the
+    // pre-seek playhead may be stale.
+    resetStallForTime(seekTime);
+
     GenericPromise::all({
         protect(m_mediaSourcePrivate)->reenqueueMediaForTime(seekTime),
         invokeAsync(MediaSourcePrivateAVFObjC::queueSingleton(), [renderer = m_renderer, seekTime] -> Ref<GenericPromise> {
@@ -651,15 +686,16 @@ void MediaPlayerPrivateMediaSourceAVFObjC::completeSeek(const MediaTime& seekedT
     assertIsMainThread();
     ALWAYS_LOG(LOGIDENTIFIER, "");
 
-    m_seeking = false;
+    m_lastSeekTime = seekedTime;
 
-    if (RefPtr player = m_player.get()) {
-        player->seeked(seekedTime);
-        player->timeChanged();
-    }
-
+    // The renderer seek is done and its target frame is available.
     if (hasVideo())
         setHasAvailableVideoFrame(true);
+    m_seeking = false;
+
+    // Propagate readyState/playback; this also resolves the seek promise (the target position is
+    // buffered and, for video, its frame is available by this point).
+    updateStateFromReadyState();
 }
 
 bool MediaPlayerPrivateMediaSourceAVFObjC::seeking() const
@@ -742,52 +778,59 @@ const PlatformTimeRanges& MediaPlayerPrivateMediaSourceAVFObjC::buffered() const
 
 void MediaPlayerPrivateMediaSourceAVFObjC::bufferedChanged()
 {
+    resetStallForTime(currentTime());
+}
+
+void MediaPlayerPrivateMediaSourceAVFObjC::resetStallForTime(const MediaTime& time)
+{
     assertIsMainThread();
+    if (m_stallRequest->hasCallback())
+        protect(m_stallRequest)->disconnect();
     m_renderer->cancelTimeReachedAction();
 
-    auto ranges = protect(m_mediaSourcePrivate)->buffered();
-    auto currentTime = this->currentTime();
-    if (!protect(m_mediaSourcePrivate)->hasFutureTime(currentTime) && shouldBePlaying()) {
-        ALWAYS_LOG(LOGIDENTIFIER, "Not having data to play at currentTime: ", currentTime, " stalling");
+    auto logSiteIdentifier = LOGIDENTIFIER;
+    UNUSED_PARAM(logSiteIdentifier);
+    auto onStallReached = [weakThis = WeakPtr { *this }, logSiteIdentifier](MediaTimePromise::Result&& result) {
+        assertIsMainThread();
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return;
+
+        if (protectedThis->m_stallRequest->hasCallback())
+            protect(protectedThis->m_stallRequest)->complete();
+
+        if (!result)
+            return;
+
+        // The Request was tracked, so reaching this point means the cap really fired and
+        // hasn't been superseded by a newer resetStallForTime — bufferedChanged would have
+        // disconnected the Request before reinstalling. No need to re-check hasFutureTime.
+        MediaTime now = protectedThis->currentTime();
+        ALWAYS_LOG_WITH_THIS(protectedThis, logSiteIdentifier, "boundary time observer called, now = ", now);
+
+        if (protectedThis->seeking())
+            return; // seek owns state transitions
+        if (now >= protectedThis->duration())
+            protectedThis->pause();
+        protectedThis->timeChanged();
+    };
+
+    if (time >= duration()) {
+        ALWAYS_LOG(LOGIDENTIFIER, "playhead ", time, " is at or past duration ", duration(), "; stalling");
+        if (shouldBePlaying())
+            stall();
+        onStallReached(time);
+        return;
+    }
+
+    if (!protect(m_mediaSourcePrivate)->hasFutureTime(time) && shouldBePlaying()) {
+        ALWAYS_LOG(LOGIDENTIFIER, "Not having data to play at time: ", time, " stalling");
         stall();
     }
 
-    auto stallAtTime = duration();
-    size_t index = ranges.find(currentTime);
-    if (index != notFound) {
-        // Find the next gap (or end of media)
-        for (; index < ranges.length(); index++) {
-            if ((index < ranges.length() - 1 && ranges.start(index + 1) - ranges.end(index) > m_mediaSourcePrivate->timeFudgeFactor())
-                || (index == ranges.length() - 1 && ranges.end(index) > currentTime)) {
-                stallAtTime = ranges.end(index);
-                break;
-            }
-        }
-    }
-
+    auto stallAtTime = protect(m_mediaSourcePrivate)->nextStallTime(time);
     ALWAYS_LOG(LOGIDENTIFIER, "will stall playback at time: ", stallAtTime);
-    auto logSiteIdentifier = LOGIDENTIFIER;
-    UNUSED_PARAM(logSiteIdentifier);
-    m_renderer->notifyTimeReachedAndStall(stallAtTime, [weakThis = WeakPtr { *this }, logSiteIdentifier](const MediaTime& stallTime) {
-        ensureOnMainThread([weakThis, logSiteIdentifier, stallTime] {
-            RefPtr protectedThis = weakThis.get();
-            if (!protectedThis)
-                return;
-            if (protect(protectedThis->m_mediaSourcePrivate)->hasFutureTime(stallTime) && protectedThis->shouldBePlaying()) {
-                ALWAYS_LOG_WITH_THIS(protectedThis, logSiteIdentifier, "Data now available at ", stallTime, " resuming");
-                protectedThis->dispatchToRendererQueue([](auto& renderer) {
-                    renderer.play(); // New data was added, resume. Can't happen in practice, action would have been cancelled once buffered changed.
-                });
-                return;
-            }
-            MediaTime now = protectedThis->currentTime();
-            ALWAYS_LOG_WITH_THIS(protectedThis, logSiteIdentifier, "boundary time observer called, now = ", now);
-
-            if (stallTime == protectedThis->duration())
-                protectedThis->pause();
-            protectedThis->timeChanged();
-        });
-    });
+    m_renderer->notifyTimeReachedAndStall(stallAtTime)->whenSettled(RunLoop::mainSingleton(), WTF::move(onStallReached))->track(protect(m_stallRequest));
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setLayerRequiresFlush()
@@ -896,12 +939,12 @@ RefPtr<VideoFrame> MediaPlayerPrivateMediaSourceAVFObjC::videoFrameForCurrentTim
     return m_lastVideoFrame;
 }
 
-DestinationColorSpace MediaPlayerPrivateMediaSourceAVFObjC::colorSpace()
+ColorSpace MediaPlayerPrivateMediaSourceAVFObjC::colorSpace()
 {
     assertIsMainThread();
     updateLastImage();
     RefPtr lastImage = m_lastImage;
-    return lastImage ? lastImage->colorSpace() : DestinationColorSpace::SRGB();
+    return lastImage ? lastImage->colorSpace() : ColorSpace::SRGB();
 }
 
 bool MediaPlayerPrivateMediaSourceAVFObjC::hasAvailableVideoFrame() const
@@ -943,11 +986,11 @@ void MediaPlayerPrivateMediaSourceAVFObjC::acceleratedRenderingStateChanged()
 
     RefPtr player = m_player.get();
 
+    bool canBeAccelerated = player && player->renderingCanBeAccelerated();
+
     // Don't create a layer if the player is not visible:
-    bool canBeAccelerated = m_pageIsVisible
-        && m_viewportVisibility != ViewportVisibility::NotVisible
-        && player
-        && player->renderingCanBeAccelerated();
+    if (shouldTeardownOnVisibilityChange())
+        canBeAccelerated = canBeAccelerated && m_pageIsVisible && m_viewportVisibility != ViewportVisibility::NotVisible;
     m_renderer->renderingCanBeAcceleratedChanged(canBeAccelerated);
 }
 
@@ -1032,7 +1075,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::durationChanged()
             player->durationChanged();
     }
     m_duration = duration;
-    bufferedChanged();
+    resetStallForTime(currentTime());
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::effectiveRateChanged()
@@ -1041,6 +1084,27 @@ void MediaPlayerPrivateMediaSourceAVFObjC::effectiveRateChanged()
     ALWAYS_LOG(LOGIDENTIFIER, effectiveRate());
     if (RefPtr player = m_player.get())
         player->rateChanged();
+    notifyEndOfMediaIfNeeded();
+}
+
+void MediaPlayerPrivateMediaSourceAVFObjC::notifyEndOfMediaIfNeeded()
+{
+    assertIsMainThread();
+    // Observed: in some runs, playback drains at end of media (the renderer
+    // stops producing frames) without the boundary observer programmed in
+    // resetStallForTime() firing. The effective rate still transitions to 0
+    // in that case, which gives us a reliable signal: if MediaSource has
+    // transitioned to 'ended' and there is no future data past the current
+    // time, route a timeChanged() through so HTMLMediaElement's
+    // mediaPlayerTimeChanged schedules the 'ended' event.
+    if (effectiveRate())
+        return;
+    RefPtr mediaSourcePrivate = m_mediaSourcePrivate;
+    if (!mediaSourcePrivate || !mediaSourcePrivate->isEnded())
+        return;
+    if (mediaSourcePrivate->hasFutureTime(currentTime()))
+        return;
+    timeChanged();
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setNaturalSize(const FloatSize& size)
@@ -1152,11 +1216,14 @@ void MediaPlayerPrivateMediaSourceAVFObjC::setReadyState(MediaPlayer::ReadyState
 void MediaPlayerPrivateMediaSourceAVFObjC::updateStateFromReadyState()
 {
     assertIsMainThread();
+    // Seek owns renderer rate and event sequencing from prepareToSeek through completeSeek.
+    if (seeking())
+        return;
+
     if (shouldBePlaying()) {
         dispatchToRendererQueue([](auto& renderer) {
             renderer.play();
         });
-        timeChanged();
     } else
         stall();
 
@@ -1167,6 +1234,13 @@ void MediaPlayerPrivateMediaSourceAVFObjC::updateStateFromReadyState()
 
     if (RefPtr player = m_player.get())
         player->readyStateChanged();
+
+    // Complete any pending seek now that readyState has been propagated, so
+    // loadeddata/canplay/canplaythrough are queued before the 'seeked' event. Reaching here means
+    // the renderer seek finished (!m_seeking) with the target data buffered and, for video, a
+    // frame available.
+    if (auto promise = std::exchange(m_seekPromise, std::nullopt))
+        promise->resolve(m_lastSeekTime);
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setNetworkState(MediaPlayer::NetworkState networkState)
@@ -1185,6 +1259,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::mediaSourceHasRetrievedAllData()
 {
     assertIsMainThread();
     setNetworkState(MediaPlayer::NetworkState::Loaded);
+    notifyEndOfMediaIfNeeded();
 }
 
 ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
@@ -1234,6 +1309,13 @@ void MediaPlayerPrivateMediaSourceAVFObjC::characteristicsFromMediaSourceChanged
     assertIsMainThread();
     if (RefPtr player = m_player.get())
         player->characteristicChanged();
+}
+
+void MediaPlayerPrivateMediaSourceAVFObjC::seekableRangesFromMediaSourceChanged()
+{
+    assertIsMainThread();
+    if (RefPtr player = m_player.get())
+        player->seekableTimeRangesChanged();
 }
 
 RetainPtr<PlatformLayer> MediaPlayerPrivateMediaSourceAVFObjC::createVideoFullscreenLayer()
@@ -1492,7 +1574,14 @@ void MediaPlayerPrivateMediaSourceAVFObjC::isInFullscreenOrPictureInPictureChang
 
 WebCore::HostingContext MediaPlayerPrivateMediaSourceAVFObjC::hostingContext() const
 {
+    assertIsMainThread();
     return m_renderer->hostingContext();
+}
+
+Ref<MediaPlayer::HostingContextPromise> MediaPlayerPrivateMediaSourceAVFObjC::requestHostingContext()
+{
+    assertIsMainThread();
+    return m_renderer->requestHostingContext();
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setVideoLayerSizeFenced(const WebCore::FloatSize& size, WTF::MachSendRightAnnotated&& sendRightAnnotated)
@@ -1506,6 +1595,13 @@ void MediaPlayerPrivateMediaSourceAVFObjC::screenReservedChanged(bool reserved)
     m_renderer->setScreenReserved(reserved);
 }
 #endif
+
+bool MediaPlayerPrivateMediaSourceAVFObjC::supportsProgressMonitoring() const
+{
+    assertIsMainThread();
+    return m_loadOptions.supportsProgressMonitoringOverride.value_or(false);
+}
+
 
 } // namespace WebCore
 

@@ -45,7 +45,7 @@ ExceptionOr<Ref<RTCRtpScriptTransformer>> RTCRtpScriptTransformer::create(Script
     if (!context.globalObject())
         return Exception { ExceptionCode::InvalidStateError };
 
-    auto& globalObject = *uncheckedDowncast<JSDOMGlobalObject>(context.globalObject());
+    auto& globalObject = *downcast<JSDOMGlobalObject>(context.globalObject());
     JSC::JSLockHolder lock(globalObject.vm());
 
     auto producerOrException = RTCEncodedStreamProducer::create(context);
@@ -83,7 +83,7 @@ WritableStream& RTCRtpScriptTransformer::writable()
 void RTCRtpScriptTransformer::start(Ref<RTCRtpTransformBackend>&& backend)
 {
     m_isSender = backend->side() == RTCRtpTransformBackend::Side::Sender;
-    m_streamProducer->start(WTF::move(backend), backend->mediaType() == RTCRtpTransformBackend::MediaType::Video);
+    m_streamProducer->start(WTF::move(backend), backend->mediaType() == RTCRtpTransformBackend::MediaType::Video, this);
 }
 
 void RTCRtpScriptTransformer::clear(ClearCallback clearCallback)

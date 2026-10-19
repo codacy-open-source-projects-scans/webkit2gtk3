@@ -87,7 +87,7 @@ WEBKIT_DEFINE_TYPE_WITH_CODE(WebKitFliteSrc, webkit_flite_src, GST_TYPE_BASE_SRC
     GST_DEBUG_CATEGORY_INIT(webkit_flite_src_debug, "webkitflitesrc", 0, "flitesrc element"));
 
 // To add more voices, add voice register functions here.
-static auto voiceRegisterFunctions = std::to_array({
+static auto voiceRegisterFunctions = WTF::toArray({
     register_cmu_us_kal,
     register_cmu_us_slt,
     register_cmu_us_rms,
@@ -157,7 +157,7 @@ static GstFlowReturn webkitFliteSrcCreate(GstBaseSrc* baseSource, guint64 offset
     if (!members->didLoadUtterance) {
         members->didLoadUtterance = true;
 
-        GUniquePtr<cst_wave> wave(flite_text_to_wave(priv->text.utf8().data(), priv->currentVoice));
+        GUniquePtr<cst_wave> wave(flite_text_to_wave(priv->text.utf8().legacyCStringPointer(), priv->currentVoice));
         cst_wave_resample(wave.get(), priv->info.rate);
 
         gsize bufferSize = priv->info.channels * sizeof(gint16) * wave->num_samples;

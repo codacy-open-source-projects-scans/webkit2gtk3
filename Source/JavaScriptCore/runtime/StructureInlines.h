@@ -33,10 +33,13 @@
 #include <JavaScriptCore/PropertyTable.h>
 #include <JavaScriptCore/StringPrototype.h>
 #include <JavaScriptCore/StructureArrayStorageInlines.h>
+#include <JavaScriptCore/StructureCache.h>
 #include <JavaScriptCore/StructureChain.h>
 #include <JavaScriptCore/StructureCreateInlines.h>
+#include <JavaScriptCore/StructureInlinesLight.h>
 #include <JavaScriptCore/StructureRareDataInlines.h>
 #include <JavaScriptCore/SymbolPrototype.h>
+#include <JavaScriptCore/WeakGCMapInlines.h>
 #include <JavaScriptCore/WebAssemblyGCStructure.h>
 #include <JavaScriptCore/WriteBarrierInlines.h>
 #include <wtf/Threading.h>
@@ -68,76 +71,8 @@ inline Structure* Structure::create(VM& vm, Structure* previous, DeferredStructu
     }
 }
 
-inline JSObject* Structure::storedPrototypeObject() const
-{
-    ASSERT(hasMonoProto());
-    JSValue value = m_prototype.get();
-    if (value.isNull())
-        return nullptr;
-    return asObject(value);
-}
-
-inline Structure* Structure::storedPrototypeStructure() const
-{
-    ASSERT(hasMonoProto());
-    JSObject* object = storedPrototypeObject();
-    if (!object)
-        return nullptr;
-    return object->structure();
-}
-
-ALWAYS_INLINE JSValue Structure::storedPrototype(const JSObject* object) const
-{
-    ASSERT(isCompilationThread() || Thread::mayBeGCThread() || object->structure() == this);
-    if (hasMonoProto())
-        return storedPrototype();
-    return object->getDirect(knownPolyProtoOffset);
-}
-
-ALWAYS_INLINE JSObject* Structure::storedPrototypeObject(const JSObject* object) const
-{
-    ASSERT(isCompilationThread() || Thread::mayBeGCThread() || object->structure() == this);
-    if (hasMonoProto())
-        return storedPrototypeObject();
-    JSValue proto = object->getDirect(knownPolyProtoOffset);
-    if (proto.isNull())
-        return nullptr;
-    return asObject(proto);
-}
-
-ALWAYS_INLINE Structure* Structure::storedPrototypeStructure(const JSObject* object) const
-{
-    if (JSObject* proto = storedPrototypeObject(object))
-        return proto->structure();
-    return nullptr;
-}
-
-ALWAYS_INLINE PropertyOffset Structure::get(VM& vm, PropertyName propertyName)
-{
-    unsigned attributes;
-    return get(vm, propertyName, attributes);
-}
-    
-ALWAYS_INLINE PropertyOffset Structure::get(VM& vm, PropertyName propertyName, unsigned& attributes)
-{
-    ASSERT(!isCompilationThread());
-    ASSERT(structure()->classInfoForCells() == info());
-
-    if (m_seenProperties.ruleOut(CompactPtr<UniquedStringImpl>::encode(propertyName.uid())))
-        return invalidOffset;
-
-    PropertyTable* propertyTable = ensurePropertyTableIfNotEmpty(vm);
-    if (!propertyTable)
-        return invalidOffset;
-
-    auto [offset, entryAttributes] = propertyTable->get(propertyName.uid());
-    if (offset != invalidOffset)
-        attributes = entryAttributes;
-    return offset;
-}
-
 template<typename Functor>
-void Structure::forEachPropertyConcurrently(const Functor& functor)
+void Structure::forEachPropertyConcurrently(NOESCAPE const Functor& functor)
 {
     Vector<Structure*, 8> structures;
     Structure* tableStructure;
@@ -190,7 +125,7 @@ void Structure::forEachPropertyConcurrently(const Functor& functor)
 }
 
 template<typename Functor>
-void Structure::forEachProperty(VM& vm, const Functor& functor)
+void Structure::forEachProperty(VM& vm, NOESCAPE const Functor& functor)
 {
     if (PropertyTable* table = ensurePropertyTableIfNotEmpty(vm)) {
         table->forEachProperty([&](const auto& entry) {
@@ -200,18 +135,6 @@ void Structure::forEachProperty(VM& vm, const Functor& functor)
         });
         ensureStillAliveHere(table);
     }
-}
-
-inline bool Structure::hasIndexingHeader(const JSCell* cell) const
-{
-    if (hasIndexedProperties(indexingType()))
-        return true;
-    
-    if (!isTypedView(m_blob.type()))
-        return false;
-
-    TypedArrayMode mode = uncheckedDowncast<JSArrayBufferView>(cell)->mode();
-    return isWastefulTypedArray(mode);
 }
 
 inline void Structure::setCachedPropertyNames(VM& vm, CachedPropertyNamesKind kind, JSCellButterfly* cached)
@@ -309,7 +232,7 @@ inline void Structure::cacheSpecialProperty(JSGlobalObject* globalObject, VM& vm
 }
 
 template<Structure::ShouldPin shouldPin, typename Func>
-inline PropertyOffset Structure::add(VM& vm, PropertyName propertyName, unsigned attributes, const Func& func)
+inline PropertyOffset Structure::add(VM& vm, PropertyName propertyName, unsigned attributes, NOESCAPE const Func& func)
 {
     ASSERT(!isCompilationThread());
     PropertyTable* table = ensurePropertyTable(vm);
@@ -366,7 +289,7 @@ inline PropertyOffset Structure::add(VM& vm, PropertyName propertyName, unsigned
 }
 
 template<Structure::ShouldPin shouldPin, typename Func>
-inline PropertyOffset Structure::remove(VM& vm, PropertyName propertyName, const Func& func)
+inline PropertyOffset Structure::remove(VM& vm, PropertyName propertyName, NOESCAPE const Func& func)
 {
     ASSERT(!isCompilationThread());
     PropertyTable* table = ensurePropertyTable(vm);
@@ -408,7 +331,7 @@ inline PropertyOffset Structure::remove(VM& vm, PropertyName propertyName, const
 }
 
 template<Structure::ShouldPin shouldPin, typename Func>
-inline PropertyOffset Structure::attributeChange(VM& vm, PropertyName propertyName, unsigned attributes, const Func& func)
+inline PropertyOffset Structure::attributeChange(VM& vm, PropertyName propertyName, unsigned attributes, NOESCAPE const Func& func)
 {
     ASSERT(!isCompilationThread());
     PropertyTable* table = ensurePropertyTable(vm);
@@ -455,13 +378,13 @@ inline PropertyOffset Structure::attributeChange(VM& vm, PropertyName propertyNa
 }
 
 template<typename Func>
-inline PropertyOffset Structure::addPropertyWithoutTransition(VM& vm, PropertyName propertyName, unsigned attributes, const Func& func)
+inline PropertyOffset Structure::addPropertyWithoutTransition(VM& vm, PropertyName propertyName, unsigned attributes, NOESCAPE const Func& func)
 {
     return add<ShouldPin::Yes>(vm, propertyName, attributes, func);
 }
 
 template<typename Func>
-inline PropertyOffset Structure::removePropertyWithoutTransition(VM& vm, PropertyName propertyName, const Func& func)
+inline PropertyOffset Structure::removePropertyWithoutTransition(VM& vm, PropertyName propertyName, NOESCAPE const Func& func)
 {
     ASSERT(isUncacheableDictionary());
     ASSERT(isPinnedPropertyTable());
@@ -471,7 +394,7 @@ inline PropertyOffset Structure::removePropertyWithoutTransition(VM& vm, Propert
 }
 
 template<typename Func>
-ALWAYS_INLINE auto Structure::addOrReplacePropertyWithoutTransition(VM& vm, PropertyName propertyName, unsigned newAttributes, const Func& func) -> decltype(auto)
+ALWAYS_INLINE auto Structure::addOrReplacePropertyWithoutTransition(VM& vm, PropertyName propertyName, unsigned newAttributes, NOESCAPE const Func& func) -> decltype(auto)
 {
     ASSERT(!isCompilationThread());
     PropertyTable* table = ensurePropertyTable(vm);
@@ -524,7 +447,7 @@ ALWAYS_INLINE auto Structure::addOrReplacePropertyWithoutTransition(VM& vm, Prop
 }
 
 template<typename Func>
-inline PropertyOffset Structure::attributeChangeWithoutTransition(VM& vm, PropertyName propertyName, unsigned attributes, const Func& func)
+inline PropertyOffset Structure::attributeChangeWithoutTransition(VM& vm, PropertyName propertyName, unsigned attributes, NOESCAPE const Func& func)
 {
     return attributeChange<ShouldPin::Yes>(vm, propertyName, attributes, func);
 }
@@ -687,13 +610,175 @@ inline Structure* StructureTransitionTable::get(PointerKey rep, unsigned attribu
     return map()->get(StructureTransitionTable::Hash::createKey(rep, attributes, transitionKind));
 }
 
-inline void StructureTransitionTable::finalizeUnconditionally(VM& vm, CollectionScope)
+inline void StructureTransitionTable::reconcileWeakReferencesAtGCEnd(VM& vm, CollectionScope)
 {
     if (auto* transition = trySingleTransition()) {
         if (!vm.heap.isMarked(transition))
             m_data = UsingSingleSlotFlag;
     }
 }
+
+inline void Structure::finishCreation(VM& vm, const Structure* previous, DeferredStructureTransitionWatchpointFire* deferred)
+{
+    this->finishCreation(vm);
+    if (previous->hasRareData()) {
+        const StructureRareData* previousRareData = previous->rareData();
+        if (previousRareData->hasSharedPolyProtoWatchpoint()) {
+            ensureRareData(vm);
+            rareData()->setSharedPolyProtoWatchpoint(previousRareData->copySharedPolyProtoWatchpoint());
+        }
+    }
+    previous->fireStructureTransitionWatchpoint(deferred);
+}
+
+IGNORE_RETURN_TYPE_WARNINGS_BEGIN
+ALWAYS_INLINE PropertyOffset Structure::get(VM& vm, Concurrency concurrency, UniquedStringImpl* uid, unsigned& attributes)
+{
+    switch (concurrency) {
+    case Concurrency::MainThread:
+        ASSERT(!isCompilationThread() && !Thread::mayBeGCThread());
+        return get(vm, uid, attributes);
+    case Concurrency::ConcurrentThread:
+        return getConcurrently(uid, attributes);
+    }
+}
+IGNORE_RETURN_TYPE_WARNINGS_END
+
+IGNORE_RETURN_TYPE_WARNINGS_BEGIN
+ALWAYS_INLINE PropertyOffset Structure::get(VM& vm, Concurrency concurrency, UniquedStringImpl* uid)
+{
+    switch (concurrency) {
+    case Concurrency::MainThread:
+        ASSERT(!isCompilationThread() && !Thread::mayBeGCThread());
+        return get(vm, uid);
+    case Concurrency::ConcurrentThread:
+        return getConcurrently(uid);
+    }
+}
+IGNORE_RETURN_TYPE_WARNINGS_END
+
+inline PropertyOffset Structure::getConcurrently(UniquedStringImpl* uid)
+{
+    unsigned attributesIgnored;
+    return getConcurrently(uid, attributesIgnored);
+}
+
+inline void Structure::startWatchingPropertyForReplacements(VM& vm, PropertyOffset offset)
+{
+    ensurePropertyReplacementWatchpointSet(vm, offset);
+}
+
+inline void Structure::startWatchingInternalPropertiesIfNecessary(VM& vm)
+{
+    if (didWatchInternalProperties()) [[likely]]
+        return;
+    startWatchingInternalProperties(vm);
+}
+
+inline JSCellButterfly* Structure::cachedPropertyNames(CachedPropertyNamesKind kind) const
+{
+    if (!hasRareData())
+        return nullptr;
+    return rareData()->cachedPropertyNames(kind);
+}
+
+inline JSCellButterfly* Structure::cachedPropertyNamesIgnoringSentinel(CachedPropertyNamesKind kind) const
+{
+    if (!hasRareData())
+        return nullptr;
+    return rareData()->cachedPropertyNamesIgnoringSentinel(kind);
+}
+
+inline JSValue Structure::cachedSpecialProperty(CachedSpecialPropertyKey key)
+{
+    if (!hasRareData())
+        return JSValue();
+    return rareData()->cachedSpecialProperty(key);
+}
+
+inline JSString* Structure::defaultToPrimitiveFastAndNonObservable(VM& vm)
+{
+    if (typeInfo().type() != FinalObjectType)
+        return nullptr;
+
+    if (!hasRareData())
+        return nullptr;
+
+    // Use the object's own realm: the cached special properties below were resolved against this
+    // structure's prototype chain, so they must be compared against that realm's primordials.
+    JSGlobalObject* globalObject = this->realm();
+    if (!globalObject) [[unlikely]]
+        return nullptr;
+
+    if (!globalObject->objectPrototypeChainIsSaneWatchpointSet().isStillValid()) [[unlikely]]
+        return nullptr;
+
+    StructureRareData* rareData = this->rareData();
+    switch (rareData->cachedHasDefaultToPrimitiveFastAndNonObservable()) {
+    case TriState::True:
+        return asString(rareData->cachedSpecialProperty(CachedSpecialPropertyKey::ToStringTag));
+    case TriState::False:
+        return nullptr;
+    case TriState::Indeterminate:
+        break;
+    }
+
+    JSValue toPrimitive = rareData->cachedSpecialProperty(CachedSpecialPropertyKey::ToPrimitive);
+    JSValue valueOf = rareData->cachedSpecialProperty(CachedSpecialPropertyKey::ValueOf);
+    JSValue toString = rareData->cachedSpecialProperty(CachedSpecialPropertyKey::ToString);
+    JSValue toStringTag = rareData->cachedSpecialProperty(CachedSpecialPropertyKey::ToStringTag);
+
+    bool definitelySlow = (toPrimitive && !toPrimitive.isUndefined())
+        || (valueOf && valueOf != globalObject->objectProtoValueOfFunction())
+        || (toString && toString != globalObject->objectProtoToStringFunction())
+        || (toStringTag && !toStringTag.isString());
+
+    if (definitelySlow)
+        rareData->setCachedHasDefaultToPrimitiveFastAndNonObservable(TriState::False);
+    else {
+        if (toPrimitive && valueOf && toString && toStringTag) {
+            rareData->setCachedHasDefaultToPrimitiveFastAndNonObservable(TriState::True);
+            return asString(toStringTag);
+        }
+
+        // Memoize Slow only when the verdict is stable. An empty cache with no own special property is
+        // merely not-yet-probed, so leave it Unknown and let a later call reach Fast once it populates.
+        bool hasOwnSpecialProperty = isValidOffset(get(vm, vm.propertyNames->valueOf))
+            || isValidOffset(get(vm, vm.propertyNames->toString))
+            || isValidOffset(get(vm, vm.propertyNames->toPrimitiveSymbol))
+            || isValidOffset(get(vm, vm.propertyNames->toStringTagSymbol));
+        if (hasOwnSpecialProperty)
+            rareData->setCachedHasDefaultToPrimitiveFastAndNonObservable(TriState::False);
+    }
+
+    return nullptr;
+}
+
+inline void Structure::clearCachedPrototypeChain()
+{
+    m_cachedPrototypeChain.clear();
+    if (!hasRareData())
+        return;
+    rareData()->clearCachedPropertyNameEnumerator();
+}
+
+inline StructureFireDetail::StructureFireDetail(const Structure* structure)
+    : m_structure(structure)
+{
+}
+
+inline StructureTransitionTable::~StructureTransitionTable()
+{
+    if (!isUsingSingleSlot())
+        delete map();
+}
+
+inline StructureCache::StructureCache(VM& vm)
+    : m_structures(vm)
+{
+}
+
+inline StructureCache::~StructureCache() = default;
 
 } // namespace JSC
 

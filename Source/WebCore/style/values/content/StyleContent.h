@@ -32,6 +32,11 @@
 #include <WebCore/StyleValueTypes.h>
 
 namespace WebCore {
+
+namespace CSS {
+struct Content;
+}
+
 namespace Style {
 
 // <leader()>            = leader( <leader-type> )
@@ -53,38 +58,60 @@ namespace Style {
 // MISSING from <alt-content>:
 //   <counter>
 
+struct ContentText {
+    String text;
+
+    bool operator==(const ContentText&) const = default;
+};
+DEFINE_TYPE_WRAPPER_GET(ContentText, text);
+
+struct ContentImage {
+    ImageWrapper image;
+
+    bool operator==(const ContentImage&) const = default;
+};
+DEFINE_TYPE_WRAPPER_GET(ContentImage, image);
+
+struct ContentCounter {
+    using CounterFunction = FunctionNotation<CSSValueID::Counter, CommaSeparatedTuple<CustomIdent, std::optional<CounterStyle>>>;
+    using CountersFunction = FunctionNotation<CSSValueID::Counters, CommaSeparatedTuple<CustomIdent, String, std::optional<CounterStyle>>>;
+
+    CustomIdent identifier;
+    String separator;
+    CounterStyle style;
+
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&...) const;
+
+    bool operator==(const ContentCounter&) const = default;
+};
+
+struct ContentQuote {
+    QuoteType quote;
+
+    bool operator==(const ContentQuote&) const = default;
+};
+DEFINE_TYPE_WRAPPER_GET(ContentQuote, quote);
+
+struct ContentGlyph {
+    SynthesizedGlyph glyph;
+
+    bool operator==(const ContentGlyph&) const = default;
+};
+DEFINE_TYPE_WRAPPER_GET(ContentGlyph, glyph);
+
 struct Content {
-    struct Text {
-        String text;
-
-        bool operator==(const Text&) const = default;
-    };
-    struct Image {
-        ImageWrapper image;
-
-        bool operator==(const Image&) const = default;
-    };
-    struct Counter {
-        CustomIdent identifier;
-        String separator;
-        CounterStyle style;
-
-        template<typename... F> decltype(auto) switchOn(F&&...) const;
-
-        bool operator==(const Counter&) const = default;
-    };
-    struct Quote {
-        QuoteType quote;
-
-        bool operator==(const Quote&) const = default;
-    };
-    using ListItem = Variant<Text, Image, Counter, Quote>;
-    using List = SpaceSeparatedFixedVector<ListItem>;
+    using Text = ContentText;
+    using Image = ContentImage;
+    using Counter = ContentCounter;
+    using Quote = ContentQuote;
+    using Glyph = ContentGlyph;
+    using VisibleContentListItem = Variant<Text, Image, Counter, Quote, Glyph>;
+    using VisibleContentList = SpaceSeparatedFixedVector<VisibleContentListItem>;
 
     // FIXME: This struct could be optimized down to a pointer when unused by using TrailingArray.
     struct Data {
-        List list;
-        Markable<String> altText;
+        VisibleContentList visible;
+        Markable<String> alt;
 
         bool operator==(const Data&) const = default;
     };
@@ -113,12 +140,12 @@ struct Content {
         return std::get_if<Data>(&m_value);
     }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         return WTF::switchOn(m_value, std::forward<F>(f)...);
     }
 
-    WTF::String altText() const;
+    WTF::String LEGACY_NODELETE altText() const;
 
     bool operator==(const Content&) const = default;
 
@@ -130,27 +157,20 @@ private:
 template<size_t I> const auto& get(const Content::Data& value)
 {
     if constexpr (!I)
-        return value.list;
+        return value.visible;
     else if constexpr (I == 1)
-        return value.altText;
+        return value.alt;
 }
 
-DEFINE_TYPE_WRAPPER_GET(Content::Text, text);
-DEFINE_TYPE_WRAPPER_GET(Content::Image, image);
-DEFINE_TYPE_WRAPPER_GET(Content::Quote, quote);
-
-template<typename... F> decltype(auto) Content::Counter::switchOn(F&&... f) const
+template<typename... F> decltype(auto) ContentCounter::switchOn(NOESCAPE F&&... f) const
 {
     auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
-
-    using CounterFunction = FunctionNotation<CSSValueCounter, CommaSeparatedTuple<CustomIdent, std::optional<CounterStyle>>>;
-    using CountersFunction = FunctionNotation<CSSValueCounters, CommaSeparatedTuple<CustomIdent, String, std::optional<CounterStyle>>>;
 
     if (separator.value.isEmpty()) {
         return visitor(CounterFunction {
             .parameters = {
                 identifier,
-                style != CSSValueDecimal ? std::make_optional(style) : std::nullopt
+                style != CSSValueID::Decimal ? std::make_optional(style) : std::nullopt
             }
         });
     } else {
@@ -158,7 +178,7 @@ template<typename... F> decltype(auto) Content::Counter::switchOn(F&&... f) cons
             .parameters = {
                 identifier,
                 separator,
-                style != CSSValueDecimal ? std::make_optional(style) : std::nullopt
+                style != CSSValueID::Decimal ? std::make_optional(style) : std::nullopt
             }
         });
     }
@@ -166,10 +186,11 @@ template<typename... F> decltype(auto) Content::Counter::switchOn(F&&... f) cons
 
 // MARK: - Conversion
 
-template<> struct CSSValueConversion<Content> { auto operator()(BuilderState&, const CSSValue&) -> Content; };
+template<> struct ToCSS<Content> { auto operator()(const Content&, const Style::ComputedStyle&) -> CSS::Content; };
+template<> struct ToStyle<CSS::Content> { auto operator()(const CSS::Content&, const BuilderState&) -> Content; };
 
-// `Content::Counter` is special-cased to return a `CSSCounterValue`.
-template<> struct CSSValueCreation<Content::Counter> { Ref<CSSValue> operator()(CSSValuePool&, const RenderStyle&, const Content::Counter&); };
+template<> struct CSSValueConversion<Content> { auto operator()(BuilderState&, const CSSValue&) -> Content; };
+template<> struct CSSValueCreation<Content> { Ref<CSSValue> operator()(CSSValuePool&, const Style::ComputedStyle&, const Content&); };
 
 } // namespace Style
 } // namespace WebCore
@@ -178,5 +199,6 @@ DEFINE_SLASH_SEPARATED_TUPLE_LIKE_CONFORMANCE(WebCore::Style::Content::Data, 2)
 DEFINE_TUPLE_LIKE_CONFORMANCE_FOR_TYPE_WRAPPER(WebCore::Style::Content::Text)
 DEFINE_TUPLE_LIKE_CONFORMANCE_FOR_TYPE_WRAPPER(WebCore::Style::Content::Image)
 DEFINE_TUPLE_LIKE_CONFORMANCE_FOR_TYPE_WRAPPER(WebCore::Style::Content::Quote)
+DEFINE_TUPLE_LIKE_CONFORMANCE_FOR_TYPE_WRAPPER(WebCore::Style::Content::Glyph)
 DEFINE_VARIANT_LIKE_CONFORMANCE(WebCore::Style::Content::Counter)
 DEFINE_VARIANT_LIKE_CONFORMANCE(WebCore::Style::Content)

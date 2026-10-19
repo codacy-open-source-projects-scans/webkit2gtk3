@@ -38,12 +38,14 @@
 #include "pas_epoch.h"
 #include "pas_fd_stream.h"
 #include "pas_heap.h"
+#include "pas_mte_config.h"
 #include "pas_segregated_page.h"
 #include "pas_segregated_page_config.h"
 #include "pas_segregated_size_directory.h"
 #include "pas_status_reporter.h"
 #include "pas_utility_heap.h"
 #include "pas_utils.h"
+#include "tagged_bmalloc_heap_config.h"
 #include "thingy_heap_config.h"
 #include <cstdlib>
 #include <optional>
@@ -108,6 +110,7 @@ RuntimeConfigTestScope::RuntimeConfigTestScope(
             FOR_EACH_RUNTIME_CONFIG(minalign32, setUp);
             FOR_EACH_RUNTIME_CONFIG(pagesize64k, setUp);
             FOR_EACH_RUNTIME_CONFIG(bmalloc, setUp);
+            FOR_EACH_RUNTIME_CONFIG(tagged_bmalloc, setUp);
             FOR_EACH_RUNTIME_CONFIG(hotbit, setUp);
             setUp(pas_utility_heap_runtime_config);
             setUp(jit_heap_runtime_config);
@@ -141,6 +144,18 @@ DisableBitfit::DisableBitfit()
         "disable-bitfit",
         [] (pas_heap_runtime_config& runtimeConfig) {
             runtimeConfig.max_bitfit_object_size = 0;
+        })
+{
+}
+
+ForceSegregated::ForceSegregated()
+    : RuntimeConfigTestScope(
+        "force-segregated",
+        [] (pas_heap_runtime_config& runtimeConfig) {
+            if (&runtimeConfig != &pas_utility_heap_runtime_config) {
+                runtimeConfig.max_segregated_object_size = UINT_MAX;
+                runtimeConfig.max_bitfit_object_size = 0;
+            }
         })
 {
 }
@@ -194,6 +209,12 @@ InstallVerifier::InstallVerifier()
         })
 {
 }
+
+NoVerifier::NoVerifier()
+    : TestScope(
+        "no-verifier",
+        [] () { })
+{ }
 
 EpochIsCounter::EpochIsCounter()
     : TestScope(
@@ -354,12 +375,14 @@ int childSuccessReportingPipe = -1;
 
 } // anonymous namespace
 
+void addAllocationZeroingTests();
 void addBitfieldVectorTests();
 void addBitfitTests();
 void addBitvectorTests();
 void addBmallocTests();
 void addCartesianTreeTests();
 void addCoalignTests();
+void addCompactHeapReservationTests();
 void addEnumerationTests();
 void addExpendableMemoryTests();
 void addExtendedGCDTests();
@@ -377,10 +400,13 @@ void addLockFreeReadPtrPtrHashtableTests();
 void addLotsOfHeapsAndThreadsTests();
 void addMARTests();
 void addMemalignTests();
+void addMTETests();
+void addMemoryFlavorTests();
 void addMinHeapTests();
 void addPGMTests();
 void addRaceTests();
 void addRedBlackTreeTests();
+void addReallocFastPathTests();
 void addScavengerExternalWorkTests();
 void addTLCDecommitTests();
 void addTSDTests();
@@ -610,8 +636,8 @@ ParsedArguments parseArguments(int argc, char** argv)
             }
             i++;
             int value = atoi(argv[i]);
-            if (value <= 0) {
-                cerr << "Error: --child-processes must be a positive integer, got: " << argv[i] << endl;
+            if (value < 0) {
+                cerr << "Error: --child-processes must be a non-negative integer, got: " << argv[i] << endl;
                 exit(1);
             }
             args.childProcesses = value;
@@ -635,6 +661,9 @@ ParsedArguments parseArguments(int argc, char** argv)
 
 unsigned computeTestConcurrency(std::optional<int> childProcesses)
 {
+    if (childProcesses.has_value() && !(*childProcesses))
+        return 1;
+
     const char* envConcurrency = getenv("PasTestConcurrency");
     if (envConcurrency) {
         int concurrency = atoi(envConcurrency);
@@ -746,7 +775,7 @@ size_t waitForAnyProcess(vector<RunningTest>& runningTests)
             cout << "    FAIL: unexpected exit with code " << WEXITSTATUS(waitStatus) << endl;
         }
     } else if (WIFSIGNALED(waitStatus)) {
-        cout << "    CRASH: with signal " << WTERMSIG(waitStatus) << endl;
+        cout << "    FAIL: CRASH with signal " << WTERMSIG(waitStatus) << endl;
     } else
         cout << "    FAIL: child process terminated with unknown status code " << waitStatus << endl;
 
@@ -830,22 +859,33 @@ static void runFilteredTests(const string& filter, std::optional<int> childProce
 
 int main(int argc, char** argv)
 {
+#if defined(PAS_USE_OPENSOURCE_MTE) && PAS_USE_OPENSOURCE_MTE
+    pas_mte_ensure_initialized();
+#endif
+
     setvbuf(stdout, NULL, _IOLBF, 0);
 
 #if SEGHEAP
     pas_segregated_page_config_do_validate = true;
 #endif
 
+    // This list should be kept in sync with the
+    // LIBPAS_SUITE() list in src/test/xctest/LibpasTests.mm;
+    // missing entries in that list will not be run in xctest-based configs,
+    // e.g. CI.
+
     // Run the Thingy tests first because they catch the most bugs.
     ADD_SUITE(ThingyAndUtilityHeapAllocation);
 
     // Run the rest of the tests in alphabetical order.
+    ADD_SUITE(AllocationZeroing);
     ADD_SUITE(BitfieldVector);
     ADD_SUITE(Bitfit);
     ADD_SUITE(Bitvector);
     ADD_SUITE(Bmalloc);
     ADD_SUITE(CartesianTree);
     ADD_SUITE(Coalign);
+    ADD_SUITE(CompactHeapReservation);
     ADD_SUITE(Enumeration);
     ADD_SUITE(ExpendableMemory);
     ADD_SUITE(ExtendedGCD);
@@ -862,14 +902,23 @@ int main(int argc, char** argv)
     ADD_SUITE(LotsOfHeapsAndThreads);
     ADD_SUITE(MAR);
     ADD_SUITE(Memalign);
+    ADD_SUITE(MemoryFlavor);
     ADD_SUITE(MinHeap);
     ADD_SUITE(PGM);
     ADD_SUITE(Race);
     ADD_SUITE(RedBlackTree);
+    ADD_SUITE(ReallocFastPath);
+    ADD_SUITE(ScavengerExternalWork);
     ADD_SUITE(TLCDecommit);
     ADD_SUITE(TSD);
     ADD_SUITE(Utils);
     ADD_SUITE(ViewCache);
+#if defined(PAS_USE_OPENSOURCE_MTE) && PAS_USE_OPENSOURCE_MTE
+#if PAS_ENABLE_MTE
+    if (PAS_USE_MTE)
+        ADD_SUITE(MTE);
+#endif
+#endif
 
     ParsedArguments args = parseArguments(argc, argv);
 

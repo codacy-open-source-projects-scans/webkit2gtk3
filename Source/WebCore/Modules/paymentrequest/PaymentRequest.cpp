@@ -32,7 +32,6 @@
 #include "ContextDestructionObserverInlines.h"
 #include "Document.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "FrameDestructionObserverInlines.h"
 #include "JSDOMConvertBoolean.h"
 #include "JSDOMPromise.h"
@@ -68,7 +67,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(PaymentRequest);
 
 // Implements the IsWellFormedCurrencyCode abstract operation from ECMA 402
 // https://tc39.github.io/ecma402/#sec-iswellformedcurrencycode
-static bool NODELETE isWellFormedCurrencyCode(const String& currency)
+static bool LEGACY_NODELETE isWellFormedCurrencyCode(const String& currency)
 {
     if (currency.length() == 3)
         return currency.containsOnly<isASCIIAlpha>();
@@ -126,7 +125,7 @@ static ExceptionOr<void> checkAndCanonicalizeTotal(PaymentItem& total)
 
 // Implements "validate a standardized payment method identifier"
 // https://www.w3.org/TR/payment-method-id/#validity-0
-static bool NODELETE isValidStandardizedPaymentMethodIdentifier(StringView identifier)
+static bool LEGACY_NODELETE isValidStandardizedPaymentMethodIdentifier(StringView identifier)
 {
     enum class State {
         Start,

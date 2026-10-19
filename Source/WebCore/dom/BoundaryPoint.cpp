@@ -51,7 +51,7 @@ std::optional<BoundaryPoint> makeBoundaryPointAfterNode(Node& node)
     return BoundaryPoint { parent.releaseNonNull(), node.computeNodeIndex() + 1 };
 }
 
-static bool NODELETE isOffsetBeforeChild(ContainerNode& container, unsigned offset, Node& child)
+static bool LEGACY_NODELETE isOffsetBeforeChild(ContainerNode& container, unsigned offset, Node& child)
 {
     if (!offset)
         return true;
@@ -118,14 +118,14 @@ TextStream& operator<<(TextStream& stream, const BoundaryPoint& boundaryPoint)
 {
     TextStream::GroupScope scope(stream);
     stream << "BoundaryPoint ";
-    stream.dumpProperty("node"_s, boundaryPoint.container->debugDescription());
+    stream.dumpProperty("node"_s, protect(boundaryPoint.container)->debugDescription());
     stream.dumpProperty("offset"_s, boundaryPoint.offset);
     return stream;
 }
 
 String BoundaryPoint::debugDescription() const
 {
-    return makeString('{', container->debugDescription().utf8(), ", offset: "_s, offset, '}');
+    return makeString('{', protect(container)->debugDescription().utf8(), ", offset: "_s, offset, '}');
 }
 
 }

@@ -51,6 +51,9 @@
         },
         "-internal-media-document": {},
         "-internal-select-popover": {},
+        "-internal-select-preferred-size-one": {
+            "comment": "Preferred size because box type (list box, dropdown) depends on appearance."
+        },
         "-internal-uses-menulist": {},
         "-webkit-any": {
             "argument": "required",
@@ -286,6 +289,21 @@
             "status": "non-standard",
             "user-agent-part": true
         },
+        "-internal-fallback-popup-menu": {
+            "user-agent-part": true
+        },
+        "-internal-fallback-popup-menu-group-label": {
+            "user-agent-part": true
+        },
+        "-internal-fallback-popup-menu-item": {
+            "user-agent-part": true
+        },
+        "-internal-fallback-popup-menu-item-selected": {
+            "user-agent-part": true
+        },
+        "-internal-fallback-popup-menu-separator": {
+            "user-agent-part": true
+        },
         "-webkit-color-swatch-wrapper": {
             "status": "non-standard",
             "user-agent-part": true
@@ -405,6 +423,9 @@
         },
         "-webkit-meter-suboptimum-value": {
             "status": "non-standard",
+            "user-agent-part": true
+        },
+        "-internal-optgroup-label": {
             "user-agent-part": true
         },
         "-webkit-progress-bar": {
@@ -533,8 +554,17 @@
         "details-content": {
             "user-agent-part": true
         },
+        "field-content": {
+            "settings-flag": "htmlEnhancedSelectEnabled || cssAppearanceBaseEnabled",
+            "user-agent-part": true
+        },
         "-internal-cue-background": {
             "conditional": "ENABLE(VIDEO)",
+            "status": "non-standard",
+            "user-agent-part": true
+        },
+        "-internal-image-overlay-text": {
+            "conditional": "ENABLE(IMAGE_ANALYSIS)",
             "status": "non-standard",
             "user-agent-part": true
         },

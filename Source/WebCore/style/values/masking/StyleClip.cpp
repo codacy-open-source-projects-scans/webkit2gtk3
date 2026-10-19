@@ -26,8 +26,8 @@
 #include "StyleClip.h"
 
 #include "AnimationUtilities.h"
+#include "CSSClipValue.h"
 #include "CSSKeywordValueInlines.h"
-#include "CSSRectValue.h"
 #include "StyleBuilderChecking.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include "StylePrimitiveNumericTypes+CSSValueConversion.h"
@@ -40,49 +40,33 @@ namespace Style {
 
 auto CSSValueConversion<Clip>::operator()(BuilderState& state, const CSSValue& value) -> Clip
 {
-    if (isValueID(value, CSSValueAuto))
+    if (isValueID(value, CSSValueID::Auto))
         return CSS::Keyword::Auto { };
 
-    RefPtr rectValue = requiredDowncast<CSSRectValue>(state, value);
-    if (!rectValue)
+    RefPtr clipValue = requiredDowncast<CSSClipValue>(state, value);
+    if (!clipValue)
         return CSS::Keyword::Auto { };
 
-    auto convertEdge = [&](Ref<const CSSValue>&& value) -> ClipEdge {
-        if (isValueID(value.get(), CSSValueAuto))
-            return CSS::Keyword::Auto { };
-        return toStyleFromCSSValue<Length<>>(state, value);
-    };
-
-    return ClipRect {
-        convertEdge(rectValue->rect().top()),
-        convertEdge(rectValue->rect().right()),
-        convertEdge(rectValue->rect().bottom()),
-        convertEdge(rectValue->rect().left()),
-    };
+    return toStyle(clipValue->clip(), state);
 }
 
-Ref<CSSValue> CSSValueCreation<ClipRect>::operator()(CSSValuePool& pool, const RenderStyle& style, const ClipRect& clipRect)
+Ref<CSSValue> CSSValueCreation<Clip>::operator()(CSSValuePool&, const Style::ComputedStyle& style, const Clip& clip)
 {
-    return CSSRectValue::create({
-        createCSSValue(pool, style, clipRect.value->top()),
-        createCSSValue(pool, style, clipRect.value->right()),
-        createCSSValue(pool, style, clipRect.value->bottom()),
-        createCSSValue(pool, style, clipRect.value->left()),
-    });
+    return CSSClipValue::create(toCSS(clip, style));
 }
 
 // MARK: - Blending
 
 template<> struct Blending<ClipEdge> {
-    auto canBlend(const ClipEdge&, const ClipEdge&) -> bool;
-    auto requiresInterpolationForAccumulativeIteration(const ClipEdge&, const ClipEdge&) -> bool;
-    auto blend(const ClipEdge&, const ClipEdge&, const BlendingContext&) -> ClipEdge;
+    bool LEGACY_NODELETE canBlend(const ClipEdge&, const ClipEdge&);
+    bool LEGACY_NODELETE requiresInterpolationForAccumulativeIteration(const ClipEdge&, const ClipEdge&);
+    ClipEdge LEGACY_NODELETE blend(const ClipEdge&, const ClipEdge&, const BlendingContext&);
 };
 
 template<> struct Blending<ClipRect> {
-    auto canBlend(const ClipRect&, const ClipRect&) -> bool;
-    auto requiresInterpolationForAccumulativeIteration(const ClipRect&, const ClipRect&) -> bool;
-    auto blend(const ClipRect&, const ClipRect&, const BlendingContext&) -> ClipRect;
+    bool LEGACY_NODELETE canBlend(const ClipRect&, const ClipRect&);
+    bool LEGACY_NODELETE requiresInterpolationForAccumulativeIteration(const ClipRect&, const ClipRect&);
+    ClipRect LEGACY_NODELETE blend(const ClipRect&, const ClipRect&, const BlendingContext&);
 };
 
 auto Blending<ClipEdge>::canBlend(const ClipEdge& a, const ClipEdge& b) -> bool

@@ -495,7 +495,7 @@ class DrawGlyphs {
 public:
     static constexpr char name[] = "draw-glyphs";
 
-    DrawGlyphs(Ref<const Font>&& font, Vector<GlyphBufferGlyph>&& glyphs, Vector<GlyphBufferAdvance>&& advances, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
+    DrawGlyphs(Ref<const FontBase>&& font, Vector<GlyphBufferGlyph>&& glyphs, Vector<GlyphBufferAdvance>&& advances, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
         : m_font(WTF::move(font))
         , m_glyphs(WTF::move(glyphs))
         , m_advances(WTF::move(advances))
@@ -504,7 +504,6 @@ public:
     {
     }
 
-    Ref<const Font> font() const { return m_font; }
     const Vector<GlyphBufferGlyph>& glyphs() const LIFETIME_BOUND { return m_glyphs; }
     const Vector<GlyphBufferAdvance>& advances() const LIFETIME_BOUND { return m_advances; }
     size_t length() const { return m_glyphs.size(); }
@@ -516,7 +515,7 @@ public:
     void dump(TextStream&, OptionSet<AsTextFlag>) const;
 
 private:
-    Ref<const Font> m_font;
+    Ref<const FontBase> m_font;
     Vector<GlyphBufferGlyph> m_glyphs;
     Vector<GlyphBufferAdvance> m_advances;
     FloatPoint m_localAnchor;
@@ -572,9 +571,9 @@ public:
     DrawDisplayList(Ref<const DisplayList>&&);
     ~DrawDisplayList();
 
-    Ref<const DisplayList> NODELETE displayList() const;
+    Ref<const DisplayList> LEGACY_NODELETE displayList() const;
 
-    void apply(GraphicsContext&) const;
+    void apply(GraphicsContext&, ControlFactory&) const;
     void dump(TextStream&, OptionSet<AsTextFlag>) const;
 
 private:
@@ -589,7 +588,7 @@ public:
     ~DrawPlaceholder();
 
     void apply(GraphicsContext&) const;
-    void NODELETE dump(TextStream&, OptionSet<AsTextFlag>) const;
+    void LEGACY_NODELETE dump(TextStream&, OptionSet<AsTextFlag>) const;
 
 private:
     using FunctionHolder = Box<Function<void(GraphicsContext&)>>;

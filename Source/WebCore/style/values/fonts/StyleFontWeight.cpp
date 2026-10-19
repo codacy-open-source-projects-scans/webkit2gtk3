@@ -29,8 +29,8 @@
 #include "CSSKeywordValue.h"
 #include "CSSPropertyParserConsumer+Font.h"
 #include "FontCascadeDescription.h"
-#include "RenderStyle+GettersInlines.h"
 #include "StyleBuilderChecking.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include "StylePrimitiveNumericTypes+CSSValueConversion.h"
 #include "SystemFontDatabase.h"
@@ -44,14 +44,14 @@ auto CSSValueConversion<FontWeight>::operator()(BuilderState& state, const CSSVa
 {
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (auto valueID = keywordValue->valueID(); valueID) {
-        case CSSValueInvalid:
-        case CSSValueNormal:
+        case CSSValueID::Invalid:
+        case CSSValueID::Normal:
             return CSS::Keyword::Normal { };
-        case CSSValueBold:
+        case CSSValueID::Bold:
             return CSS::Keyword::Bold { };
-        case CSSValueBolder:
+        case CSSValueID::Bolder:
             return FontCascadeDescription::bolderWeight(state.parentStyle().fontDescription().weight());
-        case CSSValueLighter:
+        case CSSValueID::Lighter:
             return FontCascadeDescription::lighterWeight(state.parentStyle().fontDescription().weight());
         default:
             if (CSSPropertyParserHelpers::isSystemFontShorthand(valueID))

@@ -56,6 +56,11 @@ public:
     static Ref<AXIsolatedObject> create(IsolatedObjectData&&);
     ~AXIsolatedObject();
 
+    RefPtr<AXIsolatedObject> approximateHitTest(const IntPoint&) const;
+    // For hit tests that come from an AX client through the page object, whose point is always
+    // in screen space, even when the client is a test client.
+    RefPtr<AXCoreObject> accessibilityHitTestForScreenPoint(const IntPoint&) const;
+
     std::optional<AXTreeID> treeID() const final { return tree().treeID(); }
     String debugDescriptionInternal(bool, std::optional<OptionSet<AXDebugStringOption>> = std::nullopt) const final;
 
@@ -77,6 +82,15 @@ public:
     bool hasRowGroupTag() const final;
 
     const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) LIFETIME_BOUND final;
+#if ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+    AccessibilityChildrenVector unignoredChildren(bool updateChildrenIfNeeded = true) final;
+#endif
+    AccessibilityChildrenVector stitchedUnignoredChildren() final;
+    size_t stitchedUnignoredChildrenCount() final;
+    const AccessibilityChildrenVector* cachedUnignoredChildren() final;
+    const AccessibilityChildrenVector* cachedStitchedUnignoredChildren() final;
+    AccessibilityChildrenVector crossFrameUnignoredChildrenInRange(size_t start, size_t maxCount) final;
+    std::optional<bool> cachedHasCrossFrameChild() final;
     AXIsolatedObject* parentObject() const final { return tree().objectForID(parent()); }
     AXIsolatedObject* parentObjectUnignored() const final { return downcast<AXIsolatedObject>(AXCoreObject::parentObjectUnignored()); }
     bool isEditableWebArea() const final { return boolAttributeValue(AXProperty::IsEditableWebArea); }
@@ -98,7 +112,9 @@ public:
         return runs && runs->size();
     }
     TextEmissionBehavior textEmissionBehavior() const final;
-    AXTextRunLineID listMarkerLineID() const final { return propertyValue<AXTextRunLineID>(AXProperty::ListMarkerLineID); };
+    bool isReplacedElementForTextEmission() const final { return boolAttributeValue(AXProperty::IsReplacedElementForTextEmission); }
+    bool isInUserAgentShadowTree() const final { return boolAttributeValue(AXProperty::IsInUserAgentShadowTree); }
+    bool isInsideNativeTextControl() const final { return boolAttributeValue(AXProperty::IsInsideNativeTextControl); }
     String listMarkerText() const final { return stringAttributeValue(AXProperty::ListMarkerText); }
     FontOrientation fontOrientation() const final { return propertyValue<FontOrientation>(AXProperty::FontOrientation); }
 
@@ -117,6 +133,8 @@ public:
     bool isBlockFlow() const final { return boolAttributeValue(AXProperty::IsBlockFlow); }
 
 private:
+    AXIsolatedTree::CachedUnignoredChildren& ensureCachedUnignoredChildren();
+
     constexpr ProcessID processID() const final { return tree().processID(); }
     void detachRemoteParts(AccessibilityDetachmentType) final;
     void detachPlatformWrapper(AccessibilityDetachmentType) final;
@@ -130,8 +148,6 @@ private:
     AXIsolatedObject(IsolatedObjectData&&);
     bool isAXIsolatedObjectInstance() const final { return true; }
     AccessibilityObject* associatedAXObject() const;
-
-    RefPtr<AXIsolatedObject> approximateHitTest(const IntPoint&) const;
 
     void setProperty(AXProperty, AXPropertyValueVariant&&);
     void setPropertyInVector(AXProperty property, AXPropertyValueVariant&& value)
@@ -213,7 +229,7 @@ private:
         // AXObjectCache ID, then having the main-thread re-hydrate the equivalent main-thread accessibility object,
         // if it's still alive by the time the dispatch is serviced.
         Accessibility::performFunctionOnMainThread([lambda = WTF::move(lambda), axID = objectID(), cacheID = treeID()] () mutable {
-            WeakPtr cache = AXTreeStore<AXObjectCache>::axObjectCacheForID(cacheID);
+            CheckedPtr cache = AXTreeStore<AXObjectCache>::axObjectCacheForID(cacheID);
             if (!cache)
                 return;
             if (RefPtr object = cache->objectForID(axID))
@@ -273,10 +289,11 @@ private:
     AccessibilityChildrenVector disclosedRows() final { return tree().objectsForIDs(vectorAttributeValue<AXID>(AXProperty::DisclosedRows)); }
     AXIsolatedObject* disclosedByRow() const final { return objectAttributeValue(AXProperty::DisclosedByRow); }
 
-    bool isFieldset() const final { return boolAttributeValue(AXProperty::IsFieldset); }
+    bool isFieldset() const final { return elementName() == ElementName::HTML_fieldset; }
     bool isChecked() const final { return boolAttributeValue(AXProperty::IsChecked); }
     bool isEnabled() const final { return boolAttributeValue(AXProperty::IsEnabled); }
     bool isSelected() const final { return boolAttributeValue(AXProperty::IsSelected); }
+    String selectedOptionCheckmark() const final { return stringAttributeValue(AXProperty::SelectedOptionCheckmark); }
     bool isFocused() const final;
     bool isMultiSelectable() const final { return boolAttributeValue(AXProperty::IsMultiSelectable); }
     bool isVisited() const final { return boolAttributeValue(AXProperty::IsVisited); }
@@ -310,9 +327,13 @@ private:
     int layoutCount() const final;
     double loadingProgress() const final { return tree().loadingProgress(); }
     bool supportsARIAOwns() const final { return boolAttributeValue(AXProperty::SupportsARIAOwns); }
-    String explicitPopupValue() const final { return stringAttributeValue(AXProperty::ExplicitPopupValue); }
+    AccessibilityPopupValue popupValue() const final { return static_cast<AccessibilityPopupValue>(intAttributeValue(AXProperty::PopupValue)); }
     bool pressedIsPresent() const final;
-    String explicitInvalidStatus() const final { return stringAttributeValue(AXProperty::ExplicitInvalidStatus); }
+    String invalidStatusIncludingInferred() const final
+    {
+        auto value = stringAttributeValue(AXProperty::InvalidStatus);
+        return value.isEmpty() ? "false"_s : value;
+    }
     bool supportsExpanded() const final { return boolAttributeValue(AXProperty::SupportsExpanded); }
     AccessibilitySortDirection sortDirection() const final { return static_cast<AccessibilitySortDirection>(intAttributeValue(AXProperty::SortDirection)); }
     String identifierAttribute() const final;
@@ -338,10 +359,7 @@ private:
     {
         return tree().focusedNode().unsafeGet();
     }
-    AXIsolatedObject* focusedUIElementInAnyLocalFrame() const final
-    {
-        return tree().focusedNode().unsafeGet();
-    }
+    AXIsolatedObject* focusedUIElementInAnyLocalFrame() const final;
     AXIsolatedObject* internalLinkElement() const final { return objectAttributeValue(AXProperty::InternalLinkElement); }
     AccessibilityChildrenVector radioButtonGroup() const final { return tree().objectsForIDs(vectorAttributeValue<AXID>(AXProperty::RadioButtonGroupMembers)); }
     AXIsolatedObject* scrollBar(AccessibilityOrientation) final;
@@ -406,9 +424,11 @@ private:
 #endif
     std::optional<AccessibilityOrientation> explicitOrientation() const { return optionalAttributeValue<AccessibilityOrientation>(AXProperty::ExplicitOrientation); }
     unsigned ariaLevel() const final { return unsignedAttributeValue(AXProperty::ARIALevel); }
+    bool hasExplicitGroupRole() const final { return boolAttributeValue(AXProperty::HasExplicitGroupRole); }
+    unsigned computedHeadingLevel() const final { return unsignedAttributeValue(AXProperty::HeadingLevel); }
     String language() const final { return stringAttributeValue(AXProperty::Language); }
     void setSelectedChildren(const AccessibilityChildrenVector&) final;
-    AccessibilityChildrenVector visibleChildren() final { return tree().objectsForIDs(vectorAttributeValue<AXID>(AXProperty::VisibleChildren)); }
+    AccessibilityChildrenVector visibleChildren() final;
     void setChildrenIDs(Vector<AXID>&&);
     const String explicitLiveRegionStatus() const final { return stringAttributeValue(AXProperty::ExplicitLiveRegionStatus); }
     const String explicitLiveRegionRelevant() const final { return stringAttributeValue(AXProperty::ExplicitLiveRegionRelevant); }
@@ -435,6 +455,9 @@ private:
     // CharacterRange support.
     CharacterRange selectedTextRange() const final { return propertyValue<CharacterRange>(AXProperty::SelectedTextRange); }
     int insertionPointLineNumber() const final;
+#if ENABLE(WRITING_TOOLS)
+    bool writingToolsAvailable() const final { return tree().writingToolsAvailable(); }
+#endif // ENABLE(WRITING_TOOLS)
     CharacterRange doAXRangeForLine(unsigned) const final;
     String doAXStringForRange(const CharacterRange&) const final;
     CharacterRange characterRangeForPoint(const IntPoint&) const final;
@@ -498,6 +521,8 @@ private:
     FloatRect convertFrameToSpace(const FloatRect&, AccessibilityConversionSpace) const final;
     void increment() final;
     void decrement() final;
+    void syncIncrement() final;
+    void syncDecrement() final;
     bool performDismissAction() final;
     void performDismissActionIgnoringResult() final;
     void scrollToMakeVisible() const final;
@@ -506,6 +531,7 @@ private:
     bool replaceTextInRange(const String&, const CharacterRange&) final;
     bool insertText(const String&) final;
     bool press() final;
+    bool syncPress() final;
 
     bool isAccessibilityObject() const final { return false; }
 
@@ -536,7 +562,7 @@ private:
     bool hasUnderline() const final { return colorAttributeValue(AXProperty::UnderlineColor) != Accessibility::defaultColor(); }
     AXTextMarkerRange textInputMarkedTextMarkerRange() const final;
     Element* element() const final;
-    Node* NODELETE node() const final;
+    Node* LEGACY_NODELETE node() const final;
     RenderObject* renderer() const final;
 
     AccessibilityChildrenVector relatedObjects(AXRelation) const final;
@@ -562,7 +588,7 @@ private:
 #if PLATFORM(COCOA)
     RetainPtr<NSAttributedString> attributedStringForTextMarkerRange(AXTextMarkerRange&&, SpellCheck) const final;
 #endif
-    AXObjectCache* NODELETE axObjectCache() const;
+    AXObjectCache* LEGACY_NODELETE axObjectCache() const;
     Element* actionElement() const final;
     Path elementPath() const final;
     bool supportsPath() const final;

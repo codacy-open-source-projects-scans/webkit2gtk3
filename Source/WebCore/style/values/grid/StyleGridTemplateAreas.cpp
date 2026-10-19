@@ -59,8 +59,8 @@ static GridNamedLinesMap initializeImplicitNamedGridLines(const GridNamedAreaMap
 
 GridTemplateAreas::GridTemplateAreas(GridNamedAreaMap&& map)
     : map { WTF::move(map) }
-    , implicitNamedGridColumnLines { initializeImplicitNamedGridLines(map, GridTrackSizingDirection::Columns) }
-    , implicitNamedGridRowLines { initializeImplicitNamedGridLines(map, GridTrackSizingDirection::Rows) }
+    , implicitNamedGridColumnLines { initializeImplicitNamedGridLines(this->map, GridTrackSizingDirection::Columns) }
+    , implicitNamedGridRowLines { initializeImplicitNamedGridLines(this->map, GridTrackSizingDirection::Rows) }
 {
 }
 
@@ -75,7 +75,7 @@ GridTemplateAreas::GridTemplateAreas(const GridNamedAreaMap& map)
 
 auto CSSValueConversion<GridTemplateAreas>::operator()(BuilderState& state, const CSSValue& value) -> GridTemplateAreas
 {
-    if (isValueID(value, CSSValueNone))
+    if (isValueID(value, CSSValueID::None))
         return CSS::Keyword::None { };
 
     RefPtr gridTemplateAreasValue = requiredDowncast<CSSGridTemplateAreasValue>(state, value);
@@ -85,7 +85,7 @@ auto CSSValueConversion<GridTemplateAreas>::operator()(BuilderState& state, cons
     return GridTemplateAreas { gridTemplateAreasValue->areas().map };
 }
 
-auto CSSValueCreation<GridTemplateAreas>::operator()(CSSValuePool& pool, const RenderStyle& style, const GridTemplateAreas& value) -> Ref<CSSValue>
+auto CSSValueCreation<GridTemplateAreas>::operator()(CSSValuePool& pool, const Style::ComputedStyle& style, const GridTemplateAreas& value) -> Ref<CSSValue>
 {
     return WTF::switchOn(value,
         [&](const CSS::Keyword::None& keyword) -> Ref<CSSValue> {
@@ -99,7 +99,7 @@ auto CSSValueCreation<GridTemplateAreas>::operator()(CSSValuePool& pool, const R
 
 // MARK: - Serialization
 
-void Serialize<GridTemplateAreas>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const RenderStyle& style, const GridTemplateAreas& value)
+void Serialize<GridTemplateAreas>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const Style::ComputedStyle& style, const GridTemplateAreas& value)
 {
     WTF::switchOn(value,
         [&](const CSS::Keyword::None& keyword) {

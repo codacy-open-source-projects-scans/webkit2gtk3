@@ -47,7 +47,8 @@ public:
         bool recursive { false };
     };
 
-    WEBCORE_EXPORT static Ref<FileSystemDirectoryHandle> create(ScriptExecutionContext&, String&&, FileSystemHandleIdentifier, Ref<FileSystemStorageConnection>&&);
+    WEBCORE_EXPORT static Ref<FileSystemDirectoryHandle> create(ScriptExecutionContext&, String&&, FileSystemHandleGlobalIdentifier, FileSystemHandleIdentifier, Ref<FileSystemStorageConnection>&&);
+    WEBCORE_EXPORT static Ref<FileSystemDirectoryHandle> create(ScriptExecutionContext&, String&&, FileSystemHandleGlobalIdentifier);
     void getFileHandle(const String& name, const GetFileOptions&, DOMPromiseDeferred<IDLInterface<FileSystemFileHandle>>&&);
     void getDirectoryHandle(const String& name, const GetDirectoryOptions&, DOMPromiseDeferred<IDLInterface<FileSystemDirectoryHandle>>&&);
     void removeEntry(const String& name, const RemoveOptions&, DOMPromiseDeferred<void>&&);
@@ -58,7 +59,7 @@ public:
 
     class Iterator : public RefCounted<FileSystemDirectoryHandle::Iterator> {
     public:
-        static Ref<Iterator> create(FileSystemDirectoryHandle&);
+        static Ref<Iterator> LEGACY_NODELETE create(FileSystemDirectoryHandle&);
         using Result = std::optional<KeyValuePair<String, Ref<FileSystemHandle>>>;
         void next(CompletionHandler<void(ExceptionOr<Result>&&)>&&);
     private:
@@ -74,10 +75,10 @@ public:
         bool m_isInitialized { false };
         bool m_isWaitingForResult { false };
     };
-    Ref<Iterator> createIterator(ScriptExecutionContext*);
+    Ref<Iterator> LEGACY_NODELETE createIterator(ScriptExecutionContext*);
 
 private:
-    FileSystemDirectoryHandle(ScriptExecutionContext&, String&&, FileSystemHandleIdentifier, Ref<FileSystemStorageConnection>&&);
+    FileSystemDirectoryHandle(ScriptExecutionContext&, String&&, FileSystemHandleGlobalIdentifier, Markable<FileSystemHandleIdentifier>, RefPtr<FileSystemStorageConnection>&&);
 };
 
 } // namespace WebCore

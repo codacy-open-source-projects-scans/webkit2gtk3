@@ -30,19 +30,22 @@
 
 namespace API {
 
+class FrameInfo;
+
 class JSHandle final : public ObjectImpl<Object::Type::JSHandle> {
 public:
     static Ref<JSHandle> create(WebKit::JSHandleInfo&&);
 
-    // FIXME: This public constructor can be made private once _WKJSHandle no longer conforms to NSSecureCoding.
-    JSHandle(WebKit::JSHandleInfo&&);
-
     virtual ~JSHandle();
 
     const WebKit::JSHandleInfo& info() const LIFETIME_BOUND { return m_info; }
+    FrameInfo& sourceFrame() const LIFETIME_BOUND { return m_sourceFrame.get(); }
 
 private:
+    JSHandle(WebKit::JSHandleInfo&&);
+
     const WebKit::JSHandleInfo m_info;
+    const Ref<FrameInfo> m_sourceFrame;
 };
 
 } // namespace API

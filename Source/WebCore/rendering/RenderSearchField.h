@@ -35,7 +35,7 @@ class RenderSearchField final : public RenderTextControlSingleLine {
     WTF_MAKE_TZONE_ALLOCATED(RenderSearchField);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderSearchField);
 public:
-    RenderSearchField(HTMLInputElement&, RenderStyle&&);
+    RenderSearchField(HTMLInputElement&, Style::ComputedStyle&&);
     virtual ~RenderSearchField();
 
     void updateCancelButtonVisibility() const;
@@ -43,7 +43,7 @@ public:
     bool popupIsVisible() const { return m_searchPopupIsVisible; }
     void showPopup();
     void hidePopup();
-    void NODELETE popupDidHide();
+    void LEGACY_NODELETE popupDidHide();
     WEBCORE_EXPORT std::span<const RecentSearch> recentSearches();
 
     void updatePopup(const AtomString& name, const Vector<WebCore::RecentSearch>& searchItems);
@@ -61,7 +61,7 @@ private:
     LayoutUnit computeControlLogicalHeight(LayoutUnit lineHeight, LayoutUnit nonContentHeight) const override;
     void updateFromElement() override;
     Visibility visibilityForCancelButton() const;
-    const AtomString& NODELETE autosaveName() const;
+    const AtomString& LEGACY_NODELETE autosaveName() const;
 
     SearchPopupMenu* searchPopup() const { return m_searchPopup.get(); }
 

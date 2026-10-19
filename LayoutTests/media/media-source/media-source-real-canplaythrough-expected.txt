@@ -2,8 +2,5 @@
 EVENT(sourceopen)
 EVENT(loadedmetadata)
 EVENT(updateend)
-EVENT(loadeddata)
-EVENT(canplay)
-EVENT(canplaythrough)
 END OF TEST
 

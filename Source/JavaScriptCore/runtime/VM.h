@@ -40,17 +40,16 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <JavaScriptCore/Integrity.h>
 #include <JavaScriptCore/Interpreter.h>
 #include <JavaScriptCore/JSDateMath.h>
-#include <JavaScriptCore/JSONAtomStringCache.h>
 #include <JavaScriptCore/KeyAtomStringCache.h>
 #include <JavaScriptCore/NativeFunction.h>
 #include <JavaScriptCore/NumericStrings.h>
 #include <JavaScriptCore/SmallStrings.h>
 #include <JavaScriptCore/StringReplaceCache.h>
-#include <JavaScriptCore/StringSplitCache.h>
 #include <JavaScriptCore/StrongForward.h>
 #include <JavaScriptCore/VMThreadContext.h>
 #include <JavaScriptCore/WeakGCMap.h>
 #include <JavaScriptCore/WriteBarrier.h>
+#include <wtf/ApproximateTime.h>
 #include <wtf/BumpPointerAllocator.h>
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/Compiler.h>
@@ -112,7 +111,6 @@ class CompactTDZEnvironmentMap;
 class ConservativeRoots;
 class ControlFlowProfiler;
 class CrossTaskToken;
-class EvacuatedStackSlice;
 class Exception;
 class ExceptionScope;
 class FuzzerAgent;
@@ -123,6 +121,7 @@ class IntlCache;
 enum Intrinsic : uint8_t;
 class JSDestructibleObjectHeapCellType;
 class JSGlobalObject;
+class JSSentinel;
 class JSLock;
 class JSObject;
 struct JSPIContext;
@@ -131,6 +130,8 @@ class JSPropertyNameEnumerator;
 class JITSizeStatistics;
 class JITThunks;
 class MegamorphicCache;
+class JSONCache;
+class MicrotaskCallCache;
 class MicrotaskQueue;
 class NativeExecutable;
 class Debugger;
@@ -148,6 +149,7 @@ class SourceProvider;
 class SourceProviderCache;
 enum class SourceTaintedOrigin : uint8_t;
 class StackFrame;
+class StringSplitCache;
 class Structure;
 class Symbol;
 class TypedArrayController;
@@ -246,6 +248,11 @@ public:
 
         JS_EXPORT_PRIVATE virtual String overrideSourceURL(const StackFrame&, const String& originalSourceURL) const = 0;
 
+        // Called after marking and before sweeping, alongside the cell types the Heap reconciles
+        // itself. The client owns the subspaces for its own cell types, so it has to visit the
+        // marked cells of those that hold weak references and settle them.
+        virtual void reconcileWeakReferencesAtGCEnd(VM&, CollectionScope) { }
+
         virtual bool isWebCoreJSClientData() const { return false; }
     };
 
@@ -286,14 +293,14 @@ public:
     inline CallFrame* topJSCallFrame() const;
 
     // Global object in which execution began.
-    JS_EXPORT_PRIVATE JSGlobalObject* NODELETE deprecatedVMEntryGlobalObject(JSGlobalObject*) const;
+    JS_EXPORT_PRIVATE JSGlobalObject* LEGACY_NODELETE deprecatedVMEntryGlobalObject(JSGlobalObject*) const;
 
     WeakRandom& random() LIFETIME_BOUND { return m_random; }
     WeakRandom& heapRandom() LIFETIME_BOUND { return m_heapRandom; }
     Integrity::Random& integrityRandom() LIFETIME_BOUND { return m_integrityRandom; }
 
     template<typename Type, typename Functor>
-    Type& ensureSideData(void* key, const Functor&);
+    Type& ensureSideData(void* key, NOESCAPE const Functor&);
 
     bool hasTerminationRequest() const { return m_hasTerminationRequest; }
     void clearHasTerminationRequest()
@@ -301,7 +308,7 @@ public:
         m_hasTerminationRequest = false;
         clearEntryScopeService(ConcurrentEntryScopeService::ResetTerminationRequest);
     }
-    void NODELETE setHasTerminationRequest();
+    void LEGACY_NODELETE setHasTerminationRequest();
 
     bool executionForbidden() const { return m_executionForbidden; }
     void setExecutionForbidden() { m_executionForbidden = true; }
@@ -332,6 +339,7 @@ public:
     }
 
     void throwTerminationException();
+    void throwTerminationExceptionIfNeeded();
 
     enum class EntryScopeService : uint8_t {
         // Sticky services i.e. if set, these will never be cleared.
@@ -356,7 +364,7 @@ public:
         NeedStopTheWorld = 1 << 1, // FIXME rdar://161576886
     };
 
-    bool hasAnyEntryScopeServiceRequest() { return m_entryScopeServicesRawBits; }
+    bool hasAnyEntryScopeServiceRequest() { return m_entryScopeServicesRawBits || hasTimeZoneChange() || hasLanguageChange(); }
     void executeEntryScopeServicesOnEntry();
     void executeEntryScopeServicesOnExit();
 
@@ -372,7 +380,7 @@ public:
     enum class SchedulerOptions : uint8_t {
         HasImminentlyScheduledWork = 1 << 0,
     };
-    JS_EXPORT_PRIVATE void performOpportunisticallyScheduledTasks(MonotonicTime deadline, OptionSet<SchedulerOptions>);
+    JS_EXPORT_PRIVATE void performOpportunisticallyScheduledTasks(ApproximateTime deadline, OptionSet<SchedulerOptions>);
 
     Structure* cellButterflyStructure(IndexingType indexingType) { return rawImmutableButterflyStructure(indexingType).get(); }
 
@@ -393,6 +401,8 @@ public:
     EntryFrame* topEntryFrame { nullptr };
     void* maybeReturnPC { nullptr };
     JSPIContext* topJSPIContext { nullptr };
+    WriteBarrier<JSSentinel> m_fastArraySentinel;
+    WriteBarrier<JSSentinel> m_fastStringSentinel;
 private:
 
     struct EntryScopeServicesBits {
@@ -504,6 +514,7 @@ public:
 
     VMType vmType;
     bool m_mightBeExecutingTaintedCode { false };
+    bool m_mightHavePrevalentDomainTaintedCode { false };
     ClientData* clientData { nullptr };
 #if ENABLE(WEBASSEMBLY)
     Wasm::Context wasmContext;
@@ -524,6 +535,7 @@ public:
 #if ENABLE(WEBASSEMBLY)
     WriteBarrier<Structure> pinballCompletionStructure;
     WriteBarrier<Structure> webAssemblyCalleeGroupStructure;
+    WriteBarrier<Structure> webAssemblyStreamingContextStructure;
 #endif
     WriteBarrier<Structure> moduleProgramExecutableStructure;
     WriteBarrier<Structure> slimPromiseReactionStructure;
@@ -581,11 +593,23 @@ public:
     WriteBarrier<JSCell> m_orderedHashTableDeletedValue;
     WriteBarrier<JSCell> m_orderedHashTableSentinel;
 
+    WriteBarrier<Structure> m_sentinelStructure;
+    WriteBarrier<JSSentinel> m_fastArrayValuesSentinel;
+    WriteBarrier<JSSentinel> m_fastArrayKeysSentinel;
+    WriteBarrier<JSSentinel> m_fastArrayEntriesSentinel;
+    WriteBarrier<JSSentinel> m_fastMapKeysSentinel;
+    WriteBarrier<JSSentinel> m_fastMapValuesSentinel;
+    WriteBarrier<JSSentinel> m_fastMapEntriesSentinel;
+    WriteBarrier<JSSentinel> m_fastSetValuesSentinel;
+    WriteBarrier<JSSentinel> m_fastSetEntriesSentinel;
+    WriteBarrier<JSSentinel> m_fastAsyncGeneratorSentinel;
+
+    WriteBarrier<JSCell> m_cachedSortScratch;
+    WriteBarrier<JSCell> m_sortScratchSentinel;
+
     WriteBarrier<NativeExecutable> m_fastCanConstructBoundExecutable;
     WriteBarrier<NativeExecutable> m_slowCanConstructBoundExecutable;
 
-    Weak<NativeExecutable> m_fastRemoteFunctionExecutable;
-    Weak<NativeExecutable> m_slowRemoteFunctionExecutable;
 
     const Ref<DeferredWorkTimer> deferredWorkTimer;
 
@@ -603,9 +627,7 @@ public:
     WriteBarrier<JSString> lastCachedString;
     Ref<StringImpl> lastAtomizedIdentifierStringImpl { *StringImpl::empty() };
     Ref<AtomStringImpl> lastAtomizedIdentifierAtomStringImpl { *static_cast<AtomStringImpl*>(StringImpl::empty()) };
-    JSONAtomStringCache jsonAtomStringCache;
     KeyAtomStringCache keyAtomStringCache;
-    StringSplitCache stringSplitCache;
     Vector<unsigned> stringSplitIndice;
     StringReplaceCache stringReplaceCache;
 
@@ -613,17 +635,22 @@ public:
     bool* addressOfMightBeExecutingTaintedCode() LIFETIME_BOUND { return &m_mightBeExecutingTaintedCode; }
     void setMightBeExecutingTaintedCode(bool value = true) { m_mightBeExecutingTaintedCode = value; }
 
+    bool mightHavePrevalentDomainTaintedCode() const { return m_mightHavePrevalentDomainTaintedCode; }
+    void setMightHavePrevalentDomainTaintedCode() { m_mightHavePrevalentDomainTaintedCode = true; }
+
     AtomStringTable* atomStringTable() const { return m_atomStringTable; }
     WTF::SymbolRegistry& symbolRegistry() { return m_symbolRegistry.get(); }
     WTF::SymbolRegistry& privateSymbolRegistry() { return m_privateSymbolRegistry.get(); }
 
     WriteBarrier<JSBigInt> heapBigIntConstantOne;
+    WriteBarrier<JSBigInt> heapBigIntConstantZero;
 
     // Cached multiplicative inverse for BigInt modulo optimization.
     WriteBarrier<JSBigInt> m_cachedBigIntDivisor;
     WriteBarrier<JSBigInt> m_nextCachedBigIntDivisor;
     Vector<UCPURegister> m_bigIntCachedInverse;
     int m_bigIntDivisorCount { 0 };
+    UCPURegister m_bigIntFoldFactor { 0 };
 
     JSCell* orderedHashTableDeletedValue()
     {
@@ -635,117 +662,36 @@ public:
         return m_orderedHashTableSentinel.get();
     }
 
-    JSPropertyNameEnumerator* emptyPropertyNameEnumerator()
-    {
-        if (m_emptyPropertyNameEnumerator) [[likely]]
-            return m_emptyPropertyNameEnumerator.get();
-        return emptyPropertyNameEnumeratorSlow();
-    }
+    Structure* sentinelStructure() { return m_sentinelStructure.get(); }
+    JSSentinel* fastArrayValuesSentinel() { return m_fastArrayValuesSentinel.get(); }
+    JSSentinel* fastArrayKeysSentinel() { return m_fastArrayKeysSentinel.get(); }
+    JSSentinel* fastArrayEntriesSentinel() { return m_fastArrayEntriesSentinel.get(); }
+    JSSentinel* fastArraySentinel() { return m_fastArraySentinel.get(); }
+    JSSentinel* fastMapKeysSentinel() { return m_fastMapKeysSentinel.get(); }
+    JSSentinel* fastMapValuesSentinel() { return m_fastMapValuesSentinel.get(); }
+    JSSentinel* fastMapEntriesSentinel() { return m_fastMapEntriesSentinel.get(); }
+    JSSentinel* fastSetValuesSentinel() { return m_fastSetValuesSentinel.get(); }
+    JSSentinel* fastSetEntriesSentinel() { return m_fastSetEntriesSentinel.get(); }
+    JSSentinel* fastStringSentinel() { return m_fastStringSentinel.get(); }
+    JSSentinel* fastAsyncGeneratorSentinel() { return m_fastAsyncGeneratorSentinel.get(); }
 
-    NativeExecutable* promiseResolvingFunctionResolveExecutable()
-    {
-        if (m_promiseResolvingFunctionResolveExecutable) [[likely]]
-            return m_promiseResolvingFunctionResolveExecutable.get();
-        return promiseResolvingFunctionResolveExecutableSlow();
-    }
+    inline JSPropertyNameEnumerator* emptyPropertyNameEnumerator();
 
-    NativeExecutable* promiseResolvingFunctionRejectExecutable()
-    {
-        if (m_promiseResolvingFunctionRejectExecutable) [[likely]]
-            return m_promiseResolvingFunctionRejectExecutable.get();
-        return promiseResolvingFunctionRejectExecutableSlow();
-    }
-
-    NativeExecutable* promiseFirstResolvingFunctionResolveExecutable()
-    {
-        if (m_promiseFirstResolvingFunctionResolveExecutable) [[likely]]
-            return m_promiseFirstResolvingFunctionResolveExecutable.get();
-        return promiseFirstResolvingFunctionResolveExecutableSlow();
-    }
-
-    NativeExecutable* promiseFirstResolvingFunctionRejectExecutable()
-    {
-        if (m_promiseFirstResolvingFunctionRejectExecutable) [[likely]]
-            return m_promiseFirstResolvingFunctionRejectExecutable.get();
-        return promiseFirstResolvingFunctionRejectExecutableSlow();
-    }
-
-    NativeExecutable* promiseResolvingFunctionResolveWithInternalMicrotaskExecutable()
-    {
-        if (m_promiseResolvingFunctionResolveWithInternalMicrotaskExecutable) [[likely]]
-            return m_promiseResolvingFunctionResolveWithInternalMicrotaskExecutable.get();
-        return promiseResolvingFunctionResolveWithInternalMicrotaskExecutableSlow();
-    }
-
-    NativeExecutable* promiseResolvingFunctionRejectWithInternalMicrotaskExecutable()
-    {
-        if (m_promiseResolvingFunctionRejectWithInternalMicrotaskExecutable) [[likely]]
-            return m_promiseResolvingFunctionRejectWithInternalMicrotaskExecutable.get();
-        return promiseResolvingFunctionRejectWithInternalMicrotaskExecutableSlow();
-    }
-
-    NativeExecutable* promiseCapabilityExecutorExecutable()
-    {
-        if (m_promiseCapabilityExecutorExecutable) [[likely]]
-            return m_promiseCapabilityExecutorExecutable.get();
-        return promiseCapabilityExecutorExecutableSlow();
-    }
-
-    NativeExecutable* promiseAllFulfillFunctionExecutable()
-    {
-        if (m_promiseAllFulfillFunctionExecutable) [[likely]]
-            return m_promiseAllFulfillFunctionExecutable.get();
-        return promiseAllFulfillFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAllSlowFulfillFunctionExecutable()
-    {
-        if (m_promiseAllSlowFulfillFunctionExecutable) [[likely]]
-            return m_promiseAllSlowFulfillFunctionExecutable.get();
-        return promiseAllSlowFulfillFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAllSettledFulfillFunctionExecutable()
-    {
-        if (m_promiseAllSettledFulfillFunctionExecutable) [[likely]]
-            return m_promiseAllSettledFulfillFunctionExecutable.get();
-        return promiseAllSettledFulfillFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAllSettledRejectFunctionExecutable()
-    {
-        if (m_promiseAllSettledRejectFunctionExecutable) [[likely]]
-            return m_promiseAllSettledRejectFunctionExecutable.get();
-        return promiseAllSettledRejectFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAllSettledSlowFulfillFunctionExecutable()
-    {
-        if (m_promiseAllSettledSlowFulfillFunctionExecutable) [[likely]]
-            return m_promiseAllSettledSlowFulfillFunctionExecutable.get();
-        return promiseAllSettledSlowFulfillFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAllSettledSlowRejectFunctionExecutable()
-    {
-        if (m_promiseAllSettledSlowRejectFunctionExecutable) [[likely]]
-            return m_promiseAllSettledSlowRejectFunctionExecutable.get();
-        return promiseAllSettledSlowRejectFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAnyRejectFunctionExecutable()
-    {
-        if (m_promiseAnyRejectFunctionExecutable) [[likely]]
-            return m_promiseAnyRejectFunctionExecutable.get();
-        return promiseAnyRejectFunctionExecutableSlow();
-    }
-
-    NativeExecutable* promiseAnySlowRejectFunctionExecutable()
-    {
-        if (m_promiseAnySlowRejectFunctionExecutable) [[likely]]
-            return m_promiseAnySlowRejectFunctionExecutable.get();
-        return promiseAnySlowRejectFunctionExecutableSlow();
-    }
+    inline NativeExecutable* promiseResolvingFunctionResolveExecutable();
+    inline NativeExecutable* promiseResolvingFunctionRejectExecutable();
+    inline NativeExecutable* promiseFirstResolvingFunctionResolveExecutable();
+    inline NativeExecutable* promiseFirstResolvingFunctionRejectExecutable();
+    inline NativeExecutable* promiseResolvingFunctionResolveWithInternalMicrotaskExecutable();
+    inline NativeExecutable* promiseResolvingFunctionRejectWithInternalMicrotaskExecutable();
+    inline NativeExecutable* promiseCapabilityExecutorExecutable();
+    inline NativeExecutable* promiseAllFulfillFunctionExecutable();
+    inline NativeExecutable* promiseAllSlowFulfillFunctionExecutable();
+    inline NativeExecutable* promiseAllSettledFulfillFunctionExecutable();
+    inline NativeExecutable* promiseAllSettledRejectFunctionExecutable();
+    inline NativeExecutable* promiseAllSettledSlowFulfillFunctionExecutable();
+    inline NativeExecutable* promiseAllSettledSlowRejectFunctionExecutable();
+    inline NativeExecutable* promiseAnyRejectFunctionExecutable();
+    inline NativeExecutable* promiseAnySlowRejectFunctionExecutable();
 
     WeakGCMap<WTF::SymbolImpl*, Symbol, PtrHash<WTF::SymbolImpl*>> symbolImplToSymbolMap;
     WeakGCMap<StringImpl*, JSString, PtrHash<StringImpl*>> atomStringToJSStringMap;
@@ -799,7 +745,7 @@ public:
     static void computeCanUseJIT();
 
     SourceProviderCache* addSourceProviderCache(SourceProvider*);
-    void clearSourceProviderCaches();
+    void pruneUnusedSourceProviderCaches();
 
     typedef UncheckedKeyHashMap<RefPtr<SourceProvider>, RefPtr<SourceProviderCache>> SourceProviderCacheMap;
     SourceProviderCacheMap sourceProviderCacheMap;
@@ -813,11 +759,10 @@ public:
     std::unique_ptr<FTL::Thunks> ftlThunks;
 #endif
 
-    NativeExecutable* getHostFunction(NativeFunction, ImplementationVisibility, NativeFunction constructor, const String& name);
-    NativeExecutable* getHostFunction(NativeFunction, ImplementationVisibility, Intrinsic, NativeFunction constructor, const DOMJIT::Signature*, const String& name);
+    NativeExecutable* getHostFunction(NativeFunction, ImplementationVisibility, NativeFunction constructor, unsigned length, const String& name);
+    NativeExecutable* getHostFunction(NativeFunction, ImplementationVisibility, Intrinsic, NativeFunction constructor, const DOMJIT::Signature*, unsigned length, const String& name);
 
     NativeExecutable* getBoundFunction(bool isJSFunction, SourceTaintedOrigin taintedness);
-    NativeExecutable* getRemoteFunction(bool isJSFunction);
 
     CodePtr<JSEntryPtrTag> getCTIInternalFunctionTrampolineFor(CodeSpecializationKind);
     MacroAssemblerCodeRef<JSEntryPtrTag> getCTIThrowExceptionFromCallSlowPath();
@@ -921,7 +866,7 @@ public:
     }
 
     void* lastStackTop() { return m_lastStackTop; }
-    void NODELETE setLastStackTop(const Thread&);
+    void LEGACY_NODELETE setLastStackTop(const Thread&);
     
 #if ENABLE(C_LOOP)
     ALWAYS_INLINE CLoopStack& cloopStack() { return traps().cloopStack(); }
@@ -941,6 +886,7 @@ public:
 
     unsigned varargsLength;
     uint32_t osrExitIndex;
+    void* osrExitReturnPC;
     void* osrExitJumpDestination;
     RegExp* m_executingRegExp { nullptr };
 
@@ -952,11 +898,6 @@ public:
     void clearScratchBuffers();
     bool isScratchBuffer(void*);
 
-    void addEvacuatedStackSlice(EvacuatedStackSlice*);
-    void removeEvacuatedStackSlice(EvacuatedStackSlice*);
-    void addEvacuatedCalleeSaves(std::span<CPURegister>);
-    void removeEvacuatedCalleeSaves(std::span<CPURegister>);
-
     EncodedJSValue* exceptionFuzzingBuffer(size_t size)
     {
         ASSERT(Options::useExceptionFuzz());
@@ -966,7 +907,6 @@ public:
     }
 
     void gatherScratchBufferRoots(ConservativeRoots&);
-    void gatherEvacuatedStackRoots(ConservativeRoots&);
 
     static constexpr unsigned expectedMaxActiveSideStateCount = 4;
     void pushCheckpointOSRSideState(std::unique_ptr<CheckpointOSRExitSideState>&&);
@@ -977,9 +917,6 @@ public:
 
     Interpreter interpreter;
     VMEntryScope* entryScope { nullptr };
-
-    JSObject* stringRecursionCheckFirstObject { nullptr };
-    UncheckedKeyHashSet<JSObject*> stringRecursionCheckVisitedObjects;
 
     DateCache dateCache;
 
@@ -1001,6 +938,17 @@ public:
     ALWAYS_INLINE MegamorphicCache* megamorphicCache() { return m_megamorphicCache.getIfExists(); }
     MegamorphicCache& ensureMegamorphicCache() { return m_megamorphicCache.get(*this); }
 
+    LazyUniqueRef<VM, StringSplitCache> m_stringSplitCache;
+    ALWAYS_INLINE StringSplitCache* stringSplitCache() { return m_stringSplitCache.getIfExists(); }
+    StringSplitCache& ensureStringSplitCache() { return m_stringSplitCache.get(*this); }
+
+    const UniqueRef<JSONCache> m_jsonCache;
+    JSONCache& jsonCache() { return m_jsonCache.get(); }
+
+    const UniqueRef<MicrotaskCallCache> m_syncResumeCallCache;
+    MicrotaskCallCache& syncResumeCallCache() { return m_syncResumeCallCache.get(); }
+    void clearMicrotaskCallCaches();
+
     enum class StructureChainIntegrityEvent : uint8_t {
         Add,
         Remove,
@@ -1017,6 +965,7 @@ public:
 #endif
 
     bool hasTimeZoneChange() { return dateCache.hasTimeZoneChange(); }
+    JS_EXPORT_PRIVATE bool hasLanguageChange();
 
     RegExpCache* regExpCache() LIFETIME_BOUND { return m_regExpCache.get(); }
 
@@ -1072,7 +1021,7 @@ public:
         DrainMicrotaskDelayScope& operator=(const DrainMicrotaskDelayScope&);
 
     private:
-        void NODELETE increment();
+        void LEGACY_NODELETE increment();
         void decrement();
 
         RefPtr<VM> m_vm;
@@ -1099,6 +1048,9 @@ public:
     void setGlobalConstRedeclarationShouldThrow(bool globalConstRedeclarationThrow) { m_globalConstRedeclarationShouldThrow = globalConstRedeclarationThrow; }
     ALWAYS_INLINE bool globalConstRedeclarationShouldThrow() const { return m_globalConstRedeclarationShouldThrow; }
 
+    void setAllowRedeclaringSymbols(bool allowRedeclaringSymbols) { m_allowRedeclaringSymbols = allowRedeclaringSymbols; }
+    ALWAYS_INLINE bool allowRedeclaringSymbols() const { return m_allowRedeclaringSymbols; }
+
     void setShouldBuildPCToCodeOriginMapping() { m_shouldBuildPCToCodeOriginMapping = true; }
     bool shouldBuilderPCToCodeOriginMapping() const { return m_shouldBuildPCToCodeOriginMapping; }
 
@@ -1108,7 +1060,7 @@ public:
     ShadowChicken& ensureShadowChicken() { return m_shadowChicken.get(*this); }
     
     template<typename Func>
-    void logEvent(CodeBlock*, const char* summary, const Func& func);
+    void logEvent(CodeBlock*, const char* summary, NOESCAPE const Func&);
 
     inline std::optional<RefPtr<Thread>> ownerThread() const; // Defined in VMInlines.h
     inline std::optional<uint64_t> ownerThreadUID() const; // Defined in VMInlines.h
@@ -1144,7 +1096,7 @@ public:
 
     WTF::RunLoop& runLoop() const { return m_runLoop; }
 
-    static void NODELETE setCrashOnVMCreation(bool);
+    static void LEGACY_NODELETE setCrashOnVMCreation(bool);
 
     void addLoopHintExecutionCounter(const JSInstruction*);
     uintptr_t* getLoopHintExecutionCounter(const JSInstruction*);
@@ -1170,12 +1122,13 @@ public:
 #endif
 
     void beginMarking();
+    void reconcileWeakReferencesAtGCEnd();
     DECLARE_VISIT_AGGREGATE;
 
-    void NODELETE addDebugger(Debugger&);
-    void NODELETE removeDebugger(Debugger&);
+    void LEGACY_NODELETE addDebugger(Debugger&);
+    void LEGACY_NODELETE removeDebugger(Debugger&);
     template<typename Func>
-    void forEachDebugger(const Func&);
+    void forEachDebugger(NOESCAPE const Func&);
 
     void changeNumberOfActiveJITPlans(int64_t value)
     {
@@ -1184,14 +1137,15 @@ public:
 
     int64_t numberOfActiveJITPlans() const { return m_numberOfActiveJITPlans.load(std::memory_order_relaxed); }
 
-    Ref<Waiter> NODELETE syncWaiter();
+    Ref<Waiter> LEGACY_NODELETE syncWaiter();
 
     void notifyDebuggerHookInjected() { m_isDebuggerHookInjected = true; }
     bool isDebuggerHookInjected() const { return m_isDebuggerHookInjected; }
     int64_t incrementModuleAsyncEvaluationCount() { return m_moduleAsyncEvaluationCount++; }
 
 #if ENABLE(WEBASSEMBLY_DEBUGGER)
-    JS_EXPORT_PRIVATE Wasm::DebugState* NODELETE debugState();
+    Wasm::DebugState* debugStateIfExists() { return m_debugState.get(); }
+    JS_EXPORT_PRIVATE Wasm::DebugState* LEGACY_NODELETE debugState();
 #endif
 
 private:
@@ -1284,6 +1238,7 @@ public:
 private:
     bool m_failNextNewCodeBlock { false };
     bool m_globalConstRedeclarationShouldThrow { true };
+    bool m_allowRedeclaringSymbols { false };
     bool m_shouldBuildPCToCodeOriginMapping { false };
     DeletePropertyMode m_deletePropertyMode { DeletePropertyMode::Default };
     HeapAnalyzer* m_activeHeapAnalyzer { nullptr };
@@ -1297,8 +1252,6 @@ private:
     Lock m_scratchBufferLock;
     Vector<ScratchBuffer*> m_scratchBuffers;
     size_t m_sizeOfLastScratchBuffer { 0 };
-    Vector<EvacuatedStackSlice*> m_evacuatedStackSlices;
-    Vector<std::span<CPURegister>> m_evacuatedCalleeSaves;
     Vector<std::unique_ptr<CheckpointOSRExitSideState>, expectedMaxActiveSideStateCount> m_checkpointSideState;
     InlineWatchpointSet m_primitiveGigacageEnabled { IsWatched };
     FunctionHasExecutedCache m_functionHasExecutedCache;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -67,20 +67,24 @@
 
 // XCode path
 #include <JavaScriptCore/JSExportMacros.h>
+#if __has_include(<WebCore/PlatformExportMacros.h>)
 #include <WebCore/PlatformExportMacros.h>
+#endif
+#if __has_include(<pal/ExportMacros.h>)
 #include <pal/ExportMacros.h>
-#if !PLATFORM(IOS_FAMILY)
+#endif
+#if !PLATFORM(IOS_FAMILY) && __has_include(<WebKit/WebKit2_C.h>)
 #include <WebKit/WebKit2_C.h>
 #endif
-#if PLATFORM(COCOA) && defined(__OBJC__)
+#if PLATFORM(COCOA) && defined(__OBJC__) && __has_include(<WebKit/WebKit.h>)
 #import <WebKit/WebKit.h>
 #if PLATFORM(MACCATALYST)
 // Many tests depend on WebKitLegacy.h being implicitly included; however,
 // on macCatalyst, WebKit.h does not include WebKitLegacy.h, so we need
 // to do it explicitly here.
 #import <WebKit/WebKitLegacy.h>
-#endif
-#endif
+#endif // PLATFORM(MACCATALYST)
+#endif // PLATFORM(COCOA) && defined(__OBJC__) && __has_include(<WebKit/WebKit.h>)
 
 #endif
 

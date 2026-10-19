@@ -28,7 +28,6 @@
 
 #include "Document.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "NodeDocument.h"
 #include "PerformanceEventTimingCandidate.h"
 #include <cmath>
@@ -54,7 +53,7 @@ PerformanceEventTiming::~PerformanceEventTiming() = default;
 
 RefPtr<Node> PerformanceEventTiming::target() const
 {
-    RefPtr node = dynamicDowncast<Node>(m_target.get());
+    RefPtr node = dynamicDowncast<Node>(m_target);
     if (!node || !node->isConnected())
         return nullptr;
 

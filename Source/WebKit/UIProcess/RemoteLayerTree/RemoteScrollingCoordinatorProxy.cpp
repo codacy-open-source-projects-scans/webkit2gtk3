@@ -44,6 +44,7 @@
 #include <WebCore/ScrollingTreeOverflowScrollProxyNode.h>
 #include <WebCore/ScrollingTreeOverflowScrollingNode.h>
 #include <WebCore/ScrollingTreePositionedNode.h>
+#include <wtf/Borrow.h>
 #include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/TZoneMallocInlines.h>
 
@@ -140,7 +141,9 @@ void RemoteScrollingCoordinatorProxy::establishLayerTreeScrollingRelations(IPC::
         for (auto overflowNodeID : positionedNode->relatedOverflowScrollingNodes()) {
             RefPtr node = scrollingTree().nodeForID(overflowNodeID);
             RefPtr overflowNode = dynamicDowncast<ScrollingTreeOverflowScrollingNode>(node.get());
-            MESSAGE_CHECK_BASE(overflowNode, connection);
+            ASSERT(overflowNode);
+            if (!overflowNode)
+                continue;
             SUPPRESS_FORWARD_DECL_ARG RetainPtr scrollContainerLayer = static_cast<CALayer*>(overflowNode->scrollContainerLayer());
             SUPPRESS_FORWARD_DECL_ARG auto layerID = RemoteLayerTreeNode::layerID(scrollContainerLayer.get());
             MESSAGE_CHECK_BASE(layerID, connection);
@@ -157,7 +160,9 @@ void RemoteScrollingCoordinatorProxy::establishLayerTreeScrollingRelations(IPC::
     for (auto& scrollProxyNode : scrollingTree().activeOverflowScrollProxyNodes()) {
         RefPtr node = scrollingTree().nodeForID(scrollProxyNode->overflowScrollingNodeID());
         RefPtr overflowNode = dynamicDowncast<ScrollingTreeOverflowScrollingNode>(node.get());
-        MESSAGE_CHECK_BASE(overflowNode, connection);
+        ASSERT(overflowNode);
+        if (!overflowNode)
+            continue;
 
         SUPPRESS_FORWARD_DECL_ARG RetainPtr scrollProxyLayer = scrollProxyNode->layer();
         SUPPRESS_FORWARD_DECL_ARG if (RefPtr layerNode = RemoteLayerTreeNode::forCALayer(scrollProxyLayer.get())) {
@@ -210,7 +215,7 @@ void RemoteScrollingCoordinatorProxy::adjustMainFrameDelegatedScrollPosition(Scr
         }
     };
 
-    for (auto& request : requestData)
+    for (auto& request : borrow(requestData))
         handleOneRequest(request);
 }
 
@@ -219,19 +224,18 @@ void RemoteScrollingCoordinatorProxy::stickyScrollingTreeNodeBeganSticking(Scrol
     protect(webPageProxy())->stickyScrollingTreeNodeBeganSticking();
 }
 
-void RemoteScrollingCoordinatorProxy::handleWheelEvent(const WebWheelEvent& wheelEvent, RectEdges<WebCore::RubberBandingBehavior> rubberBandableEdges)
+void RemoteScrollingCoordinatorProxy::handleWheelEvent(Ref<WebWheelEvent>&& wheelEvent, RectEdges<WebCore::RubberBandingBehavior> rubberBandableEdges)
 {
 #if !(PLATFORM(MAC) && ENABLE(UI_SIDE_COMPOSITING))
     auto platformWheelEvent = platform(wheelEvent);
 
     // Replicate the hack in EventDispatcher::internalWheelEvent(). We could pass rubberBandableEdges all the way through the
     // WebProcess and back via the ScrollingTree, but we only ever need to consult it here.
-    if (platformWheelEvent.phase() == PlatformWheelEventPhase::Began)
-        m_scrollingTree->setClientAllowedMainFrameRubberBandableEdges(rubberBandableEdges);
+    m_scrollingTree->setClientAllowedMainFrameRubberBandableEdges(rubberBandableEdges);
 
     auto processingSteps = m_scrollingTree->determineWheelEventProcessing(platformWheelEvent);
     if (!processingSteps.contains(WheelEventProcessingSteps::AsyncScrolling)) {
-        continueWheelEventHandling(wheelEvent, { processingSteps, false });
+        continueWheelEventHandling(WTF::move(wheelEvent), { processingSteps, false });
         return;
     }
 
@@ -241,17 +245,17 @@ void RemoteScrollingCoordinatorProxy::handleWheelEvent(const WebWheelEvent& whee
     auto result = m_scrollingTree->handleWheelEvent(filteredEvent, processingSteps);
     didReceiveWheelEvent(result.wasHandled);
 
-    continueWheelEventHandling(wheelEvent, result);
+    continueWheelEventHandling(WTF::move(wheelEvent), result);
 #else
     UNUSED_PARAM(wheelEvent);
     UNUSED_PARAM(rubberBandableEdges);
 #endif
 }
 
-void RemoteScrollingCoordinatorProxy::continueWheelEventHandling(const WebWheelEvent& wheelEvent, WheelEventHandlingResult result)
+void RemoteScrollingCoordinatorProxy::continueWheelEventHandling(Ref<WebWheelEvent>&& wheelEvent, WheelEventHandlingResult result)
 {
     bool willStartSwipe = m_scrollingTree->willWheelEventStartSwipeGesture(platform(wheelEvent));
-    protect(webPageProxy())->continueWheelEventHandling(wheelEvent, result, willStartSwipe);
+    protect(webPageProxy())->continueWheelEventHandling(WTF::move(wheelEvent), result, willStartSwipe);
 }
 
 TrackingType RemoteScrollingCoordinatorProxy::eventTrackingTypeForPoint(WebCore::EventTrackingRegions::EventType eventType, IntPoint p) const
@@ -262,6 +266,11 @@ TrackingType RemoteScrollingCoordinatorProxy::eventTrackingTypeForPoint(WebCore:
 WebCore::RectEdges<bool> RemoteScrollingCoordinatorProxy::pinnedStateIncludingAncestorsAtPoint(FloatPoint p)
 {
     return m_scrollingTree->pinnedStateIncludingAncestorsAtPoint(p);
+}
+
+bool RemoteScrollingCoordinatorProxy::isPointInScrollbar(FloatPoint p)
+{
+    return m_scrollingTree->isPointInScrollbar(p);
 }
 
 void RemoteScrollingCoordinatorProxy::viewportChangedViaDelegatedScrolling(const FloatPoint& scrollPosition, const FloatRect& layoutViewport, double scale)
@@ -285,7 +294,10 @@ void RemoteScrollingCoordinatorProxy::sendScrollingTreeNodeUpdate()
     if (webPageProxy->scrollingUpdatesDisabledForTesting())
         return;
 
-    auto scrollUpdates = m_scrollingTree->takePendingScrollUpdates();
+    bool mainFrameScrollPositionChanged = false;
+    auto rootNodeID = rootScrollingNodeID();
+
+    const Vector scrollUpdates = m_scrollingTree->takePendingScrollUpdates();
     for (unsigned i = 0; i < scrollUpdates.size(); ++i) {
         const auto& update = scrollUpdates[i];
         bool isLastUpdate = i == scrollUpdates.size() - 1;
@@ -294,6 +306,8 @@ void RemoteScrollingCoordinatorProxy::sendScrollingTreeNodeUpdate()
             const auto& updateData = std::get<ScrollUpdateData>(update.data);
             if (updateData.updateType == ScrollUpdateType::PositionUpdate) {
                 webPageProxy->scrollingNodeScrollViewDidScroll(update.nodeID);
+                if (rootNodeID && update.nodeID == *rootNodeID)
+                    mainFrameScrollPositionChanged = true;
                 auto* scrollPerfData = webPageProxy->scrollingPerformanceData();
 
                 if (scrollPerfData && updateData.layoutViewportOriginOrOverrideRect) {
@@ -315,6 +329,9 @@ void RemoteScrollingCoordinatorProxy::sendScrollingTreeNodeUpdate()
         webPageProxy->sendScrollUpdateForNode(m_scrollingTree->frameIDForScrollingNodeID(update.nodeID), update, isLastUpdate);
         m_waitingForDidScrollReply = true;
     }
+
+    if (mainFrameScrollPositionChanged)
+        mainFrameScrollPositionDidChange();
 
 #if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
     if (!scrollUpdates.isEmpty())
@@ -341,9 +358,8 @@ void RemoteScrollingCoordinatorProxy::receivedLastScrollingTreeNodeUpdateReply()
         return;
 
     RunLoop::mainSingleton().dispatch([weakThis = WeakPtr { *this }]() {
-        if (!weakThis)
-            return;
-        weakThis->sendScrollingTreeNodeUpdate();
+        if (CheckedPtr checkedThis = weakThis)
+            checkedThis->sendScrollingTreeNodeUpdate();
     });
 }
 
@@ -367,10 +383,20 @@ String RemoteScrollingCoordinatorProxy::scrollingTreeAsText() const
     return m_scrollingTree->scrollingTreeAsText();
 }
 
+String RemoteScrollingCoordinatorProxy::scrollingTreeIncludingNodeIDsAsText() const
+{
+    return m_scrollingTree->scrollingTreeAsText(ScrollingStateTreeAsTextBehavior::IncludeNodeIDs);
+}
+
+float RemoteScrollingCoordinatorProxy::rubberbandHyperbolicCoefficientForTesting() const
+{
+    return m_scrollingTree->rubberbandHyperbolicCoefficientForTesting();
+}
+
 bool RemoteScrollingCoordinatorProxy::hasScrollableMainFrame() const
 {
     // FIXME: Locking
-    auto* rootNode = m_scrollingTree->rootNode();
+    RefPtr rootNode = m_scrollingTree->rootNode();
     return rootNode && rootNode->canHaveScrollbars();
 }
 
@@ -408,12 +434,17 @@ WebCore::FloatBoxExtent RemoteScrollingCoordinatorProxy::obscuredContentInsets()
     return m_scrollingTree->mainFrameObscuredContentInsets();
 }
 
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-
-void RemoteScrollingCoordinatorProxy::setBannerViewHeight(float offset)
+bool RemoteScrollingCoordinatorProxy::isCommittingScrollingTreeState() const
 {
-    auto previousOffset = m_scrollingTree->bannerViewHeight();
-    m_scrollingTree->setBannerViewHeight(offset);
+    return m_scrollingTree->inCommitTreeState();
+}
+
+#if HAVE(NSREFRESHCONTROLLER)
+
+void RemoteScrollingCoordinatorProxy::setTopScrollStretchForRefreshController(float offset)
+{
+    auto previousOffset = m_scrollingTree->topScrollStretchForRefreshController();
+    m_scrollingTree->setTopScrollStretchForRefreshController(offset);
 
     if (offset < previousOffset)
         m_scrollingTree->triggerMainFrameRubberBandSnapBack();
@@ -421,14 +452,14 @@ void RemoteScrollingCoordinatorProxy::setBannerViewHeight(float offset)
         m_scrollingTree->mainFrameRubberBandTargetOffsetDidChange();
 }
 
-void RemoteScrollingCoordinatorProxy::setBannerViewMaximumHeight(float offset)
+void RemoteScrollingCoordinatorProxy::setRefreshControllerSnappingThreshold(float offset)
 {
-    m_scrollingTree->setBannerViewMaximumHeight(offset);
+    m_scrollingTree->setRefreshControllerSnappingThreshold(offset);
 }
 
-void RemoteScrollingCoordinatorProxy::setHasBannerViewOverlay(bool hasBannerView)
+void RemoteScrollingCoordinatorProxy::setHasRefreshController(bool hasBannerView)
 {
-    m_scrollingTree->setHasBannerViewOverlay(hasBannerView);
+    m_scrollingTree->setHasRefreshController(hasBannerView);
 }
 
 #endif
@@ -458,9 +489,19 @@ float RemoteScrollingCoordinatorProxy::mainFrameScaleFactor() const
     return m_scrollingTree->mainFrameScaleFactor();
 }
 
+void RemoteScrollingCoordinatorProxy::setDelegatedPageScaleFactor(float scale)
+{
+    m_scrollingTree->setMainFrameDelegatedPageScaleFactor(scale);
+}
+
 FloatSize RemoteScrollingCoordinatorProxy::totalContentsSize() const
 {
     return m_scrollingTree->totalContentsSize();
+}
+
+FloatSize RemoteScrollingCoordinatorProxy::sizeForVisibleContent() const
+{
+    return m_scrollingTree->mainFrameSizeForVisibleContent();
 }
 
 void RemoteScrollingCoordinatorProxy::displayDidRefresh(PlatformDisplayID displayID)
@@ -471,7 +512,7 @@ void RemoteScrollingCoordinatorProxy::displayDidRefresh(PlatformDisplayID displa
 bool RemoteScrollingCoordinatorProxy::hasScrollableOrZoomedMainFrame() const
 {
     // FIXME: Locking
-    auto* rootNode = m_scrollingTree->rootNode();
+    RefPtr rootNode = m_scrollingTree->rootNode();
     if (!rootNode)
         return false;
 
@@ -489,8 +530,6 @@ void RemoteScrollingCoordinatorProxy::sendUIStateChangedIfNecessary()
 
 void RemoteScrollingCoordinatorProxy::resetStateAfterProcessExited()
 {
-    m_currentHorizontalSnapPointIndex = 0;
-    m_currentVerticalSnapPointIndex = 0;
     m_uiState.reset();
 }
 
@@ -563,6 +602,11 @@ bool RemoteScrollingCoordinatorProxy::scrollingPerformanceTestingEnabled() const
 void RemoteScrollingCoordinatorProxy::scrollingTreeNodeScrollbarVisibilityDidChange(WebCore::ScrollingNodeID nodeID, ScrollbarOrientation orientation, bool isVisible)
 {
     protect(webPageProxy())->sendToProcessContainingFrame(m_scrollingTree->frameIDForScrollingNodeID(nodeID), Messages::RemoteScrollingCoordinator::ScrollingTreeNodeScrollbarVisibilityDidChange(nodeID, orientation, isVisible));
+}
+
+void RemoteScrollingCoordinatorProxy::requestFullScrollingTreeCommitForFrame(WebCore::FrameIdentifier frameID)
+{
+    protect(webPageProxy())->sendToProcessContainingFrame(frameID, Messages::RemoteScrollingCoordinator::RequestFullScrollingTreeCommit(frameID));
 }
 
 void RemoteScrollingCoordinatorProxy::scrollingTreeNodeScrollbarMinimumThumbLengthDidChange(WebCore::ScrollingNodeID nodeID, ScrollbarOrientation orientation, int minimumThumbLength)

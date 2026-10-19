@@ -212,8 +212,8 @@ static constexpr std::array quoteTable {
     QuotesForLanguage { "zu"_span,         0, 0x201c, 0x201d, 0x2018, 0x2019 },
 };
 
-RenderQuote::RenderQuote(Document& document, RenderStyle&& style, QuoteType quote)
-    : RenderInline(Type::Quote, document, WTF::move(style))
+RenderQuote::RenderQuote(Document& document, Style::ComputedStyle&& style, QuoteType quote)
+    : RenderBoxModelObject(Type::Quote, document, WTF::move(style))
     , m_type(quote)
     , m_text(emptyString())
 {
@@ -225,19 +225,19 @@ RenderQuote::~RenderQuote() = default;
 
 void RenderQuote::insertedIntoTree()
 {
-    RenderInline::insertedIntoTree();
+    RenderBoxModelObject::insertedIntoTree();
     view().setHasQuotesNeedingUpdate(true);
 }
 
 void RenderQuote::willBeRemovedFromTree()
 {
     view().setHasQuotesNeedingUpdate(true);
-    RenderInline::willBeRemovedFromTree();
+    RenderBoxModelObject::willBeRemovedFromTree();
 }
 
-void RenderQuote::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
+void RenderQuote::styleDidChange(Style::Difference diff, const Style::ComputedStyle* oldStyle)
 {
-    RenderInline::styleDidChange(diff, oldStyle);
+    RenderBoxModelObject::styleDidChange(diff, oldStyle);
     if (diff >= Style::DifferenceResult::Layout) {
         m_needsTextUpdate = true;
         view().setHasQuotesNeedingUpdate(true);
@@ -273,7 +273,7 @@ struct SubtagComparison {
     std::strong_ordering comparison { std::strong_ordering::equal };
 };
 
-static SubtagComparison subtagCompare(std::span<const char> key, std::span<const char> range)
+static SubtagComparison LEGACY_NODELETE subtagCompare(std::span<const char> key, std::span<const char> range)
 {
     SubtagComparison result;
 
@@ -299,7 +299,7 @@ static SubtagComparison subtagCompare(std::span<const char> key, std::span<const
     return result;
 }
 
-static std::strong_ordering quoteTableLanguageComparisonFunction(const QuotesForLanguage& key, std::span<const QuotesForLanguage> range)
+static std::strong_ordering LEGACY_NODELETE quoteTableLanguageComparisonFunction(const QuotesForLanguage& key, std::span<const QuotesForLanguage> range)
 {
     // These strings need to be compared according to "Extended Filtering", as in Section 3.3.2 in RFC4647.
     // https://tools.ietf.org/html/rfc4647#page-10
@@ -354,7 +354,7 @@ static std::strong_ordering quoteTableLanguageComparisonFunction(const QuotesFor
     }
 }
 
-static const QuotesForLanguage* binaryFindQuotes(const QuotesForLanguage& key, std::span<const QuotesForLanguage> subrange = quoteTable)
+static const QuotesForLanguage* LEGACY_NODELETE binaryFindQuotes(const QuotesForLanguage& key, std::span<const QuotesForLanguage> subrange = quoteTable)
 {
     if (subrange.empty())
         return nullptr;
@@ -455,7 +455,7 @@ void RenderQuote::updateTextRenderer(RenderTreeBuilder& builder)
         renderText->setContentString(m_text);
         return;
     }
-    builder.attach(*this, createRenderer<RenderTextFragment>(document(), m_text));
+    builder.attach(*this, createRenderer<RenderTextFragment>(protect(document()), m_text));
 }
 
 String RenderQuote::computeText() const
@@ -473,7 +473,7 @@ String RenderQuote::computeText() const
     case QuoteType::CloseQuote:
         if (!style().quotes().isAuto())
             return isOpenQuote ? style().quotes().openQuote(m_depth).impl() : style().quotes().closeQuote(m_depth).impl();
-        if (const auto* quotes = quotesForLanguage(Style::toPlatform(style().computedLocale())))
+        if (const auto* quotes = quotesForLanguage(Style::toPlatform(style().usedLocale())))
             return stringForQuoteCharacter(isOpenQuote ? (m_depth ? quotes->open2 : quotes->open1) : (m_depth ? quotes->close2 : quotes->close1));
         // FIXME: Should the default be the quotes for "en" rather than straight quotes?
         // (According to https://html.spec.whatwg.org/multipage/rendering.html#quotes, the answer is "yes".)

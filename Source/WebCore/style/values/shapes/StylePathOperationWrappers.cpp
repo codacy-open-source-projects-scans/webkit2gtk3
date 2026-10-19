@@ -50,7 +50,7 @@ RefPtr<PathOperation> CSSValueConversion<RefPtr<PathOperation>>::operator()(Buil
 {
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return nullptr;
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -61,9 +61,7 @@ RefPtr<PathOperation> CSSValueConversion<RefPtr<PathOperation>>::operator()(Buil
     if (RefPtr url = dynamicDowncast<CSSURLValue>(value)) {
         auto styleURL = toStyle(url->url(), state);
 
-        // FIXME: ReferencePathOperation are not hooked up to support remote URLs yet, so only works with document local references. To see an example of how this should work, see Style::FilterReference which supports both document local and remote URLs.
-
-        auto fragment = SVGURIReference::fragmentIdentifierFromIRIString(styleURL, state.document());
+        auto fragment = styleURL.fragment();
 
         Ref treeScope = [&] -> Ref<const TreeScope> {
             if (auto* element = state.element())
@@ -120,12 +118,12 @@ RefPtr<PathOperation> CSSValueConversion<RefPtr<PathOperation>>::operator()(Buil
     return operation;
 }
 
-Ref<CSSValue> CSSValueCreation<RayPath>::operator()(CSSValuePool&, const RenderStyle& style, const RayPath& path)
+Ref<CSSValue> CSSValueCreation<RayPath>::operator()(CSSValuePool&, const Style::ComputedStyle& style, const RayPath& path)
 {
     return CSSRayValue::create(toCSS(path.ray(), style), path.referenceBox());
 }
 
-Ref<CSSValue> CSSValueCreation<BasicShapePath>::operator()(CSSValuePool& pool, const RenderStyle& style, const BasicShapePath& path, PathConversion conversion)
+Ref<CSSValue> CSSValueCreation<BasicShapePath>::operator()(CSSValuePool& pool, const Style::ComputedStyle& style, const BasicShapePath& path, PathConversion conversion)
 {
     if (path.referenceBox() == CSSBoxType::BoxMissing)
         return CSSValueList::createSpaceSeparated(createCSSValue(pool, style, path.shape(), conversion));
@@ -134,7 +132,7 @@ Ref<CSSValue> CSSValueCreation<BasicShapePath>::operator()(CSSValuePool& pool, c
 
 // MARK: - Serialization
 
-void Serialize<BasicShapePath>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const RenderStyle& style, const BasicShapePath& shape, PathConversion conversion)
+void Serialize<BasicShapePath>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const Style::ComputedStyle& style, const BasicShapePath& shape, PathConversion conversion)
 {
     if (shape.referenceBox() == CSSBoxType::BoxMissing) {
         serializationForCSS(builder, context, style, shape.shape(), conversion);
@@ -150,12 +148,13 @@ void Serialize<BasicShapePath>::operator()(StringBuilder& builder, const CSS::Se
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-static std::optional<AcceleratedEffectCoordBox> toAcceleratedEffectCoordBox(CSSBoxType boxType)
+static std::optional<AcceleratedEffectCoordBox> LEGACY_NODELETE toAcceleratedEffectCoordBox(CSSBoxType boxType)
 {
     switch (boxType) {
     case CSSBoxType::BoxMissing:
-    case CSSBoxType::MarginBox:
         return std::nullopt;
+    case CSSBoxType::MarginBox:
+        return AcceleratedEffectCoordBox::MarginBox;
     case CSSBoxType::BorderBox:
         return AcceleratedEffectCoordBox::BorderBox;
     case CSSBoxType::PaddingBox:
@@ -189,10 +188,10 @@ AcceleratedEffectReferencePath Evaluation<ReferencePath, AcceleratedEffectRefere
     };
 }
 
-AcceleratedEffectBasicShapePath Evaluation<BasicShapePath, AcceleratedEffectBasicShapePath>::operator()(const BasicShapePath& value, const TransformOperationData& data, ZoomFactor zoom)
+AcceleratedEffectBasicShapePath Evaluation<BasicShapePath, AcceleratedEffectBasicShapePath>::operator()(const BasicShapePath& value, const FloatRect& containingBlock, ZoomFactor zoom)
 {
     return {
-        .basicShape = evaluate<AcceleratedEffectBasicShape>(value.shape(), data, zoom),
+        .basicShape = evaluate<AcceleratedEffectBasicShape>(value.shape(), containingBlock, zoom),
         .box = toAcceleratedEffectCoordBox(value.referenceBox()),
     };
 }

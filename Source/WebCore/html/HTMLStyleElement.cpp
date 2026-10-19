@@ -34,7 +34,6 @@
 #include "EventSender.h"
 #include "HTMLNames.h"
 #include "MediaQueryParser.h"
-#include "MediaQueryParserContext.h"
 #include "NodeDocument.h"
 #include "NodeName.h"
 #include "Page.h"
@@ -173,7 +172,7 @@ void HTMLStyleElement::notifyLoadedSheetAndAllCriticalSubresources(bool errorOcc
     styleLoadEventSenderSingleton().dispatchEventSoon(*this, m_loadedSheet ? eventNames().loadEvent : eventNames().errorEvent);
 }
 
-void HTMLStyleElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) const
+void HTMLStyleElement::addSubresourceAttributeURLs(OrderedHashSet<URL>& urls) const
 {
     HTMLElement::addSubresourceAttributeURLs(urls);
 

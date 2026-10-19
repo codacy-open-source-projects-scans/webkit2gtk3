@@ -34,11 +34,11 @@
 #include <WebCore/WorkerScriptLoader.h>
 #include <WebCore/WorkerScriptLoaderClient.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/CurrentThread.h>
 #include <wtf/RefPtr.h>
 #include <wtf/RunLoop.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
-#include <wtf/Threading.h>
 
 namespace WebCore {
 
@@ -50,7 +50,7 @@ struct ServiceWorkerRegistrationData;
 class ServiceWorkerJob final : public RefCounted<ServiceWorkerJob>, public WorkerScriptLoaderClient {
     WTF_MAKE_TZONE_ALLOCATED_EXPORT(ServiceWorkerJob, WEBCORE_EXPORT);
 public:
-    static Ref<ServiceWorkerJob> create(ServiceWorkerJobClient&, Ref<DeferredPromise>&&, ServiceWorkerJobData&&);
+    static Ref<ServiceWorkerJob> LEGACY_NODELETE create(ServiceWorkerJobClient&, Ref<DeferredPromise>&&, ServiceWorkerJobData&&);
     WEBCORE_EXPORT ~ServiceWorkerJob();
 
     void ref() const final { RefCounted::ref(); }
@@ -65,7 +65,7 @@ public:
     Identifier identifier() const { return m_jobData.identifier().jobIdentifier; }
 
     const ServiceWorkerJobData& data() const LIFETIME_BOUND { return m_jobData; }
-    Ref<DeferredPromise> NODELETE takePromise();
+    Ref<DeferredPromise> LEGACY_NODELETE takePromise();
 
     void fetchScriptWithContext(ScriptExecutionContext&, FetchOptions::Cache);
 
@@ -75,7 +75,7 @@ public:
 
     WEBCORE_EXPORT static ResourceError validateServiceWorkerResponse(const ServiceWorkerJobData&, const ResourceResponse&);
 
-    bool NODELETE isRegistering() const;
+    bool LEGACY_NODELETE isRegistering() const;
 
 private:
     ServiceWorkerJob(ServiceWorkerJobClient&, Ref<DeferredPromise>&&, ServiceWorkerJobData&&);
@@ -94,7 +94,7 @@ private:
     RefPtr<WorkerScriptLoader> m_scriptLoader;
 
 #if ASSERT_ENABLED
-    const Ref<Thread> m_creationThread { Thread::currentSingleton() };
+    const uint32_t m_creationThreadID { currentThreadID() };
 #endif
 };
 

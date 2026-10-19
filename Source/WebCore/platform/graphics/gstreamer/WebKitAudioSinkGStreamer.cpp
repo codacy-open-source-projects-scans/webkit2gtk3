@@ -60,7 +60,7 @@ WEBKIT_DEFINE_TYPE_WITH_CODE(WebKitAudioSink, webkit_audio_sink, GST_TYPE_BIN,
 
 static bool webKitAudioSinkConfigure(WebKitAudioSink* sink)
 {
-    auto enableAudioMixer = CStringView::unsafeFromUTF8(g_getenv("WEBKIT_GST_ENABLE_AUDIO_MIXER"));
+    auto enableAudioMixer = UTF8CStringView::unsafeFromUTF8(g_getenv("WEBKIT_GST_ENABLE_AUDIO_MIXER"));
     if (!enableAudioMixer || enableAudioMixer != "1"_s)
         return false;
 
@@ -73,7 +73,7 @@ static bool webKitAudioSinkConfigure(WebKitAudioSink* sink)
     RELEASE_ASSERT(sink->priv->interAudioSink);
 
     gst_bin_add(GST_BIN_CAST(sink), sink->priv->interAudioSink.get());
-    auto targetPad = adoptGRef(gst_element_get_static_pad(sink->priv->interAudioSink.get(), "sink"));
+    GRefPtr targetPad = adoptGRef(gst_element_get_static_pad(sink->priv->interAudioSink.get(), "sink"));
     gst_element_add_pad(GST_ELEMENT_CAST(sink), webkitGstGhostPadFromStaticTemplate(&audioSinkTemplate, "sink"_s, targetPad.get()));
 
     if (sink->priv->role != "webaudio"_s)
@@ -100,9 +100,9 @@ static bool webKitAudioSinkConfigure(WebKitAudioSink* sink)
         if (!sampleRate) [[unlikely]]
             return GST_PAD_PROBE_OK;
 
-        auto sink = adoptGRef(gst_pad_get_parent_element(pad));
+        GRefPtr sink = adoptGRef(gst_pad_get_parent_element(pad));
         uint64_t periodTime = gst_util_uint64_scale_ceil(AudioUtilities::renderQuantumSize, GST_SECOND, *sampleRate);
-        GStreamerAudioMixer::singleton().configureSourcePeriodTime(CStringView::unsafeFromUTF8(GST_ELEMENT_NAME(sink.get())), periodTime);
+        GStreamerAudioMixer::singleton().configureSourcePeriodTime(UTF8CStringView::unsafeFromUTF8(GST_ELEMENT_NAME(sink.get())), periodTime);
         return GST_PAD_PROBE_OK;
     }), nullptr, nullptr);
     return true;

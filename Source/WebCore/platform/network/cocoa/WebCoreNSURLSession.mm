@@ -27,7 +27,6 @@
 #import "WebCoreNSURLSession.h"
 
 #import "CachedResourceRequest.h"
-#import "ParsedRequestRange.h"
 #import "PlatformMediaResourceLoader.h"
 #import "SharedBuffer.h"
 #import "SubresourceLoader.h"
@@ -53,7 +52,7 @@ static NSDate * __nullable networkLoadMetricsDate(MonotonicTime time)
 {
     if (!time)
         return nil;
-    NSTimeInterval value = time.approximateWallTime().secondsSinceEpoch().seconds();
+    NSTimeInterval value = time.approximate<WallTime>().secondsSinceEpoch().seconds();
     if (value <= 0)
         return nil;
     return [NSDate dateWithTimeIntervalSince1970:value];
@@ -551,7 +550,7 @@ NS_ASSUME_NONNULL_END
         if (self.invalidated)
             return pongHandler(adoptNS([[NSError alloc] initWithDomain:NSURLErrorDomain code:NSURLErrorUnknown userInfo:nil]).get(), 0);
 
-        Ref { self.loader }->sendH2Ping(url.get(), [self, protectedSelf = WTF::move(protectedSelf), pongHandler = WTF::move(pongHandler)] (Expected<Seconds, ResourceError>&& result) mutable {
+        Ref { self.loader }->sendH2Ping(url.get(), [self, protectedSelf = WTF::move(protectedSelf), pongHandler = WTF::move(pongHandler)] (std::expected<Seconds, ResourceError>&& result) mutable {
             NSTimeInterval interval = 0;
             RetainPtr<NSError> error;
             if (result)
@@ -889,7 +888,7 @@ void WebCoreNSURLSessionDataTaskClient::loadFinished(PlatformMediaResource& reso
         _resumeSessionID++;
         Ref loader = [strongSession loader];
         if (auto resource = loader->requestResource(self.originalRequest, PlatformMediaResourceLoader::LoadOption::DisallowCaching)) {
-            resource->setClient(adoptRef(*new WebCoreNSURLSessionDataTaskClient(protectedSelf.get(), *_targetDispatcher)));
+            resource->setClient(adoptRef(*new WebCoreNSURLSessionDataTaskClient(protectedSelf.get(), *protect(_targetDispatcher))));
             if (self->_state != NSURLSessionTaskStateRunning) {
                 resource->shutdown();
                 return;

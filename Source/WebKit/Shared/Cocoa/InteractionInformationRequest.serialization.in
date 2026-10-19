@@ -28,10 +28,13 @@ struct WebKit::InteractionInformationRequest {
     bool includeSnapshot;
     bool includeLinkIndicator;
     bool includeCursorContext;
+    bool includeHasDoubleClickHandler;
     bool includeImageData;
 
     bool gatherAnimations;
     bool linkIndicatorShouldHaveLegacyMargins;
+
+    WebKit::WebEventInputSource inputSource;
 };
 
 #endif

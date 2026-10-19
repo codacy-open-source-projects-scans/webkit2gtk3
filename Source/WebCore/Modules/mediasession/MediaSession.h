@@ -108,7 +108,7 @@ public:
     void willBeginPlayback();
     void willPausePlayback();
 
-    WEBCORE_EXPORT Document* NODELETE document() const;
+    WEBCORE_EXPORT Document* LEGACY_NODELETE document() const;
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
     MediaSessionReadyState readyState() const { return m_readyState; };
@@ -134,7 +134,7 @@ public:
     const Logger& logger() const { return *m_logger.get(); }
 #endif
 
-    bool NODELETE hasObserver(MediaSessionObserver&) const;
+    bool LEGACY_NODELETE hasObserver(MediaSessionObserver&) const;
     WEBCORE_EXPORT void addObserver(MediaSessionObserver&);
     void removeObserver(MediaSessionObserver&);
 
@@ -148,7 +148,7 @@ public:
     void setScreenshareActive(bool isActive, DOMPromiseDeferred<void>&& promise) { updateCaptureState(isActive, WTF::move(promise), MediaProducerMediaCaptureKind::Display); }
 #endif
 
-    WEBCORE_EXPORT bool hasActionHandler(const MediaSessionAction) const;
+    WEBCORE_EXPORT bool LEGACY_NODELETE hasActionHandler(const MediaSessionAction) const;
 
     RefPtr<CaptionUserPreferences> captionPreferences();
     void captionPreferencesChanged();
@@ -159,6 +159,8 @@ public:
 
     void setCaptionsEnabled(bool);
     bool captionsEnabled() const { return m_captionsEnabled; }
+
+    void presentationModeChanged();
 
 private:
     explicit MediaSession(Navigator&);
@@ -189,7 +191,7 @@ private:
     PlatformMediaSessionMediaType presentationType() const final { return PlatformMediaSessionMediaType::DOMMediaSession; }
     void mayResumePlayback(bool shouldResume) final;
     void suspendPlayback() final;
-    bool NODELETE isPlaying() const final;
+    bool LEGACY_NODELETE isPlaying() const final;
     bool isAudible() const final { return false; }
     bool isEnded() const final;
     MediaTime mediaSessionDuration() const final;
@@ -202,13 +204,13 @@ private:
     WeakPtr<Navigator> m_navigator;
     const Ref<PlatformMediaSession> m_platformSession;
     RefPtr<MediaMetadata> m_metadata;
-    RefPtr<MediaMetadata> m_defaultMetadata;
+    const RefPtr<MediaMetadata> m_defaultMetadata;
     MediaSessionPlaybackState m_playbackState { MediaSessionPlaybackState::None };
     std::optional<MediaPositionState> m_positionState;
     std::optional<double> m_lastReportedPosition;
     MonotonicTime m_timeAtLastPositionUpdate;
     HashMap<MediaSessionAction, Ref<MediaSessionActionHandler>, IntHash<MediaSessionAction>, WTF::StrongEnumHashTraits<MediaSessionAction>> m_actionHandlers WTF_GUARDED_BY_LOCK(m_actionHandlersLock);
-    RefPtr<const Logger> m_logger;
+    const RefPtr<const Logger> m_logger;
     uint64_t m_logIdentifier { 0 };
 
     WeakHashSet<MediaSessionObserver> m_observers;
@@ -227,6 +229,10 @@ private:
     std::optional<CaptionUserPreferencesDisplayMode> m_captionDisplayMode;
     Vector<MediaSessionCaptionTrack> m_captionTracks;
     bool m_captionsEnabled { false };
+#if PLATFORM(COCOA)
+    bool m_shouldSuppressMediaSessionPauseActionOnInterruption { false };
+#endif
+    bool m_needsYouTubeCaptionsQuirk { false };
 };
 
 String convertEnumerationToString(MediaSessionPlaybackState);

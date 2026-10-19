@@ -31,7 +31,6 @@
 #include "Editing.h"
 #include "ElementInlines.h"
 #include "HTMLInputElement.h"
-#include "NodeInlines.h"
 #include "PositionInlines.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
@@ -235,6 +234,24 @@ bool VisibleSelection::isAll(EditingBoundaryCrossingRule rule) const
     return !nonBoundaryShadowTreeRootNode() && visibleStart().previous(rule).isNull() && visibleEnd().next(rule).isNull();
 }
 
+static uint64_t textDistance(const Position& start, const Position& end)
+{
+    auto range = makeSimpleRange(start, end);
+    if (!range)
+        return 0;
+    return characterCount(*range, TextIteratorBehavior::EmitsCharactersBetweenAllVisiblePositions);
+}
+
+Position VisibleSelection::endpointToPreserveWhenExtendedTo(const Position& extent) const
+{
+    if (extent < start())
+        return end();
+    if (end() < extent)
+        return start();
+
+    return textDistance(start(), extent) <= textDistance(extent, end()) ? end() : start();
+}
+
 void VisibleSelection::appendTrailingWhitespace()
 {
     RefPtr scope = deprecatedEnclosingBlockFlowElement(protect(m_end.deprecatedNode()).get());
@@ -378,8 +395,8 @@ void VisibleSelection::adjustSelectionRespectingGranularity(TextGranularity gran
             break;
         }
         case TextGranularity::DocumentBoundary:
-            m_start = startOfDocument(m_start.document()).deepEquivalent();
-            m_end = endOfDocument(m_end.document()).deepEquivalent();
+            m_start = startOfDocument(protect(m_start.document())).deepEquivalent();
+            m_end = endOfDocument(protect(m_end.document())).deepEquivalent();
             break;
         case TextGranularity::ParagraphBoundary:
             m_start = startOfParagraph(VisiblePosition(m_start, m_affinity)).deepEquivalent();

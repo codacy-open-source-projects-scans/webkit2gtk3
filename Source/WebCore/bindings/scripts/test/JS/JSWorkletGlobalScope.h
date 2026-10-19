@@ -22,6 +22,7 @@
 
 #include "EventTarget.h"
 #include "JSEventTarget.h"
+#include <WebCore/JSDOMBindingFacade.h>
 #include <WebCore/JSDOMWrapper.h>
 
 namespace WebCore {
@@ -52,7 +53,8 @@ public:
     static void analyzeHeap(JSCell*, JSC::HeapAnalyzer&);
     WorkletGlobalScope& wrapped() const
     {
-        return static_cast<WorkletGlobalScope&>(Base::wrapped());
+        // JSWorkletGlobalScope wrappers always wrap WorkletGlobalScope objects.
+        SUPPRESS_MEMORY_UNSAFE_CAST return static_cast<WorkletGlobalScope&>(Base::wrapped());
     }
 
 public:

@@ -48,14 +48,9 @@ class GraphicsContext;
 class FontCascadeFonts;
 class FontSelector;
 class LayoutRect;
-class RenderStyle;
 class RenderText;
 class TextLayout;
 class TextRun;
-
-namespace DisplayList {
-class DisplayList;
-}
 
 struct GlyphData;
 struct GlyphGeometryCacheEntry;
@@ -63,11 +58,21 @@ struct GlyphOverflow;
 struct FloatSegment;
 struct TabSize;
 
+namespace DisplayList {
+class DisplayList;
+}
+
+namespace Style {
+// FIXME: This is a layering violation. Platform code should not reference types in the Style namespace.
+class ComputedStyle;
+}
+
 #if USE(CORE_TEXT)
 AffineTransform computeBaseOverallTextMatrix(const std::optional<AffineTransform>& syntheticOblique);
-AffineTransform computeOverallTextMatrix(const Font&);
 AffineTransform computeBaseVerticalTextMatrix(const AffineTransform& previousTextMatrix);
-AffineTransform computeVerticalTextMatrix(const Font&, const AffineTransform& previousTextMatrix);
+// The text matrix to use when drawing a run of `font`, including the Y-flip, synthetic oblique and, for vertical
+// fonts, the upright rotation.
+AffineTransform computeTextMatrix(const FontBase&);
 #endif
 
 class TextLayoutDeleter {
@@ -104,16 +109,16 @@ public:
     const FontCascadeDescription& fontDescription() const LIFETIME_BOUND { return m_fontDescription; }
     FontCascadeDescription& mutableFontDescription() const LIFETIME_BOUND { return m_fontDescription; }
 
-    float size() const { return fontDescription().computedSize(); }
+    float size() const { return fontDescription().usedSize(); }
 
     bool isCurrent(const FontSelector&) const;
     void updateFonts(Ref<FontCascadeFonts>&&) const;
     WEBCORE_EXPORT void update(RefPtr<FontSelector>&& = nullptr) const;
-    unsigned fontSelectorVersion() const;
+    unsigned LEGACY_NODELETE fontSelectorVersion() const;
 
     using CustomFontNotReadyAction = FontCascadeCustomFontNotReadyAction;
     WEBCORE_EXPORT FloatSize drawText(GraphicsContext&, const TextRun&, const FloatPoint&, unsigned from = 0, std::optional<unsigned> to = std::nullopt, CustomFontNotReadyAction = CustomFontNotReadyAction::DoNotPaintIfFontNotReady) const;
-    static void drawGlyphs(GraphicsContext&, const Font&, std::span<const GlyphBufferGlyph>, std::span<const GlyphBufferAdvance>, const FloatPoint&, FontSmoothingMode);
+    static void drawGlyphs(GraphicsContext&, const FontBase&, std::span<const GlyphBufferGlyph>, std::span<const GlyphBufferAdvance>, const FloatPoint&, FontSmoothingMode);
     void drawEmphasisMarks(GraphicsContext&, const TextRun&, const AtomString& mark, const FloatPoint&, unsigned from = 0, std::optional<unsigned> to = std::nullopt) const;
 
     Vector<FloatSegment> lineSegmentsForIntersectionsWithRect(const TextRun&, const FloatPoint& textOrigin, const FloatRect& lineExtents) const;
@@ -158,8 +163,8 @@ public:
     inline bool isPlatformFont() const; // Defined in FontCascadeInlines.h
 
     inline const FontMetrics& metricsOfPrimaryFont() const; // Defined in FontCascadeInlines.h
-    float zeroWidth() const;
-    float tabWidth(const Font&, const TabSize&, float, Font::SyntheticBoldInclusion) const;
+    WEBCORE_EXPORT float zeroWidth() const;
+    float tabWidth(const Font&, const TabSize&, float) const;
     bool hasValidAverageCharWidth() const;
     bool fastAverageCharWidthIfAvailable(float &width) const; // returns true on success
 
@@ -172,24 +177,21 @@ public:
     WEBCORE_EXPORT GlyphData glyphDataForCharacter(char32_t, bool mirror, FontVariant = FontVariant::Auto, std::optional<ResolvedEmojiPolicy> = std::nullopt) const;
     bool canUseSimplifiedTextMeasuring(char32_t, FontVariant, bool whitespaceIsCollapsed, const Font&) const;
 
-    RefPtr<const Font> fontForCombiningCharacterSequence(StringView) const;
+    // Sets matchedPrecomposedCharacter when the font was chosen for the precomposed character that the sequence is canonically equivalent to.
+    RefPtr<const Font> fontForCombiningCharacterSequence(StringView, std::optional<char32_t>& matchedPrecomposedCharacter) const;
 
-    static bool NODELETE isCJKIdeograph(char32_t);
-    static bool NODELETE isCJKIdeographOrSymbol(char32_t);
+    static bool LEGACY_NODELETE isCJKIdeograph(char32_t);
+    static bool LEGACY_NODELETE isCJKIdeographOrSymbol(char32_t);
 
-    static bool canUseGlyphDisplayList(const RenderStyle&);
+    // FIXME: This is a layering violation. Platform code should not reference types in the Style namespace.
+    static bool LEGACY_NODELETE canUseGlyphDisplayList(const Style::ComputedStyle&);
 
     // Returns (the number of opportunities, whether the last expansion is a trailing expansion)
     // If there are no opportunities, the bool will be true iff we are forbidding leading expansions.
     static std::pair<unsigned, bool> expansionOpportunityCount(StringView, TextDirection, ExpansionBehavior);
 
-    // Whether or not there is an expansion opportunity just before the first character
-    // Note that this does not take a isAfterExpansion flag; this assumes that isAfterExpansion is false
-    static bool NODELETE leftExpansionOpportunity(StringView, TextDirection);
-    static bool NODELETE rightExpansionOpportunity(StringView, TextDirection);
-
-    WEBCORE_EXPORT static void NODELETE setDisableFontSubpixelAntialiasingForTesting(bool);
-    WEBCORE_EXPORT static bool NODELETE shouldDisableFontSubpixelAntialiasingForTesting();
+    WEBCORE_EXPORT static void LEGACY_NODELETE setDisableFontSubpixelAntialiasingForTesting(bool);
+    WEBCORE_EXPORT static bool LEGACY_NODELETE shouldDisableFontSubpixelAntialiasingForTesting();
 
     using CodePath = FontCascadeCodePath;
     WEBCORE_EXPORT CodePath codePath(const TextRun&, std::optional<unsigned> from = std::nullopt, std::optional<unsigned> to = std::nullopt) const;
@@ -218,7 +220,7 @@ private:
     void adjustSelectionRectForSimpleTextWithFixedPitch(const TextRun&, LayoutRect& selectionRect, unsigned from, unsigned to) const;
     float width(CodePath, const TextRun&, SingleThreadWeakHashSet<const Font>* fallbackFonts = nullptr, GlyphOverflow* = nullptr) const;
     WEBCORE_EXPORT float widthForSimpleTextSlow(StringView text, TextDirection, GlyphGeometryCacheEntry*) const;
-    ALWAYS_INLINE bool NODELETE canHandleRunAsSimpleText(const TextRun&, unsigned from, unsigned to) const;
+    ALWAYS_INLINE bool LEGACY_NODELETE canHandleRunAsSimpleText(const TextRun&, unsigned from, unsigned to) const;
 
     std::optional<GlyphData> getEmphasisMarkGlyphData(const AtomString&) const;
     const Font* fontForEmphasisMark(const AtomString&) const;
@@ -231,24 +233,22 @@ private:
     void adjustSelectionRectForComplexText(const TextRun&, LayoutRect& selectionRect, unsigned from, unsigned to) const;
 
     static std::pair<unsigned, bool> expansionOpportunityCountInternal(std::span<const Latin1Character>, TextDirection, ExpansionBehavior);
-    static std::pair<unsigned, bool> NODELETE expansionOpportunityCountInternal(std::span<const char16_t>, TextDirection, ExpansionBehavior);
+    static std::pair<unsigned, bool> LEGACY_NODELETE expansionOpportunityCountInternal(std::span<const char16_t>, TextDirection, ExpansionBehavior);
 
     friend struct WidthIterator;
     friend class ComplexTextController;
     friend class FontCascadeFonts;
 
 public:
-#if ENABLE(TEXT_AUTOSIZING)
     bool equalForTextAutoSizing(const FontCascade& other) const
     {
         return m_fontDescription.equalForTextAutoSizing(other.m_fontDescription)
             && m_spacing == other.m_spacing;
     }
-#endif
 
     // Useful for debugging the different font rendering code paths.
-    WEBCORE_EXPORT static void NODELETE setForcedCodePath(Markable<CodePath>);
-    static Markable<CodePath> NODELETE forcedCodePath();
+    WEBCORE_EXPORT static void LEGACY_NODELETE setForcedCodePath(Markable<CodePath>);
+    static Markable<CodePath> LEGACY_NODELETE forcedCodePath();
     static Markable<CodePath> s_forcedCodePath;
 
     bool hasFontSelector() const { return !!m_fontSelector; }

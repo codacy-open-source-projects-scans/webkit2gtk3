@@ -27,9 +27,9 @@
 
 namespace WebCore {
 
-class JSTestException : public JSDOMWrapper<TestException> {
+class JSTestException : public JSDOMErrorWrapper<TestException> {
 public:
-    using Base = JSDOMWrapper<TestException>;
+    using Base = JSDOMErrorWrapper<TestException>;
     static JSTestException* create(JSC::Structure*, JSDOMGlobalObject*, Ref<TestException>&&);
 
     static JSC::JSObject* createPrototype(JSC::VM&, JSDOMGlobalObject&);
@@ -57,8 +57,12 @@ protected:
 
 class JSTestExceptionOwner final : public JSC::WeakHandleOwner {
 public:
+    JSTestExceptionOwner() = default;
     bool isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown>, void* context, JSC::AbstractSlotVisitor&, ASCIILiteral*) final;
     void finalize(JSC::Handle<JSC::Unknown>, void* context) final;
+
+private:
+    explicit JSTestExceptionOwner(ClangVTableWorkaroundTag);
 };
 
 inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld&, TestException*)

@@ -39,7 +39,10 @@
 #import <pal/cocoa/OpenGLSoftLinkCocoa.h>
 #import <pal/spi/cg/CoreGraphicsSPI.h>
 #import <pal/spi/cocoa/AVFoundationSPI.h>
+#import <wtf/MainThread.h>
+#import <wtf/NeverDestroyed.h>
 #import <wtf/ProcessPrivilege.h>
+#import <wtf/WorkQueue.h>
 
 #import <pal/cocoa/AVFoundationSoftLink.h>
 
@@ -129,39 +132,54 @@ static DynamicRangeMode convertAVVideoRangeToEnum(NSString* range)
 }
 #endif
 
-ScreenProperties collectScreenProperties()
+// May run on the main thread or a background thread.
+static bool collectHDRStateForDisplay(PlatformDisplayID displayID, DynamicRangeMode& dynamicRangeMode)
+{
+    bool supportsHighDynamicRange = false;
+#if HAVE(AVPLAYER_VIDEORANGEOVERRIDE)
+    if (PAL::isAVFoundationFrameworkAvailable()) {
+        dynamicRangeMode = convertAVVideoRangeToEnum([PAL::getAVPlayerClassSingleton() preferredVideoRangeForDisplays:@[ @(displayID) ]]);
+        supportsHighDynamicRange = dynamicRangeMode > DynamicRangeMode::Standard;
+    }
+#endif
+#if HAVE(AVPLAYER_VIDEORANGEOVERRIDE) && USE(MEDIATOOLBOX)
+    else
+#endif
+#if USE(MEDIATOOLBOX)
+    if (PAL::isMediaToolboxFrameworkAvailable() && PAL::canLoad_MediaToolbox_MTShouldPlayHDRVideo())
+        supportsHighDynamicRange = PAL::softLink_MediaToolbox_MTShouldPlayHDRVideo((__bridge CFArrayRef)@[ @(displayID) ]);
+#endif
+
+    if (!supportsHighDynamicRange && dynamicRangeMode > DynamicRangeMode::Standard)
+        dynamicRangeMode = DynamicRangeMode::Standard;
+
+    if (supportsHighDynamicRange && WebCore::ThermalMitigationNotifier::isThermalMitigationEnabled())
+        supportsHighDynamicRange = false;
+
+    return supportsHighDynamicRange;
+}
+
+static void collectHDRState(ScreenProperties& screenProperties)
+{
+    for (auto& [displayID, screenData] : screenProperties.screenDataMap)
+        screenData.screenSupportsHighDynamicRange = collectHDRStateForDisplay(displayID, screenData.preferredDynamicRangeMode);
+}
+
+static WorkQueue& screenPropertiesQueueSingleton()
+{
+    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("org.webkit.ScreenProperties"_s, WorkQueue::QOS::UserInitiated));
+    return queue.get();
+}
+
+static ScreenProperties collectScreenPropertiesExceptForHDRState()
 {
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
 
     ScreenProperties screenProperties;
     bool screenHasInvertedColors = [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldInvertColors];
 
-    auto screenSupportsHighDynamicRange = [](PlatformDisplayID displayID, DynamicRangeMode& dynamicRangeMode) {
-        bool supportsHighDynamicRange = false;
-#if HAVE(AVPLAYER_VIDEORANGEOVERRIDE)
-        if (PAL::isAVFoundationFrameworkAvailable()) {
-            dynamicRangeMode = convertAVVideoRangeToEnum([PAL::getAVPlayerClassSingleton() preferredVideoRangeForDisplays:@[ @(displayID) ]]);
-            supportsHighDynamicRange = dynamicRangeMode > DynamicRangeMode::Standard;
-        }
-#endif
-#if HAVE(AVPLAYER_VIDEORANGEOVERRIDE) && USE(MEDIATOOLBOX)
-        else
-#endif
-#if USE(MEDIATOOLBOX)
-        if (PAL::isMediaToolboxFrameworkAvailable() && PAL::canLoad_MediaToolbox_MTShouldPlayHDRVideo())
-            supportsHighDynamicRange = PAL::softLink_MediaToolbox_MTShouldPlayHDRVideo((__bridge CFArrayRef)@[ @(displayID) ]);
-#endif
-
-        if (!supportsHighDynamicRange && dynamicRangeMode > DynamicRangeMode::Standard)
-            dynamicRangeMode = DynamicRangeMode::Standard;
-
-        if (supportsHighDynamicRange && WebCore::ThermalMitigationNotifier::isThermalMitigationEnabled())
-            supportsHighDynamicRange = false;
-
-        return supportsHighDynamicRange;
-    };
-
-    for (NSScreen *screen in [NSScreen screens]) {
+    // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+    for (SUPPRESS_UNRETAINED_LOCAL NSScreen *screen in [NSScreen screens]) {
         ScreenData screenData;
         auto displayID = WebCore::displayID(screen);
 
@@ -170,7 +188,7 @@ ScreenProperties collectScreenProperties()
         screenData.screenAvailableRect = screenAvailableRect;
 
         screenData.screenRect = screen.frame;
-        screenData.colorSpace = DestinationColorSpace { screen.colorSpace.CGColorSpace };
+        screenData.colorSpace = ColorSpace { screen.colorSpace.CGColorSpace };
         screenData.screenDepth = NSBitsPerPixelFromDepth(screen.depth);
         screenData.screenDepthPerComponent = NSBitsPerSampleFromDepth(screen.depth);
         screenData.screenSupportsExtendedColor = [screen canRepresentDisplayGamut:NSDisplayGamutP3];
@@ -182,7 +200,6 @@ ScreenProperties collectScreenProperties()
 
         screenData.screenSize = FloatSize { CGDisplayScreenSize(displayID) };
         screenData.scaleFactor = screen.backingScaleFactor;
-        screenData.screenSupportsHighDynamicRange = screenSupportsHighDynamicRange(displayID, screenData.preferredDynamicRangeMode);
 #if HAVE(SUPPORT_HDR_DISPLAY)
         screenData.maxEDRHeadroom = [screen maximumPotentialExtendedDynamicRangeColorComponentValue];
         screenData.currentEDRHeadroom = [screen maximumExtendedDynamicRangeColorComponentValue];
@@ -198,6 +215,27 @@ ScreenProperties collectScreenProperties()
     return screenProperties;
 }
 
+ScreenProperties collectScreenProperties()
+{
+    auto screenProperties = collectScreenPropertiesExceptForHDRState();
+    collectHDRState(screenProperties);
+    return screenProperties;
+}
+
+void collectScreenPropertiesAsync(CompletionHandler<void(ScreenProperties&&)>&& completionHandler)
+{
+    ASSERT(isMainThread());
+
+    auto screenProperties = collectScreenPropertiesExceptForHDRState();
+
+    screenPropertiesQueueSingleton().dispatch([screenProperties = WTF::move(screenProperties), completionHandler = WTF::move(completionHandler)]() mutable {
+        collectHDRState(screenProperties);
+        callOnMainThread([screenProperties = WTF::move(screenProperties), completionHandler = WTF::move(completionHandler)]() mutable {
+            completionHandler(WTF::move(screenProperties));
+        });
+    });
+}
+
 void setShouldOverrideScreenSupportsHighDynamicRange(bool shouldOverride, bool supportsHighDynamicRange)
 {
     if (PAL::isMediaToolboxFrameworkAvailable() && PAL::canLoad_MediaToolbox_MTOverrideShouldPlayHDRVideo())
@@ -206,7 +244,8 @@ void setShouldOverrideScreenSupportsHighDynamicRange(bool shouldOverride, bool s
 
 uint32_t primaryOpenGLDisplayMask()
 {
-    if (auto data = screenData(primaryScreenDisplayID()))
+    Ref screen = PlatformScreen::singleton();
+    if (auto data = screen->screenData(screen->primaryScreenDisplayID()))
         return data->displayMask;
 
     return 0;
@@ -214,7 +253,8 @@ uint32_t primaryOpenGLDisplayMask()
 
 uint32_t displayMaskForDisplay(PlatformDisplayID displayID)
 {
-    if (auto data = screenData(displayID))
+    Ref screen = PlatformScreen::singleton();
+    if (auto data = screen->screenData(displayID))
         return data->displayMask;
 
     ASSERT_NOT_REACHED();
@@ -223,12 +263,13 @@ uint32_t displayMaskForDisplay(PlatformDisplayID displayID)
 
 PlatformGPUID primaryGPUID()
 {
-    return gpuIDForDisplay(primaryScreenDisplayID());
+    return gpuIDForDisplay(PlatformScreen::singleton()->primaryScreenDisplayID());
 }
 
 PlatformGPUID gpuIDForDisplay(PlatformDisplayID displayID)
 {
-    if (auto data = screenData(displayID))
+    Ref screen = PlatformScreen::singleton();
+    if (auto data = screen->screenData(displayID))
         return data->gpuID;
 
     return 0;
@@ -272,14 +313,10 @@ PlatformGPUID gpuIDForDisplayMask(GLuint displayMask)
     return static_cast<PlatformGPUID>(static_cast<uint32_t>(gpuIDHigh)) << 32 | static_cast<uint32_t>(gpuIDLow);
 }
 
-static const ScreenData* screenProperties(Widget* widget)
-{
-    return screenData(displayID(widget));
-}
-
 bool screenIsMonochrome(Widget* widget)
 {
-    if (auto data = screenProperties(widget))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget)))
         return data->screenIsMonochrome;
 
     // This is a system-wide accessibility setting, same on all screens.
@@ -289,7 +326,8 @@ bool screenIsMonochrome(Widget* widget)
 
 bool screenHasInvertedColors()
 {
-    if (auto data = screenData(primaryScreenDisplayID()))
+    Ref screen = PlatformScreen::singleton();
+    if (auto data = screen->screenData(screen->primaryScreenDisplayID()))
         return data->screenHasInvertedColors;
 
     // This is a system-wide accessibility setting, same on all screens.
@@ -299,7 +337,8 @@ bool screenHasInvertedColors()
 
 int screenDepth(Widget* widget)
 {
-    if (auto data = screenProperties(widget)) {
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget))) {
         ASSERT(data->screenDepth);
         return data->screenDepth;
     }
@@ -310,7 +349,8 @@ int screenDepth(Widget* widget)
 
 int screenDepthPerComponent(Widget* widget)
 {
-    if (auto data = screenProperties(widget)) {
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget))) {
         ASSERT(data->screenDepthPerComponent);
         return data->screenDepthPerComponent;
     }
@@ -321,7 +361,8 @@ int screenDepthPerComponent(Widget* widget)
 
 FloatRect screenRectForDisplay(PlatformDisplayID displayID)
 {
-    if (auto data = screenData(displayID)) {
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID)) {
         ASSERT(!data->screenRect.isEmpty());
         return data->screenRect;
     }
@@ -332,13 +373,14 @@ FloatRect screenRectForDisplay(PlatformDisplayID displayID)
 
 FloatRect screenRectForPrimaryScreen()
 {
-    return screenRectForDisplay(primaryScreenDisplayID());
+    return screenRectForDisplay(PlatformScreen::singleton()->primaryScreenDisplayID());
 }
 
 #if HAVE(SUPPORT_HDR_DISPLAY)
 float currentEDRHeadroomForDisplay(PlatformDisplayID displayID)
 {
-    if (auto data = screenData(displayID))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID))
         return data->currentEDRHeadroom;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -347,7 +389,8 @@ float currentEDRHeadroomForDisplay(PlatformDisplayID displayID)
 
 float maxEDRHeadroomForDisplay(PlatformDisplayID displayID)
 {
-    if (auto data = screenData(displayID))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID))
         return data->maxEDRHeadroom;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -356,7 +399,8 @@ float maxEDRHeadroomForDisplay(PlatformDisplayID displayID)
 
 bool suppressEDRForDisplay(PlatformDisplayID displayID)
 {
-    if (auto data = screenData(displayID))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID))
         return data->suppressEDR;
 
     return false;
@@ -365,7 +409,8 @@ bool suppressEDRForDisplay(PlatformDisplayID displayID)
 
 FloatRect screenRect(Widget* widget)
 {
-    if (auto data = screenProperties(widget))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget)))
         return data->screenRect;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -374,7 +419,8 @@ FloatRect screenRect(Widget* widget)
 
 FloatRect screenAvailableRect(Widget* widget)
 {
-    if (auto data = screenProperties(widget))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget)))
         return data->screenAvailableRect;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -390,20 +436,22 @@ NSScreen *screen(NSWindow *window)
 NSScreen *screen(PlatformDisplayID displayID)
 {
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
-    for (NSScreen *screen in [NSScreen screens]) {
+    // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+    for (SUPPRESS_UNRETAINED_LOCAL NSScreen *screen in [NSScreen screens]) {
         if (WebCore::displayID(screen) == displayID)
             return screen;
     }
     return firstScreen();
 }
 
-DestinationColorSpace screenColorSpace(Widget* widget)
+ColorSpace screenColorSpace(Widget* widget)
 {
-    if (auto data = screenProperties(widget))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget)))
         return data->colorSpace;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
-    return DestinationColorSpace { protect(screen(widget)).get().colorSpace.CGColorSpace };
+    return ColorSpace { protect(screen(widget)).get().colorSpace.CGColorSpace };
 }
 
 OptionSet<ContentsFormat> screenContentsFormats(Widget* widget)
@@ -426,12 +474,13 @@ OptionSet<ContentsFormat> screenContentsFormats(Widget* widget)
 
 bool screenSupportsExtendedColor(Widget* widget)
 {
+    Ref platformScreen = PlatformScreen::singleton();
 #if HAVE(SUPPORT_HDR_DISPLAY) && ENABLE(PIXEL_FORMAT_RGB10)
-    if (screenContentsFormatsForTesting().contains(ContentsFormat::RGBA10))
+    if (platformScreen->screenContentsFormatsForTesting().contains(ContentsFormat::RGBA10))
         return true;
 #endif
 
-    if (auto data = screenProperties(widget))
+    if (auto data = platformScreen->screenData(displayID(widget)))
         return data->screenSupportsExtendedColor;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -445,12 +494,14 @@ bool screenSupportsHighDynamicRange(Widget* widget)
 
 bool screenSupportsHighDynamicRange(PlatformDisplayID displayID)
 {
+    Ref screen = PlatformScreen::singleton();
+
 #if HAVE(SUPPORT_HDR_DISPLAY) && ENABLE(PIXEL_FORMAT_RGBA16F)
-    if (screenContentsFormatsForTesting().contains(ContentsFormat::RGBA16F))
+    if (screen->screenContentsFormatsForTesting().contains(ContentsFormat::RGBA16F))
         return true;
 #endif
 
-    if (auto data = screenData(displayID))
+    if (auto data = screen->screenData(displayID))
         return data->screenSupportsHighDynamicRange;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -464,7 +515,8 @@ bool screenSupportsHighDynamicRange(PlatformDisplayID displayID)
 #if HAVE(AVPLAYER_VIDEORANGEOVERRIDE)
 DynamicRangeMode preferredDynamicRangeMode(Widget* widget)
 {
-    if (auto data = screenProperties(widget))
+    Ref platformScreen = PlatformScreen::singleton();
+    if (auto data = platformScreen->screenData(displayID(widget)))
         return data->preferredDynamicRangeMode;
 
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanCommunicateWithWindowServer));
@@ -487,14 +539,14 @@ FloatRect toUserSpace(const NSRect& rect, NSWindow *destination)
 FloatRect toUserSpaceForPrimaryScreen(const NSRect& rect)
 {
     FloatRect userRect = rect;
-    userRect.setY(NSMaxY(screenRectForDisplay(primaryScreenDisplayID())) - (userRect.y() + userRect.height())); // flip
+    userRect.setY(NSMaxY(screenRectForDisplay(PlatformScreen::singleton()->primaryScreenDisplayID())) - (userRect.y() + userRect.height())); // flip
     return userRect;
 }
 
 FloatPoint toUserSpaceForPrimaryScreen(const NSPoint& point)
 {
     FloatPoint userPoint = point;
-    userPoint.setY(NSMaxY(screenRectForDisplay(primaryScreenDisplayID())) - userPoint.y()); // flip
+    userPoint.setY(NSMaxY(screenRectForDisplay(PlatformScreen::singleton()->primaryScreenDisplayID())) - userPoint.y()); // flip
     return userPoint;
 }
 

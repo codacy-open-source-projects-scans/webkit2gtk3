@@ -76,4 +76,31 @@ TEST(WebKit, ShrinkToFit)
     TestWebKitAPI::Util::run(&shrinkToFitDisabledDone);
 }
 
+TEST(WebKit, ViewScaleFactorAfterShrinkToFit)
+{
+    RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)]);
+
+    EXPECT_EQ(1.0, [webView _viewScale]);
+
+    [webView _setLayoutMode:_WKLayoutModeDynamicSizeComputedFromMinimumDocumentSize];
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSBundle.test_resourcesBundle URLForResource:@"lots-of-text" withExtension:@"html"]];
+    [webView loadRequest:request];
+    [webView _test_waitForDidFinishNavigation];
+
+    // The WebProcess scales the view down to fit the wide document during a
+    // compositing flush and then sends ViewScaleFactorDidChange back to the
+    // UIProcess. Both steps are asynchronous with respect to navigation, so
+    // poll until the cached scale reflects the auto-scale rather than assuming
+    // it has arrived after a single round-trip.
+    bool scaledDown = TestWebKitAPI::Util::waitFor([&] {
+        return [webView _viewScale] < 1.0;
+    });
+
+    // The cached value must reflect the auto-scale, not the default of 1.
+    EXPECT_TRUE(scaledDown);
+    EXPECT_LT([webView _viewScale], 1.0);
+    EXPECT_GT([webView _viewScale], 0.0);
+}
+
 #endif

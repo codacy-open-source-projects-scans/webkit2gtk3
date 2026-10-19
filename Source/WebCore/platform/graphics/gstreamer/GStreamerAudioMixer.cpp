@@ -56,7 +56,7 @@ GStreamerAudioMixer::MixerPipeline& GStreamerAudioMixer::ensureMixerPipeline(Dat
     }
 
     auto pipelineName = makeString("webkitaudiomixer-"_s, deviceId);
-    GRefPtr<GstElement> pipeline = gst_element_factory_make("pipeline", pipelineName.utf8().data());
+    GRefPtr<GstElement> pipeline = gst_element_factory_make("pipeline", pipelineName.utf8().legacyCStringPointer());
     registerActivePipeline(pipeline);
     connectSimpleBusMessageCallback(pipeline.get());
 
@@ -73,7 +73,7 @@ GStreamerAudioMixer::MixerPipeline& GStreamerAudioMixer::ensureMixerPipeline(Dat
     gst_element_link(mixer, audioSink);
     gst_element_set_state(pipeline.get(), GST_STATE_READY);
 
-    GST_DEBUG_OBJECT(pipeline.get(), "Created mixer pipeline for device '%s'.", deviceId.utf8().data());
+    GST_DEBUG_OBJECT(pipeline.get(), "Created mixer pipeline for device '%s'.", deviceId.utf8());
     auto mp = std::unique_ptr<MixerPipeline>(new MixerPipeline {
         WTF::move(pipeline),
         GRefPtr<GstElement>(mixer),
@@ -91,7 +91,7 @@ void GStreamerAudioMixer::teardownPipeline(const String& deviceId)
 
     auto& mp = *it->value;
     ASSERT(!mp.mixer->numsinkpads);
-    GST_DEBUG_OBJECT(mp.pipeline.get(), "Teardown timeout reached, destroying idle pipeline for device '%s'.", deviceId.utf8().data());
+    GST_DEBUG_OBJECT(mp.pipeline.get(), "Teardown timeout reached, destroying idle pipeline for device '%s'.", deviceId.utf8());
     unregisterPipeline(mp.pipeline);
     gst_element_set_state(mp.pipeline.get(), GST_STATE_NULL);
     locker->m_pipelines.remove(deviceId);
@@ -137,7 +137,7 @@ GRefPtr<GstPad> GStreamerAudioMixer::registerProducer(GstElement* interaudioSink
     DataMutexLocker locker { m_streamingMembers };
     auto& mp = ensureMixerPipeline(locker, resolvedDeviceId, device);
 
-    GstElement* src = makeGStreamerElement("interaudiosrc"_s, unsafeSpan(GST_ELEMENT_NAME(interaudioSink)));
+    GstElement* src = makeGStreamerElement("interaudiosrc"_s, String::fromLatin1(unsafeSpan(GST_ELEMENT_NAME(interaudioSink))));
 
     g_object_set(src, "channel", GST_ELEMENT_NAME(interaudioSink), nullptr);
     g_object_set(interaudioSink, "channel", GST_ELEMENT_NAME(interaudioSink), nullptr);
@@ -150,15 +150,15 @@ GRefPtr<GstPad> GStreamerAudioMixer::registerProducer(GstElement* interaudioSink
 
     if (forcedSampleRate) {
         auto capsfilter = gst_element_factory_make("capsfilter", nullptr);
-        auto caps = adoptGRef(gst_caps_new_simple("audio/x-raw", "rate", G_TYPE_INT, *forcedSampleRate, nullptr));
+        GRefPtr caps = adoptGRef(gst_caps_new_simple("audio/x-raw", "rate", G_TYPE_INT, *forcedSampleRate, nullptr));
         g_object_set(capsfilter, "caps", caps.get(), nullptr);
         gst_bin_add(GST_BIN_CAST(bin), capsfilter);
         gst_element_link(audioResample, capsfilter);
     }
 
-    if (auto pad = adoptGRef(gst_bin_find_unlinked_pad(GST_BIN_CAST(bin), GST_PAD_SRC)))
+    if (GRefPtr pad = adoptGRef(gst_bin_find_unlinked_pad(GST_BIN_CAST(bin), GST_PAD_SRC)))
         gst_element_add_pad(GST_ELEMENT_CAST(bin), gst_ghost_pad_new("src", pad.get()));
-    if (auto pad = adoptGRef(gst_bin_find_unlinked_pad(GST_BIN_CAST(bin), GST_PAD_SINK)))
+    if (GRefPtr pad = adoptGRef(gst_bin_find_unlinked_pad(GST_BIN_CAST(bin), GST_PAD_SINK)))
         gst_element_add_pad(GST_ELEMENT_CAST(bin), gst_ghost_pad_new("sink", pad.get()));
 
     gst_bin_add_many(GST_BIN_CAST(mp.pipeline.get()), src, bin, nullptr);
@@ -166,8 +166,8 @@ GRefPtr<GstPad> GStreamerAudioMixer::registerProducer(GstElement* interaudioSink
 
     bool shouldStart = !mp.mixer->numsinkpads;
 
-    auto mixerPad = adoptGRef(gst_element_request_pad_simple(mp.mixer.get(), "sink_%u"));
-    auto srcPad = adoptGRef(gst_element_get_static_pad(bin, "src"));
+    GRefPtr mixerPad = adoptGRef(gst_element_request_pad_simple(mp.mixer.get(), "sink_%u"));
+    GRefPtr srcPad = adoptGRef(gst_element_get_static_pad(bin, "src"));
     gst_pad_link(srcPad.get(), mixerPad.get());
 
     if (shouldStart)
@@ -193,13 +193,13 @@ void GStreamerAudioMixer::unregisterProducer(const GRefPtr<GstPad>& mixerPad)
     RELEASE_ASSERT(pipelineIt != locker->m_pipelines.end());
     auto& mp = *pipelineIt->value;
 
-    GST_DEBUG_OBJECT(mp.pipeline.get(), "Unregistering audio producer %" GST_PTR_FORMAT " from device '%s'.", mixerPad.get(), deviceId.utf8().data());
+    GST_DEBUG_OBJECT(mp.pipeline.get(), "Unregistering audio producer %" GST_PTR_FORMAT " from device '%s'.", mixerPad.get(), deviceId.utf8());
 
-    auto peer = adoptGRef(gst_pad_get_peer(mixerPad.get()));
-    auto bin = adoptGRef(gst_pad_get_parent_element(peer.get()));
-    auto sinkPad = adoptGRef(gst_element_get_static_pad(bin.get(), "sink"));
-    auto srcPad = adoptGRef(gst_pad_get_peer(sinkPad.get()));
-    auto interaudioSrc = adoptGRef(gst_pad_get_parent_element(srcPad.get()));
+    GRefPtr peer = adoptGRef(gst_pad_get_peer(mixerPad.get()));
+    GRefPtr bin = adoptGRef(gst_pad_get_parent_element(peer.get()));
+    GRefPtr sinkPad = adoptGRef(gst_element_get_static_pad(bin.get(), "sink"));
+    GRefPtr srcPad = adoptGRef(gst_pad_get_peer(sinkPad.get()));
+    GRefPtr interaudioSrc = adoptGRef(gst_pad_get_parent_element(srcPad.get()));
     GST_LOG_OBJECT(mp.pipeline.get(), "interaudiosrc: %" GST_PTR_FORMAT, interaudioSrc.get());
 
     gstElementLockAndSetState(interaudioSrc.get(), GST_STATE_NULL);
@@ -217,16 +217,16 @@ void GStreamerAudioMixer::unregisterProducer(const GRefPtr<GstPad>& mixerPad)
     if (!mp.mixer->numsinkpads) {
         gst_element_set_state(mp.pipeline.get(), GST_STATE_PAUSED);
         mp.teardownTimer.startOneShot(s_teardownTimeout);
-        GST_DEBUG_OBJECT(mp.pipeline.get(), "No producers left for device '%s', paused pipeline; teardown in %.0f seconds.", deviceId.utf8().data(), s_teardownTimeout.seconds());
+        GST_DEBUG_OBJECT(mp.pipeline.get(), "No producers left for device '%s', paused pipeline; teardown in %.0f seconds.", deviceId.utf8(), s_teardownTimeout.seconds());
         dumpBinToDotFile(mp.pipeline.get(), "audio-mixer-after-producer-unregistration"_s);
     }
 }
 
-void GStreamerAudioMixer::configureSourcePeriodTime(CStringView sourceName, uint64_t periodTime)
+void GStreamerAudioMixer::configureSourcePeriodTime(UTF8CStringView sourceName, uint64_t periodTime)
 {
     DataMutexLocker locker { m_streamingMembers };
     for (auto& [deviceId, mp] : locker->m_pipelines) {
-        auto src = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(mp->pipeline.get()), sourceName.utf8()));
+        GRefPtr src = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(mp->pipeline.get()), sourceName.utf8()));
         if (!src)
             continue;
 

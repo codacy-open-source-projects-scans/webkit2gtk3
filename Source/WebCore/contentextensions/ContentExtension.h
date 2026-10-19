@@ -47,10 +47,11 @@ public:
     const String& identifier() const LIFETIME_BOUND { return m_identifier; }
     const URL& extensionBaseURL() const LIFETIME_BOUND { return m_extensionBaseURL; }
     const CompiledContentExtension& compiledExtension() const { return m_compiledExtension.get(); }
-    StyleSheetContents* NODELETE globalDisplayNoneStyleSheet();
+    StyleSheetContents* LEGACY_NODELETE globalDisplayNoneStyleSheet();
     const DFABytecodeInterpreter::Actions& topURLActions(const URL& topURL) const;
     const DFABytecodeInterpreter::Actions& frameURLActions(const URL& frameURL) const;
     const Vector<uint64_t>& universalActions() const LIFETIME_BOUND { return m_universalActions; }
+    DFABytecodeInterpreter::Actions interpretURLFilters(const String& url, ResourceFlags) const;
 
 private:
     ContentExtension(const String& identifier, Ref<CompiledContentExtension>&&, URL&&, ShouldCompileCSS);
@@ -60,7 +61,7 @@ private:
     const Ref<CompiledContentExtension> m_compiledExtension;
     URL m_extensionBaseURL;
 
-    RefPtr<StyleSheetContents> m_globalDisplayNoneStyleSheet;
+    const RefPtr<StyleSheetContents> m_globalDisplayNoneStyleSheet;
     void compileGlobalDisplayNoneStyleSheet();
 
     void populateTopURLActionCacheIfNeeded(const URL& topURL) const;
@@ -72,6 +73,7 @@ private:
     mutable DFABytecodeInterpreter::Actions m_cachedFrameURLActions;
 
     Vector<uint64_t> m_universalActions;
+    mutable DFABytecodeInterpreter m_urlFiltersInterpreter;
 };
 
 } // namespace ContentExtensions

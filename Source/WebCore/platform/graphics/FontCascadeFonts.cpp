@@ -49,19 +49,19 @@ public:
         }
     }
 
-    GlyphData NODELETE glyphDataForCharacter(char32_t c) const
+    GlyphData LEGACY_NODELETE glyphDataForCharacter(char32_t c) const
     {
         unsigned index = GlyphPage::indexForCodePoint(c);
         return { m_glyphs[index], m_fonts[index].get() };
     }
 
-    void NODELETE setGlyphDataForCharacter(char32_t c, GlyphData glyphData)
+    void setGlyphDataForCharacter(char32_t c, GlyphData glyphData)
     {
         setGlyphDataForIndex(GlyphPage::indexForCodePoint(c), glyphData);
     }
 
 private:
-    void NODELETE setGlyphDataForIndex(unsigned index, const GlyphData& glyphData)
+    void LEGACY_NODELETE setGlyphDataForIndex(unsigned index, const GlyphData& glyphData)
     {
         m_glyphs[index] = glyphData.glyph;
         m_fonts[index] = glyphData.font.get();
@@ -75,6 +75,9 @@ inline FontCascadeFonts::GlyphPageCacheEntry::GlyphPageCacheEntry(RefPtr<GlyphPa
     : m_singleFont(WTF::move(singleFont))
 {
 }
+
+FontCascadeFonts::GlyphPageCacheEntry::GlyphPageCacheEntry() = default;
+FontCascadeFonts::GlyphPageCacheEntry::~GlyphPageCacheEntry() = default;
 
 GlyphData FontCascadeFonts::GlyphPageCacheEntry::glyphDataForCharacter(char32_t character)
 {
@@ -110,7 +113,7 @@ FontCascadeFonts::FontCascadeFonts()
 {
 #if ASSERT_ENABLED
     if (!isMainThread())
-        m_thread = Thread::currentSingleton();
+        m_creationThreadID = currentThreadID();
 #endif
 }
 
@@ -230,12 +233,12 @@ const FontRanges& FontCascadeFonts::realizeFallbackRangesAt(const FontCascadeDes
     return fontRanges;
 }
 
-static inline bool NODELETE isInRange(char32_t character, char32_t lowerBound, char32_t upperBound)
+static inline bool LEGACY_NODELETE isInRange(char32_t character, char32_t lowerBound, char32_t upperBound)
 {
     return character >= lowerBound && character <= upperBound;
 }
 
-static bool NODELETE shouldIgnoreRotation(char32_t character)
+static bool LEGACY_NODELETE shouldIgnoreRotation(char32_t character)
 {
     if (character == 0x000A7 || character == 0x000A9 || character == 0x000AE)
         return true;
@@ -376,8 +379,10 @@ GlyphData FontCascadeFonts::glyphDataForSystemFallback(char32_t character, const
     if (!systemFallbackFont)
         return GlyphData();
 
-    if (systemFallbackShouldBeInvisible)
-        systemFallbackFont = const_cast<Font*>(&systemFallbackFont->invisibleFont());
+    if (systemFallbackShouldBeInvisible) {
+        // FIXME: Remove suppression once rdar://189998365 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST systemFallbackFont = const_cast<Font*>(&systemFallbackFont->invisibleFont());
+    }
 
     if (systemFallbackFont->platformData().orientation() == FontOrientation::Vertical && !systemFallbackFont->hasVerticalGlyphs() && FontCascade::isCJKIdeographOrSymbol(character))
         variant = FontVariant::BrokenIdeograph;
@@ -395,7 +400,7 @@ GlyphData FontCascadeFonts::glyphDataForSystemFallback(char32_t character, const
 
     // Keep the system fallback fonts we use alive.
     if (fallbackGlyphData.isValid())
-        m_systemFallbackFontSet.add(systemFallbackFont.releaseNonNull());
+        addSystemFallbackFont(systemFallbackFont.releaseNonNull());
 
     return fallbackGlyphData;
 }
@@ -527,13 +532,13 @@ static RefPtr<GlyphPage> glyphPageFromFontRanges(unsigned pageNumber, const Font
         return nullptr;
 
     if (desiredVisibility == FallbackVisibility::Invisible && font->visibility() == Font::Visibility::Visible)
-        return const_cast<GlyphPage*>(protect(font->invisibleFont())->glyphPage(pageNumber));
-    return const_cast<GlyphPage*>(font->glyphPage(pageNumber));
+        SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<GlyphPage*>(protect(font->invisibleFont())->glyphPage(pageNumber));
+    SUPPRESS_MEMORY_UNSAFE_CAST return const_cast<GlyphPage*>(font->glyphPage(pageNumber));
 }
 
 GlyphData FontCascadeFonts::glyphDataForCharacter(char32_t c, const FontCascadeDescription& description, FontSelector* fontSelector, FontVariant variant, ResolvedEmojiPolicy resolvedEmojiPolicy)
 {
-    ASSERT(m_thread ? m_thread->ptr() == &Thread::currentSingleton() : isMainThread());
+    ASSERT(m_creationThreadID ? *m_creationThreadID == currentThreadID() : isMainThread());
     ASSERT(variant != FontVariant::Auto);
 
     if (variant != FontVariant::Normal)
@@ -570,6 +575,21 @@ void FontCascadeFonts::pruneSystemFallbacks()
     }
     m_systemFallbackFontSet.clear();
     m_shapedTextCache.clear();
+}
+
+void FontCascadeFonts::addSystemFallbackFont(Ref<Font>&& font)
+{
+    m_systemFallbackFontSet.add(WTF::move(font));
+}
+
+void FontCascadeFonts::forEachRealizedFont(NOESCAPE const Function<void(const Font&)>& function) const
+{
+    for (auto& ranges : m_realizedFallbackRanges) {
+        for (unsigned i = 0; i < ranges.size(); ++i) {
+            if (RefPtr font = ranges.rangeAt(i).font(ExternalResourceDownloadPolicy::Forbid))
+                function(*font);
+        }
+    }
 }
 
 TextShapingResultAndDisplayList* FontCascadeFonts::getOrCreateCachedShapedText(const TextRun& run, const FontCascade& fontCascade, unsigned from, std::optional<unsigned> to, ForTextEmphasis forTextEmphasis)

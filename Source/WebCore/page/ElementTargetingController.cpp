@@ -54,8 +54,8 @@
 #include "HitTestResult.h"
 #include "LocalFrameInlines.h"
 #include "LocalFrameView.h"
+#include "LocalNameWithNamespace.h"
 #include "NamedNodeMap.h"
-#include "NodeInlines.h"
 #include "NodeList.h"
 #include "NodeRenderStyle.h"
 #include "Page.h"
@@ -63,6 +63,7 @@
 #include "Region.h"
 #include "RenderBoxInlines.h"
 #include "RenderDescendantIterator.h"
+#include "RenderElementInlines.h"
 #include "RenderView.h"
 #include "ShadowRoot.h"
 #include "SimpleRange.h"
@@ -97,33 +98,33 @@ static constexpr auto minimumAreaRatioForElementToCoverViewport = 0.95;
 static constexpr auto minimumAreaForInterpolation = 200000;
 static constexpr auto maximumAreaForInterpolation = 800000;
 
-static float NODELETE linearlyInterpolatedViewportRatio(float viewportArea, float minimumValue, float maximumValue)
+static float LEGACY_NODELETE linearlyInterpolatedViewportRatio(float viewportArea, float minimumValue, float maximumValue)
 {
     auto areaRatio = (viewportArea - minimumAreaForInterpolation) / (maximumAreaForInterpolation - minimumAreaForInterpolation);
     return clampTo(maximumValue - areaRatio * (maximumValue - minimumValue), minimumValue, maximumValue);
 }
 
-static float NODELETE maximumAreaRatioForAbsolutelyPositionedContent(float viewportArea)
+static float LEGACY_NODELETE maximumAreaRatioForAbsolutelyPositionedContent(float viewportArea)
 {
     return linearlyInterpolatedViewportRatio(viewportArea, 0.75, 1);
 }
 
-static float NODELETE maximumAreaRatioForInFlowContent(float viewportArea)
+static float LEGACY_NODELETE maximumAreaRatioForInFlowContent(float viewportArea)
 {
     return linearlyInterpolatedViewportRatio(viewportArea, 0.5, 1);
 }
 
-static float NODELETE maximumAreaRatioForNearbyTargets(float viewportArea)
+static float LEGACY_NODELETE maximumAreaRatioForNearbyTargets(float viewportArea)
 {
     return linearlyInterpolatedViewportRatio(viewportArea, 0.25, 0.5);
 }
 
-static float NODELETE minimumAreaRatioForInFlowContent(float viewportArea)
+static float LEGACY_NODELETE minimumAreaRatioForInFlowContent(float viewportArea)
 {
     return linearlyInterpolatedViewportRatio(viewportArea, 0.005, 0.01);
 }
 
-static float NODELETE maximumAreaRatioForTrackingAdjustmentAreas(float viewportArea)
+static float LEGACY_NODELETE maximumAreaRatioForTrackingAdjustmentAreas(float viewportArea)
 {
     return linearlyInterpolatedViewportRatio(viewportArea, 0.25, 0.3);
 }
@@ -154,8 +155,8 @@ public:
         if (m_adjustmentToRestore.isEmpty())
             return;
 
-        m_element->setVisibilityAdjustment(m_adjustmentToRestore);
-        m_element->invalidateStyleAndRenderersForSubtree();
+        protect(m_element)->setVisibilityAdjustment(m_adjustmentToRestore);
+        protect(m_element)->invalidateStyleAndRenderersForSubtree();
     }
 
 private:
@@ -174,19 +175,19 @@ ElementTargetingController::ElementTargetingController(Page& page)
 {
 }
 
-static inline bool elementAndAncestorsAreOnlyRenderedChildren(const Element& element)
+static inline bool LEGACY_NODELETE elementAndAncestorsAreOnlyRenderedChildren(const Element& element)
 {
     CheckedPtr renderer = element.renderer();
     if (!renderer)
         return false;
 
     for (auto& ancestor : ancestorsOfType<RenderElement>(*renderer)) {
-        if (ancestor.style().usedVisibility() == Visibility::Hidden)
+        if (ancestor.usedStyle().visibility() == UsedVisibility::Hidden)
             continue;
 
         unsigned numberOfVisibleChildren = 0;
         for (auto& child : childrenOfType<RenderObject>(ancestor)) {
-            if (auto* renderElement = dynamicDowncast<RenderElement>(child); renderElement && renderElement->style().usedVisibility() == Visibility::Hidden)
+            if (auto* renderElement = dynamicDowncast<RenderElement>(child); renderElement && renderElement->usedStyle().visibility() == UsedVisibility::Hidden)
                 continue;
 
             if (++numberOfVisibleChildren >= 2)
@@ -207,7 +208,7 @@ static inline bool querySelectorMatchesOneElement(const Element& element, const 
     auto result = container->querySelectorAll(selector);
     if (result.hasException())
         return false;
-    return result.returnValue()->length() == 1 && result.returnValue()->item(0) == &element;
+    return protect(result.returnValue())->length() == 1 && protect(result.returnValue())->item(0) == &element;
 }
 
 struct ChildElementPosition {
@@ -241,7 +242,7 @@ static inline String computeIDSelector(const Element& element)
 {
     if (element.hasID()) {
         auto elementID = element.getIdAttribute();
-        if (auto* matches = element.treeScope().getAllElementsById(elementID); matches && matches->size() == 1)
+        if (auto* matches = protect(element.treeScope())->getAllElementsById(elementID); matches && matches->size() == 1)
             return makeString('#', elementID);
     }
     return emptyString();
@@ -252,7 +253,7 @@ static inline String computeTagAndAttributeSelector(const Element& element, cons
     if (!element.hasAttributes())
         return emptyString();
 
-    static NeverDestroyed<MemoryCompactLookupOnlyRobinHoodHashSet<QualifiedName>> attributesToExclude { std::initializer_list<QualifiedName> {
+    static NeverDestroyed<MemoryCompactLookupOnlyRobinHoodHashSet<LocalNameWithNamespace>> attributesToExclude { std::initializer_list<LocalNameWithNamespace> {
         HTMLNames::classAttr,
         HTMLNames::idAttr,
         HTMLNames::styleAttr,
@@ -428,7 +429,7 @@ static String parentRelativeSelectorRecursive(Element& element, ElementSelectorC
 
 static String computeHasChildSelector(Element& element)
 {
-    static NeverDestroyed<MemoryCompactLookupOnlyRobinHoodHashSet<QualifiedName>> tagsToCheckForUniqueAttributes { std::initializer_list<QualifiedName> {
+    static NeverDestroyed<MemoryCompactLookupOnlyRobinHoodHashSet<LocalNameWithNamespace>> tagsToCheckForUniqueAttributes { std::initializer_list<LocalNameWithNamespace> {
         HTMLNames::aTag,
         HTMLNames::imgTag,
         HTMLNames::timeTag,
@@ -567,7 +568,7 @@ TargetedElementSelectors ElementTargetingController::selectorsForElement(Element
     });
 }
 
-static inline RectEdges<bool> NODELETE computeOffsetEdges(const RenderStyle& style)
+static inline RectEdges<bool> LEGACY_NODELETE computeOffsetEdges(const Style::ComputedStyle& style)
 {
     return {
         style.top().isSpecified(),
@@ -590,7 +591,7 @@ static inline Vector<FrameIdentifier> collectChildFrameIdentifiers(const Element
 static FloatRect computeClientRect(const RenderElement& renderer)
 {
     auto rect = FloatRect { renderer.absoluteBoundingBoxRect() };
-    renderer.document().convertAbsoluteToClientRect(rect, renderer.style());
+    protect(renderer.document())->convertAbsoluteToClientRect(rect, protect(renderer.style()));
     return rect;
 }
 
@@ -736,7 +737,7 @@ static std::optional<TargetedElementInfo> targetedElementInfo(Element& element, 
 
         offsetEdges = computeOffsetEdges(renderer->style());
         positionType = renderer->style().position();
-        boundsInClientCoordinates = computeClientRect(*renderer);
+        boundsInClientCoordinates = computeClientRect(*protect(renderer));
     }
 
     bool isInVisibilityAdjustmentSubtree = [&] {
@@ -860,7 +861,7 @@ static inline std::optional<IntRect> inflatedClientRectForAdjustmentRegionTracki
     return { inflatedClientRect };
 }
 
-static bool NODELETE shouldIgnoreExistingVisibilityAdjustments(const TargetedElementRequest& request)
+static bool LEGACY_NODELETE shouldIgnoreExistingVisibilityAdjustments(const TargetedElementRequest& request)
 {
     return std::holds_alternative<String>(request.data) || std::holds_alternative<TargetedElementSelectors>(request.data);
 }
@@ -1085,7 +1086,7 @@ std::pair<Vector<Ref<Node>>, RefPtr<Element>> ElementTargetingController::findNo
     if (!foundElement)
         return { };
 
-    while (!foundElement->document().isTopDocument())
+    while (!protect(foundElement->document())->isTopDocument())
         foundElement = foundElement->document().ownerElement();
 
     if (!foundElement) {
@@ -1275,12 +1276,12 @@ Vector<TargetedElementInfo> ElementTargetingController::extractTargets(Vector<Re
             if (targetAreaRatio < minimumAreaRatioForElementToCoverViewport && !hasOneRenderedChild(target))
                 return false;
 
-            auto& style = targetRenderer->style();
-            if (auto specifiedZIndexValue = style.specifiedZIndex().tryValue(); specifiedZIndexValue && *specifiedZIndexValue < 0)
+            CheckedRef style = targetRenderer->style();
+            if (auto specifiedZIndexValue = style->specifiedZIndex().tryValue(); specifiedZIndexValue && *specifiedZIndexValue < 0)
                 return true;
 
             return targetRenderer->isOutOfFlowPositioned()
-                && (!style.hasBackground() || style.opacity().isTransparent())
+                && (!style->hasBackground() || style->opacity().isTransparent())
                 && targetRenderer->usedPointerEvents() == PointerEvents::None;
         }();
 
@@ -1429,7 +1430,7 @@ static inline Ref<Element> elementToAdjust(Element& element)
     return element;
 }
 
-static inline VisibilityAdjustment NODELETE adjustmentToApply(Element& element)
+static inline VisibilityAdjustment LEGACY_NODELETE adjustmentToApply(Element& element)
 {
     if (element.isAfterPseudoElement())
         return VisibilityAdjustment::AfterPseudo;
@@ -1525,11 +1526,11 @@ bool ElementTargetingController::adjustVisibility(Vector<TargetedElementAdjustme
         changed = true;
 
         if (invalidateSubtree)
-            adjustedElement->invalidateStyleAndRenderersForSubtree();
+            protect(adjustedElement)->invalidateStyleAndRenderersForSubtree();
         else
-            adjustedElement->invalidateStyle();
+            protect(adjustedElement)->invalidateStyle();
         m_adjustedElements.add(element);
-        m_documentsAffectedByVisibilityAdjustment.add(element->document());
+        m_documentsAffectedByVisibilityAdjustment.add(protect(element->document()));
     }
 
     if (changed)
@@ -1564,7 +1565,7 @@ static void adjustRegionAfterViewportSizeChange(Region& region, FloatSize oldSiz
             if (std::abs(distanceToTopEdge - distanceToBottomEdge) < minimumDistanceToConsiderEdgesEquidistant)
                 adjustedRect.inflateY(heightDelta / 2);
             else if (distanceToBottomEdge < distanceToTopEdge)
-                adjustedRect.move(heightDelta, 0);
+                adjustedRect.move(0, heightDelta);
         }
 
         auto enclosingAdjustedRect = enclosingIntRect(adjustedRect);
@@ -1658,11 +1659,11 @@ void ElementTargetingController::adjustVisibilityInRepeatedlyTargetedRegions(Doc
             continue;
 
         if (invalidateSubtree)
-            adjustedElement->invalidateStyleAndRenderersForSubtree();
+            protect(adjustedElement)->invalidateStyleAndRenderersForSubtree();
         else
-            adjustedElement->invalidateStyle();
+            protect(adjustedElement)->invalidateStyle();
         m_adjustedElements.add(element);
-        m_documentsAffectedByVisibilityAdjustment.add(element->document());
+        m_documentsAffectedByVisibilityAdjustment.add(protect(element->document()));
     }
 
     dispatchVisibilityAdjustmentStateDidChange();
@@ -1714,17 +1715,17 @@ void ElementTargetingController::applyVisibilityAdjustmentFromSelectors()
         if (currentAdjustment.contains(adjustment))
             continue;
 
-        element->setVisibilityAdjustment(currentAdjustment | adjustment);
+        protect(element)->setVisibilityAdjustment(currentAdjustment | adjustment);
 
         if (adjustment == VisibilityAdjustment::Subtree)
-            element->invalidateStyleAndRenderersForSubtree();
+            protect(element)->invalidateStyleAndRenderersForSubtree();
         else
-            element->invalidateStyle();
+            protect(element)->invalidateStyle();
 
-        m_adjustedElements.add(*element);
-        m_documentsAffectedByVisibilityAdjustment.add(element->document());
+        m_adjustedElements.add(protect(*element));
+        m_documentsAffectedByVisibilityAdjustment.add(protect(element->document()));
 
-        if (auto clientRect = inflatedClientRectForAdjustmentRegionTracking(*element, viewportArea))
+        if (auto clientRect = inflatedClientRectForAdjustmentRegionTracking(protect(*element), viewportArea))
             adjustmentRegion.unite(*clientRect);
 
         matchingSelectors.append(WTF::move(selectorIncludingPseudo));
@@ -2065,7 +2066,7 @@ void ElementTargetingController::selectorBasedVisibilityAdjustmentTimerFired()
     applyVisibilityAdjustmentFromSelectors();
 }
 
-RefPtr<Image> ElementTargetingController::snapshotIgnoringVisibilityAdjustment(NodeIdentifier nodeID, ScriptExecutionContextIdentifier documentID)
+RefPtr<BitmapImage> ElementTargetingController::snapshotIgnoringVisibilityAdjustment(NodeIdentifier nodeID, ScriptExecutionContextIdentifier documentID)
 {
     RefPtr page = m_page.get();
     if (!page)
@@ -2098,17 +2099,15 @@ RefPtr<Image> ElementTargetingController::snapshotIgnoringVisibilityAdjustment(N
 
     auto backgroundColor = frameView->baseBackgroundColor();
     frameView->setBaseBackgroundColor(Color::transparentBlack);
-    frameView->setNodeToDraw(element.get());
     auto resetPaintingState = makeScopeExit([frameView, backgroundColor]() mutable {
         frameView->setBaseBackgroundColor(WTF::move(backgroundColor));
-        frameView->setNodeToDraw(nullptr);
     });
 
     auto snapshotRect = renderer->absoluteBoundingBoxRect();
     if (snapshotRect.isEmpty())
         return { };
 
-    auto buffer = snapshotFrameRect(*mainFrame, snapshotRect, { { }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() });
+    auto buffer = snapshotFrameRect(*mainFrame, snapshotRect, { { }, PixelFormat::BGRA8, ColorSpace::SRGB() }, element.get());
     return BitmapImage::create(ImageBuffer::sinkIntoNativeImage(WTF::move(buffer)));
 }
 

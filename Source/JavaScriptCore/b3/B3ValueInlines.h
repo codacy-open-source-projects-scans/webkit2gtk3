@@ -61,9 +61,32 @@
 #include "B3WasmStructGetValue.h"
 #include "B3WasmStructNewValue.h"
 #include "B3WasmStructSetValue.h"
+#include <array>
 #include <wtf/GraphNodeWorklist.h>
 
 namespace JSC { namespace B3 {
+
+inline constexpr unsigned numberOfB3Opcodes = static_cast<unsigned>(Oops) + 1;
+
+// Effects for opcodes whose effects are a pure function of the opcode. Invalid entries are
+// value-dependent and handled by Value::effectsSlow(). Defined once in B3Value.cpp.
+JS_EXPORT_PRIVATE extern const std::array<Effects, numberOfB3Opcodes> constantEffectsTable;
+
+ALWAYS_INLINE Effects Value::effects() const
+{
+    const Effects& entry = constantEffectsTable[opcode()];
+    if (entry.isValid()) [[likely]]
+        return entry;
+    return effectsSlow();
+}
+
+ALWAYS_INLINE bool Value::mustExecute() const
+{
+    const Effects& entry = constantEffectsTable[opcode()];
+    if (entry.isValid()) [[likely]]
+        return entry.mustExecute();
+    return effectsSlow().mustExecute();
+}
 
 #define DISPATCH_ON_KIND(MACRO) \
     switch (kind().opcode()) { \
@@ -87,8 +110,6 @@ namespace JSC { namespace B3 {
     case SExt8: \
     case SExt16: \
     case Trunc: \
-    case TruncHigh: \
-    case Stitch: \
     case SExt8To64: \
     case SExt16To64: \
     case SExt32: \
@@ -164,7 +185,7 @@ namespace JSC { namespace B3 {
     case Store16: \
     case Store: \
         return MACRO(MemoryValue); \
-    case MemoryCopy: \
+    case MemoryMove: \
     case MemoryFill: \
         return MACRO(BulkMemoryValue); \
     case Switch: \
@@ -308,7 +329,7 @@ ALWAYS_INLINE Value* Value::cloneImpl() const
 }
 
 template<typename BottomProvider>
-void Value::replaceWithBottom(const BottomProvider& bottomProvider)
+void Value::replaceWithBottom(NOESCAPE const BottomProvider& bottomProvider)
 {
     if (m_type == Void) {
         replaceWithNop();
@@ -397,16 +418,12 @@ inline bool Value::isInt(int64_t value) const
 
 inline bool Value::hasIntPtr() const
 {
-    if (is64Bit())
-        return hasInt64();
-    return hasInt32();
+    return hasInt64();
 }
 
 inline intptr_t Value::asIntPtr() const
 {
-    if (is64Bit())
-        return asInt64();
-    return asInt32();
+    return asInt64();
 }
 
 inline bool Value::isIntPtr(intptr_t value) const
@@ -507,7 +524,7 @@ inline T Value::asNumber() const
 }
 
 template<typename Functor>
-void Value::walk(const Functor& functor, PhiChildren* phiChildren)
+void Value::walk(NOESCAPE const Functor& functor, PhiChildren* phiChildren)
 {
     GraphNodeWorklist<Value*> worklist;
     worklist.push(this);

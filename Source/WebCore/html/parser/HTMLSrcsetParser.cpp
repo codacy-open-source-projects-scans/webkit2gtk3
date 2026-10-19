@@ -36,14 +36,14 @@
 #include "Element.h"
 #include "HTMLParserIdioms.h"
 #include <ranges>
-#include <wtf/ListHashSet.h>
+#include <wtf/OrderedHashSet.h>
 #include <wtf/URL.h>
 #include <wtf/text/ParsingUtilities.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
 
-static inline bool NODELETE compareByDensity(const ImageCandidate& first, const ImageCandidate& second)
+static inline bool LEGACY_NODELETE compareByDensity(const ImageCandidate& first, const ImageCandidate& second)
 {
     return first.density < second.density;
 }
@@ -64,7 +64,7 @@ static void appendDescriptorAndReset(std::span<const CharType>& descriptorStart,
 
 // The following is called appendCharacter to match the spec's terminology.
 template<typename CharType>
-static void NODELETE appendCharacter(std::span<const CharType>& descriptorStart, std::span<const CharType> position)
+static void LEGACY_NODELETE appendCharacter(std::span<const CharType>& descriptorStart, std::span<const CharType> position)
 {
     // Since we don't copy the tokens, this just set the point where the descriptor tokens start.
     if (!descriptorStart.data())
@@ -217,7 +217,7 @@ Vector<ImageCandidate> parseImageCandidatesFromSrcsetAttribute(StringView attrib
         return parseImageCandidatesFromSrcsetAttribute<char16_t>(attribute.span16());
 }
 
-void getURLsFromSrcsetAttribute(const Element& element, StringView attribute, ListHashSet<URL>& urls)
+void getURLsFromSrcsetAttribute(const Element& element, StringView attribute, OrderedHashSet<URL>& urls)
 {
     if (attribute.isEmpty())
         return;

@@ -44,44 +44,9 @@ add_custom_target(wgsl-types
     ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/TypeDeclarations.h ${CMAKE_CURRENT_BINARY_DIR}/TypeOverloads.h)
 
-set(wgslc_SOURCES
-    AliasAnalysis.cpp
-    AttributeValidator.cpp
-    BoundsCheck.cpp
-    CallGraph.cpp
-    CompilationMessage.cpp
-    CompilationScope.cpp
-    ConstantValue.cpp
-    Constraints.cpp
-    EntryPointRewriter.cpp
-    GlobalSorting.cpp
-    GlobalVariableRewriter.cpp
-    IOValidator.cpp
-    Lexer.cpp
-    MangleNames.cpp
-    Overload.cpp
-    Parser.cpp
-    PointerRewriter.cpp
-    Token.cpp
-    TypeCheck.cpp
-    TypeStore.cpp
-    Types.cpp
-    UniformityAnalysis.cpp
-    VisibilityValidator.cpp
-    WGSL.cpp
-    WGSLEnums.cpp
-    WGSLShaderModule.cpp
-
-    AST/ASTBinaryExpression.cpp
-    AST/ASTBuilder.cpp
-    AST/ASTDecrementIncrementStatement.cpp
-    AST/ASTStringDumper.cpp
-    AST/ASTUnaryExpression.cpp
-    AST/ASTVisitor.cpp
-
-    Metal/MetalCodeGenerator.cpp
-    Metal/MetalFunctionWriter.cpp
-    )
+list(APPEND WGSLCore_UNIFIED_SOURCE_LIST_FILES
+    "Sources.txt"
+)
 
 set(wgslc_HEADERS
     AliasAnalysis.h
@@ -97,6 +62,7 @@ set(wgslc_HEADERS
     ContextProvider.h
     ContextProviderInlines.h
     EntryPointRewriter.h
+    EvaluationOrderRewriter.h
     GlobalSorting.h
     GlobalVariableRewriter.h
     Lexer.h
@@ -196,17 +162,11 @@ set(wgslc_HEADERS
     Metal/MetalFunctionWriter.h
     )
 
-set(wgslc_FRAMEWORKS WTF bmalloc)
-set(wgslc_PRIVATE_INCLUDE_DIRECTORIES
-    ${CMAKE_CURRENT_BINARY_DIR}/../../..  # for cmakeconfig.h
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/AST
-    ${CMAKE_CURRENT_SOURCE_DIR}/Metal)
-set(wgslc_DEPENDENCIES wgsl-types)
-
 # WGSLCore static library -- shared between wgslc and TestWGSL.
-add_library(WGSLCore STATIC ${wgslc_SOURCES})
+WEBKIT_COMPUTE_SOURCES(WGSLCore)
+add_library(WGSLCore STATIC ${WGSLCore_SOURCES})
+WEBKIT_ADD_TARGET_UNSAFE_BUFFER_WARNINGS(WGSLCore)
+WEBKIT_ADD_PREFIX_HEADER(WGSLCore WGSLPrefix.h PREFIX_LANGUAGES CXX)
 target_include_directories(WGSLCore PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}/../../..
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -216,13 +176,17 @@ target_include_directories(WGSLCore PUBLIC
 target_link_libraries(WGSLCore PUBLIC WebKit::JavaScriptCore)
 add_dependencies(WGSLCore wgsl-types)
 
-if (DEVELOPER_MODE_CXX_FLAGS)
-    target_compile_options(WGSLCore PRIVATE ${DEVELOPER_MODE_CXX_FLAGS})
-endif ()
-
 # wgslc executable
-list(APPEND wgslc_SOURCES wgslc.cpp)
+set(wgslc_SOURCES wgslc.cpp)
+set(wgslc_LIBRARIES WGSLCore)
 WEBKIT_EXECUTABLE_DECLARE(wgslc)
+# Before WEBKIT_EXECUTABLE(), which reads the bundle properties.
+if (WEBKIT_SDK_IS_IOS_FAMILY)
+    set_target_properties(wgslc PROPERTIES MACOSX_BUNDLE FALSE)
+endif ()
 WEBKIT_EXECUTABLE(wgslc)
+WEBKIT_REUSE_PREFIX_HEADER(wgslc WGSLCore WGSLPrefix.h PREFIX_LANGUAGES CXX)
 
-install(TARGETS wgslc EXCLUDE_FROM_ALL)
+install(TARGETS wgslc EXCLUDE_FROM_ALL
+    RUNTIME DESTINATION "${LIBEXEC_INSTALL_DIR}"
+    BUNDLE DESTINATION "${LIBEXEC_INSTALL_DIR}")

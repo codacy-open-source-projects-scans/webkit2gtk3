@@ -32,6 +32,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
+#include <wtf/text/StringHash.h>
 
 #if PLATFORM(COCOA)
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
@@ -54,7 +55,7 @@ NO_RETURN_DUE_TO_CRASH NEVER_INLINE static void crashDueToApplicationCreatingUse
 }
 #endif
 
-static HashCountedSet<String>& styleStrings()
+static HashCountedSet<String>& LEGACY_NODELETE styleStrings()
 {
     static NeverDestroyed<HashCountedSet<String>> set;
     return set;

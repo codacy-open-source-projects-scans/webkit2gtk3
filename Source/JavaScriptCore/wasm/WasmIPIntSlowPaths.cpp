@@ -45,6 +45,7 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include "WasmCallee.h"
 #include "WasmCallingConvention.h"
 #include "WasmDebugServer.h"
+#include "WasmExceptionType.h"
 #include "WasmExecutionHandler.h"
 #include "WasmIPIntGenerator.h"
 #include "WasmModuleInformation.h"
@@ -54,6 +55,7 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include "WasmWorklist.h"
 #include "WebAssemblyFunction.h"
 #include <bit>
+#include <limits>
 #include <wtf/LEBDecoder.h>
 
 namespace JSC { namespace IPInt {
@@ -104,7 +106,7 @@ IPIntStackEntry* FrameAccess::stackEnd()
 #define IPINT_HANDLE_STEP_INTO_CALL(callerVM, boxedCallee, calleeInstance) do { \
         if (Options::enableWasmDebugger()) [[unlikely]] { \
             Wasm::DebugServer& debugServer = Wasm::DebugServer::singleton(); \
-            if (debugServer.hasDebugger()) \
+            if (debugServer.isConnected()) \
                 debugServer.execution().setStepIntoBreakpointForCall((callerVM), (boxedCallee), (calleeInstance)); \
         } \
     } while (false)
@@ -114,7 +116,7 @@ IPIntStackEntry* FrameAccess::stackEnd()
 #define IPINT_HANDLE_STEP_INTO_THROW(throwVM) do { \
         if (Options::enableWasmDebugger()) [[unlikely]] { \
             Wasm::DebugServer& debugServer = Wasm::DebugServer::singleton(); \
-            if (debugServer.hasDebugger()) \
+            if (debugServer.isConnected()) \
                 debugServer.execution().setStepIntoBreakpointForThrow((throwVM)); \
         } \
     } while (false)
@@ -141,13 +143,8 @@ IPIntStackEntry* FrameAccess::stackEnd()
 
 #define IPINT_END() WASM_RETURN_TWO(0, 0);
 
-#if CPU(ADDRESS64)
 #define IPINT_RETURN(value) \
     WASM_RETURN_TWO(std::bit_cast<void*>(value), 0);
-#else
-#define IPINT_RETURN(value) \
-    WASM_RETURN_TWO(std::bit_cast<void*>(JSValue::decode(value).payload()), std::bit_cast<void*>(JSValue::decode(value).tag()));
-#endif
 
 #if ENABLE(WEBASSEMBLY_BBQJIT)
 
@@ -182,8 +179,14 @@ static inline RefPtr<Wasm::JITCallee> jitCompileAndSetHeuristics(Wasm::IPIntCall
     auto getReplacement = [&] () -> RefPtr<Wasm::JITCallee> {
         switch (osrFor) {
         case OSRFor::Prologue: {
-            if (!Options::useWasmIPInt() || needsSIMDReplacement) [[unlikely]]
-                return calleeGroup.tryGetReplacementConcurrently(functionIndex);
+            if (!Options::useWasmIPInt() || needsSIMDReplacement) [[unlikely]] {
+                // Deliberately not the lock-free peek used for loops: needsSIMDReplacement means
+                // IPInt cannot interpret this function at all, so we must find the JIT callee that
+                // IPIntPlan forced to be compiled, whether it is BBQ or OMG. This path is disabled
+                // in the default configuration, so it is not worth optimizing for contention.
+                Locker locker { calleeGroup.m_lock };
+                return calleeGroup.replacement(locker, callee.index());
+            }
             return nullptr;
         }
         case OSRFor::Epilogue: {
@@ -335,9 +338,10 @@ WASM_IPINT_EXTERN_CPP_DECL(loop_osr, CallFrame* callFrame, uint8_t* pc, IPIntSta
     // The BBQ frame may use more stack than the IPInt frame. If there's not enough stack space,
     // skip OSR and continue executing in IPInt.
     if (bbqCallee->stackCheckSize() != Wasm::stackCheckNotNeeded) {
-        auto stackAtOSREntry = reinterpret_cast<uintptr_t>(sp);
-        auto candidateNewStackPointer = reinterpret_cast<void*>(stackAtOSREntry - bbqCallee->stackCheckSize());
-        if (candidateNewStackPointer < instance->softStackLimit()) [[unlikely]]
+        const uintptr_t stackPointer = reinterpret_cast<uintptr_t>(sp);
+        const uintptr_t stackExtent = stackPointer - static_cast<uintptr_t>(bbqCallee->stackCheckSize());
+        const uintptr_t stackLimit = reinterpret_cast<uintptr_t>(instance->softStackLimit());
+        if (stackExtent >= stackPointer || stackExtent <= stackLimit) [[unlikely]]
             WASM_RETURN_TWO(nullptr, nullptr);
     }
 
@@ -370,7 +374,7 @@ WASM_IPINT_EXTERN_CPP_DECL(epilogue_osr, CallFrame* callFrame)
 }
 #endif
 
-static void NODELETE copyExceptionStackToPayload(const Wasm::FunctionSignature& tagType, const IPIntStackEntry* stackPointer, FixedVector<uint64_t>& payload)
+static void copyExceptionStackToPayload(const Wasm::RTT& tagType, const IPIntStackEntry* stackPointer, FixedVector<uint64_t>& payload)
 {
     unsigned payloadIndex = payload.size();
     for (unsigned i = 0; i < tagType.argumentCount(); ++i) {
@@ -384,7 +388,7 @@ static void NODELETE copyExceptionStackToPayload(const Wasm::FunctionSignature& 
     ASSERT(!payloadIndex);
 }
 
-static void NODELETE copyExceptionPayloadToStack(const Wasm::FunctionSignature& tagType, const FixedVector<uint64_t>& payload, IPIntStackEntry* stackPointer)
+static void copyExceptionPayloadToStack(const Wasm::RTT& tagType, const FixedVector<uint64_t>& payload, IPIntStackEntry* stackPointer)
 {
     unsigned payloadIndex = payload.size();
     for (unsigned i = 0; i < tagType.argumentCount(); ++i) {
@@ -516,11 +520,7 @@ WASM_IPINT_EXTERN_CPP_DECL(rethrow_exception, CallFrame* callFrame, unsigned try
     Wasm::IPIntCallee* callee = IPINT_CALLEE(callFrame);
     RELEASE_ASSERT(tryDepth <= callee->rethrowSlots());
     FrameAccess frame(callFrame, callee);
-#if CPU(ADDRESS64)
     JSWebAssemblyException* exception = std::bit_cast<JSWebAssemblyException*>(frame.rethrowSlot(tryDepth - 1)->i64);
-#else
-    JSWebAssemblyException* exception = std::bit_cast<JSWebAssemblyException*>(frame.rethrowSlot(tryDepth - 1)->i32);
-#endif
     RELEASE_ASSERT(exception);
     throwException(globalObject, throwScope, exception);
 
@@ -552,55 +552,94 @@ WASM_IPINT_EXTERN_CPP_DECL(throw_ref, CallFrame* callFrame, EncodedJSValue exnre
     WASM_RETURN_TWO(vm.targetMachinePCForThrow, nullptr);
 }
 
-WASM_IPINT_EXTERN_CPP_DECL(table_get, unsigned tableIndex, unsigned index)
+static ALWAYS_INLINE std::optional<uint32_t> checkedTableOperand(uint64_t value, bool isTable64)
 {
-    EncodedJSValue result = Wasm::tableGet(instance, tableIndex, index);
+    if (!isTable64)
+        value = static_cast<uint32_t>(value);
+    if (value > std::numeric_limits<int32_t>::max()) [[unlikely]]
+        return std::nullopt;
+    return static_cast<uint32_t>(value);
+}
+
+WASM_IPINT_EXTERN_CPP_DECL(table_get, unsigned tableIndex, uint64_t index)
+{
+    // FuncRefTable::get materializes the funcref's JS wrapper on demand.
+    WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
+    const auto& info = instance->module().moduleInformation();
+    auto checkedIndex = checkedTableOperand(index, info.table(tableIndex).addressType().is64Bit());
+    if (!checkedIndex)
+        IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
+
+    EncodedJSValue result = Wasm::tableGet(instance, tableIndex, *checkedIndex);
     if (!result)
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
     IPINT_RETURN(result);
 }
 
-WASM_IPINT_EXTERN_CPP_DECL(table_set, unsigned tableIndex, unsigned index, EncodedJSValue value)
+WASM_IPINT_EXTERN_CPP_DECL(table_set, unsigned tableIndex, uint64_t index, EncodedJSValue value)
 {
-    if (!Wasm::tableSet(instance, tableIndex, index, value))
+    const auto& info = instance->module().moduleInformation();
+    auto checkedIndex = checkedTableOperand(index, info.table(tableIndex).addressType().is64Bit());
+    if (!checkedIndex)
+        IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
+
+    if (!Wasm::tableSet(instance, tableIndex, *checkedIndex, value))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
     IPINT_END();
 }
 
 WASM_IPINT_EXTERN_CPP_DECL(table_init, IPIntStackEntry* sp, TableInitMetadata* metadata)
 {
+    const auto& info = instance->module().moduleInformation();
+
     int32_t n = sp[0].i32;
     int32_t src = sp[1].i32;
-    int32_t dst = sp[2].i32;
+    auto dst = checkedTableOperand(sp[2].i64, info.table(metadata->tableIndex).addressType().is64Bit());
+
+    if (!dst)
+        IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
 
     WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
-    if (!Wasm::tableInit(instance, metadata->elementIndex, metadata->tableIndex, dst, src, n))
+    if (!Wasm::tableInit(instance, metadata->elementIndex, metadata->tableIndex, *dst, src, n))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
     IPINT_END();
 }
 
 WASM_IPINT_EXTERN_CPP_DECL(table_fill, IPIntStackEntry* sp, TableFillMetadata* metadata)
 {
-    int32_t n = sp[0].i32;
-    EncodedJSValue fill = sp[1].ref;
-    int32_t offset = sp[2].i32;
+    const auto& info = instance->module().moduleInformation();
+    const bool isTable64 = info.table(metadata->tableIndex).addressType().is64Bit();
 
-    if (!Wasm::tableFill(instance, metadata->tableIndex, offset, fill, n))
+    auto n = checkedTableOperand(sp[0].i64, isTable64);
+    EncodedJSValue fill = sp[1].ref;
+    auto offset = checkedTableOperand(sp[2].i64, isTable64);
+
+    if (!n || !offset)
+        IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
+
+    if (!Wasm::tableFill(instance, metadata->tableIndex, *offset, fill, *n))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
     IPINT_END();
 }
 
 WASM_IPINT_EXTERN_CPP_DECL(table_grow, IPIntStackEntry* sp, TableGrowMetadata* metadata)
 {
-    int32_t n = sp[0].i32;
+    const auto& info = instance->module().moduleInformation();
+
+    auto n = checkedTableOperand(sp[0].i64, info.table(metadata->tableIndex).addressType().is64Bit());
     EncodedJSValue fill = sp[1].ref;
 
-    WASM_RETURN_TWO(std::bit_cast<void*>(Wasm::tableGrow(instance, metadata->tableIndex, fill, n)), 0);
+    if (!n)
+        IPINT_RETURN(static_cast<intptr_t>(-1));
+
+    WASM_RETURN_TWO(reinterpret_cast<void*>(Wasm::tableGrow(instance, metadata->tableIndex, fill, *n)), 0);
 }
 
 WASM_IPINT_EXTERN_CPP_DECL(memory_grow, int64_t delta, uint8_t memoryIndex)
 {
     WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
+    if (!instance->module().moduleInformation().memory(memoryIndex).isMemory64())
+        delta = static_cast<uint32_t>(delta);
     WASM_RETURN_TWO(reinterpret_cast<void*>(Wasm::growMemory(instance, delta, memoryIndex)), 0);
 }
 
@@ -614,7 +653,8 @@ WASM_IPINT_EXTERN_CPP_DECL(memory_init, int32_t dataIndex, IPIntStackEntry* sp, 
 {
     int32_t n = sp[0].i32;
     int32_t s = sp[1].i32;
-    int64_t d = sp[2].i64;
+    const auto& info = instance->module().moduleInformation();
+    uint64_t d = info.memory(memoryIndex).isMemory64() ? sp[2].i64 : static_cast<uint32_t>(sp[2].i32);
 
     if (!Wasm::memoryInit(instance, dataIndex, d, s, n, memoryIndex))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsMemoryAccess);
@@ -631,9 +671,11 @@ WASM_IPINT_EXTERN_CPP_DECL(memory_copy, IPIntStackEntry* sp)
 {
     uint8_t srcMemoryIndex = static_cast<uint8_t>(sp[0].i64);
     uint8_t dstMemoryIndex = static_cast<uint8_t>(sp[1].i64);
-    int64_t count = sp[2].i64;
-    int64_t src = sp[3].i64;
-    int64_t dst = sp[4].i64;
+    const auto& info = instance->module().moduleInformation();
+    bool bothMemory64 = info.memory(srcMemoryIndex).isMemory64() && info.memory(dstMemoryIndex).isMemory64();
+    uint64_t count = bothMemory64 ? sp[2].i64 : static_cast<uint32_t>(sp[2].i32);
+    uint64_t src = info.memory(srcMemoryIndex).isMemory64() ? sp[3].i64 : static_cast<uint32_t>(sp[3].i32);
+    uint64_t dst = info.memory(dstMemoryIndex).isMemory64() ? sp[4].i64 : static_cast<uint32_t>(sp[4].i32);
     if (!Wasm::memoryCopy(instance, dst, src, count, dstMemoryIndex, srcMemoryIndex))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsMemoryAccess);
     IPINT_END();
@@ -642,9 +684,10 @@ WASM_IPINT_EXTERN_CPP_DECL(memory_copy, IPIntStackEntry* sp)
 WASM_IPINT_EXTERN_CPP_DECL(memory_fill, IPIntStackEntry* sp)
 {
     uint8_t memoryIndex = static_cast<uint8_t>(sp[0].i64);
-    int64_t count = sp[1].i64;
+    const auto& info = instance->module().moduleInformation();
+    uint64_t count = info.memory(memoryIndex).isMemory64() ? sp[1].i64 : static_cast<uint32_t>(sp[1].i32);
     int32_t targetValue = sp[2].i32;
-    int64_t dst = sp[3].i64;
+    uint64_t dst = info.memory(memoryIndex).isMemory64() ? sp[3].i64 : static_cast<uint32_t>(sp[3].i32);
     if (!Wasm::memoryFill(instance, dst, targetValue, count, memoryIndex))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsMemoryAccess);
     IPINT_END();
@@ -658,11 +701,18 @@ WASM_IPINT_EXTERN_CPP_DECL(elem_drop, int32_t dataIndex)
 
 WASM_IPINT_EXTERN_CPP_DECL(table_copy, IPIntStackEntry* sp, TableCopyMetadata* metadata)
 {
-    int32_t n = sp[0].i32;
-    int32_t src = sp[1].i32;
-    int32_t dst = sp[2].i32;
+    const auto& info = instance->module().moduleInformation();
+    const bool dstIsTable64 = info.table(metadata->dstTableIndex).addressType().is64Bit();
+    const bool srcIsTable64 = info.table(metadata->srcTableIndex).addressType().is64Bit();
 
-    if (!Wasm::tableCopy(instance, metadata->dstTableIndex, metadata->srcTableIndex, dst, src, n))
+    auto n = checkedTableOperand(sp[0].i64, dstIsTable64 && srcIsTable64);
+    auto src = checkedTableOperand(sp[1].i64, srcIsTable64);
+    auto dst = checkedTableOperand(sp[2].i64, dstIsTable64);
+
+    if (!n || !src || !dst)
+        IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
+
+    if (!Wasm::tableCopy(instance, metadata->dstTableIndex, metadata->srcTableIndex, *dst, *src, *n))
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsTableAccess);
     IPINT_END();
 }
@@ -738,8 +788,8 @@ WASM_IPINT_EXTERN_CPP_DECL(array_new, uint32_t type, uint32_t size, IPIntStackEn
 {
     WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
     WebAssemblyGCStructure* structure = instance->gcObjectStructure(type);
-    const Wasm::TypeDefinition& arraySignature = structure->typeDefinition();
-    Wasm::StorageType elementType = arraySignature.as<Wasm::ArrayType>()->elementType().type;
+    const Wasm::RTT& arraySignature = structure->rtt();
+    Wasm::StorageType elementType = arraySignature.elementType().type;
 
     JSValue result;
     if (elementType.unpacked().isV128())
@@ -756,8 +806,8 @@ WASM_IPINT_EXTERN_CPP_DECL(array_new_default, uint32_t type, uint32_t size)
     WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
     UNUSED_PARAM(instance);
     WebAssemblyGCStructure* structure = instance->gcObjectStructure(type);
-    const Wasm::TypeDefinition& arraySignature = structure->typeDefinition();
-    Wasm::StorageType elementType = arraySignature.as<Wasm::ArrayType>()->elementType().type;
+    const Wasm::RTT& arraySignature = structure->rtt();
+    Wasm::StorageType elementType = arraySignature.elementType().type;
     EncodedJSValue defaultValue = 0;
 
     if (Wasm::isRefType(elementType)) {
@@ -888,7 +938,7 @@ WASM_IPINT_EXTERN_CPP_DECL(array_fill, IPIntStackEntry* sp)
     EncodedJSValue arrayref = sp[3].ref;
     JSValue arrayValue = JSValue::decode(arrayref);
     if (arrayValue.isNull()) [[unlikely]]
-        IPINT_THROW(Wasm::ExceptionType::NullArrayFill);
+        IPINT_THROW(Wasm::ExceptionType::NullAccess);
 
     ASSERT(arrayValue.isObject());
     JSWebAssemblyArray* arrayObject = uncheckedDowncast<JSWebAssemblyArray>(arrayValue.getObject());
@@ -924,7 +974,7 @@ WASM_IPINT_EXTERN_CPP_DECL(array_copy, IPIntStackEntry* sp)
     uint32_t size = sp[0].i32;
 
     if (JSValue::decode(dst).isNull() || JSValue::decode(src).isNull()) [[unlikely]]
-        IPINT_THROW(Wasm::ExceptionType::NullArrayCopy);
+        IPINT_THROW(Wasm::ExceptionType::NullAccess);
 
     if (!Wasm::arrayCopy(instance, dst, dstOffset, src, srcOffset, size)) [[unlikely]]
         IPINT_THROW(Wasm::ExceptionType::OutOfBoundsArrayCopy);
@@ -974,13 +1024,13 @@ WASM_IPINT_EXTERN_CPP_DECL(trace, CallFrame* callFrame, uint8_t* pc, uint8_t* mc
         IPINT_END();
 
     Wasm::IPIntCallee* callee = IPINT_CALLEE(callFrame);
-    dataLogF("<%p> %p%s / %p: executing +0x%x, %s, pc = %p, mc = %p\n",
+    SAFE_DATALOGF("<%p> %p%s / %p: executing +0x%x, %s, pc = %p, mc = %p\n",
         &Thread::currentSingleton(),
         instance,
-        makeString(callee->indexOrName()).ascii().data(),
+        makeString(callee->indexOrName()).utf8(),
         callFrame,
         static_cast<uint32_t>(pc - callee->bytecode()),
-        opcodeName(pc).characters(),
+        opcodeName(pc),
         pc, mc);
     IPINT_END();
 }
@@ -1006,6 +1056,8 @@ WASM_IPINT_EXTERN_CPP_DECL(array_init_data, uint32_t dataIndex, IPIntStackEntry*
 
 WASM_IPINT_EXTERN_CPP_DECL(array_init_elem, uint32_t elemIndex, IPIntStackEntry* sp)
 {
+    WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
+
     // sp[0] = size
     // sp[1] = src_offset
     // sp[2] = dst_offset
@@ -1031,26 +1083,26 @@ WASM_IPINT_EXTERN_CPP_DECL(any_convert_extern, EncodedJSValue value)
 
 WASM_IPINT_EXTERN_CPP_DECL(ref_test, int32_t heapType, bool allowNull, EncodedJSValue value)
 {
-    if (Wasm::typeIndexIsType(static_cast<Wasm::TypeIndex>(heapType))) {
-        bool result = Wasm::refCast(value, allowNull, static_cast<Wasm::TypeIndex>(heapType), nullptr);
+    if (!Wasm::isTypeIndexHeapType(heapType)) {
+        bool result = Wasm::refCast(value, allowNull, Wasm::typeIndexFromTypeKind(static_cast<Wasm::TypeKind>(heapType)));
         IPINT_RETURN(static_cast<uint64_t>(result));
     }
 
     auto& info = instance->module().moduleInformation();
-    SUPPRESS_UNCOUNTED_ARG bool result = Wasm::refCast(value, allowNull, info.typeIndexFromTypeSignatureIndex(Wasm::ModuleInformation::typeSignatureIndexFromHeapType(heapType)), &info.rtt(Wasm::ModuleInformation::typeSignatureIndexFromHeapType(heapType)));
+    SUPPRESS_UNCOUNTED_ARG bool result = Wasm::refCast(value, allowNull, info.rtt(Wasm::ModuleInformation::typeSignatureIndexFromHeapType(heapType)).asTypeIndex());
     IPINT_RETURN(static_cast<uint64_t>(result));
 }
 
 WASM_IPINT_EXTERN_CPP_DECL(ref_cast, int32_t heapType, bool allowNull, EncodedJSValue value)
 {
-    if (Wasm::typeIndexIsType(static_cast<Wasm::TypeIndex>(heapType))) {
-        if (!Wasm::refCast(value, allowNull, static_cast<Wasm::TypeIndex>(heapType), nullptr)) [[unlikely]]
+    if (!Wasm::isTypeIndexHeapType(heapType)) {
+        if (!Wasm::refCast(value, allowNull, Wasm::typeIndexFromTypeKind(static_cast<Wasm::TypeKind>(heapType)))) [[unlikely]]
             IPINT_THROW(Wasm::ExceptionType::CastFailure);
         IPINT_RETURN(value);
     }
 
     auto& info = instance->module().moduleInformation();
-    SUPPRESS_UNCOUNTED_ARG if (!Wasm::refCast(value, allowNull, info.typeIndexFromTypeSignatureIndex(Wasm::ModuleInformation::typeSignatureIndexFromHeapType(heapType)), &info.rtt(Wasm::ModuleInformation::typeSignatureIndexFromHeapType(heapType)))) [[unlikely]] {
+    SUPPRESS_UNCOUNTED_ARG if (!Wasm::refCast(value, allowNull, info.rtt(Wasm::ModuleInformation::typeSignatureIndexFromHeapType(heapType)).asTypeIndex())) [[unlikely]] {
         if (!allowNull && JSValue::decode(value).isNull())
             IPINT_THROW(Wasm::ExceptionType::NullAccess);
         IPINT_THROW(Wasm::ExceptionType::CastFailure);
@@ -1065,6 +1117,16 @@ WASM_IPINT_EXTERN_CPP_DECL(prepare_function_body, CallFrame* callFrame)
     WASM_RETURN_TWO(callee, nullptr);
 }
 
+enum class PrepareCallKind : uint8_t { Call, TailCall };
+
+static ALWAYS_INLINE void ensureCallBytecodeForKind(const Wasm::RTT& rtt, PrepareCallKind kind)
+{
+    if (kind == PrepareCallKind::TailCall)
+        rtt.ensureTailCallBytecode();
+    else
+        rtt.ensureCallBytecode();
+}
+
 /**
  * Given a function index, determine the pointer to its executable code.
  * Return a pair of the target wasm instance and the code pointer (via WASM_CALL_RETURN).
@@ -1075,12 +1137,10 @@ WASM_IPINT_EXTERN_CPP_DECL(prepare_function_body, CallFrame* callFrame)
  *  - calleeAndWasmInstanceReturn[0] - the callee to use, goes into the 'callee' slot of the CallFrame.
  *  - calleeAndWasmInstanceReturn[1] - the wasm instance to use, goes into the 'codeBlock' slot of the CallFrame. For JS this is reused for the function info.
  */
-WASM_IPINT_EXTERN_CPP_DECL(prepare_call, CallFrame* callFrame, CallMetadata* call, Register* calleeAndWasmInstanceReturn)
+static ALWAYS_INLINE UGPRPair prepareCallImpl(JSWebAssemblyInstance* instance, CallFrame* callFrame, uint32_t callProfileIndex, Wasm::FunctionSpaceIndex functionIndex, Register* calleeAndWasmInstanceReturn)
 {
     auto* callee = IPINT_CALLEE(callFrame);
-    instance->ensureBaselineData(callee->functionIndex()).at(call->callProfileIndex).incrementCount();
-
-    Wasm::FunctionSpaceIndex functionIndex = call->functionIndex;
+    instance->ensureBaselineData(callee->functionIndex()).at(callProfileIndex).incrementCount();
 
     uint32_t importFunctionCount = instance->module().moduleInformation().importFunctionCount();
 
@@ -1102,8 +1162,8 @@ WASM_IPINT_EXTERN_CPP_DECL(prepare_call, CallFrame* callFrame, CallMetadata* cal
     } else {
         // Target is a wasm function within the same instance
         codePtr = *instance->calleeGroup()->entrypointLoadLocationFromFunctionIndexSpace(functionIndex);
-        auto callee = instance->calleeGroup()->wasmCalleeFromFunctionIndexSpace(functionIndex);
-        calleeReturn = CalleeBits::encodeNativeCallee(callee.get());
+        auto nativeCallee = instance->calleeGroup()->wasmCalleeFromFunctionIndexSpace(functionIndex);
+        calleeReturn = CalleeBits::encodeNativeCallee(nativeCallee.get());
         wasmInstanceReturn = instance;
     }
 
@@ -1114,42 +1174,49 @@ WASM_IPINT_EXTERN_CPP_DECL(prepare_call, CallFrame* callFrame, CallMetadata* cal
     WASM_CALL_RETURN(targetInstance, codePtr);
 }
 
-// Returns the same outputs as prepare_call: entrypoint and target instance
+// Returns the same outputs as prepareCallImpl: entrypoint and target instance
 // via result registers, callee and function-info/instance via the stack slots.
-WASM_IPINT_EXTERN_CPP_DECL(prepare_call_indirect, CallFrame* callFrame, Wasm::FunctionSpaceIndex* functionIndex, CallIndirectMetadata* call)
+static ALWAYS_INLINE UGPRPair prepareCallIndirectImpl(JSWebAssemblyInstance* instance, CallFrame* callFrame, const Wasm::RTT& rtt, uint32_t callProfileIndex, uint32_t tableIndex, Wasm::FunctionSpaceIndex* functionIndex)
 {
     auto* callee = IPINT_CALLEE(callFrame);
-    auto& callProfile = instance->ensureBaselineData(callee->functionIndex()).at(call->callProfileIndex);
+    auto& callProfile = instance->ensureBaselineData(callee->functionIndex()).at(callProfileIndex);
     callProfile.incrementCount();
 
-    unsigned tableIndex = call->tableIndex;
+    auto checkedIndex = checkedTableOperand(*std::bit_cast<uint64_t*>(functionIndex), instance->module().moduleInformation().table(tableIndex).addressType().is64Bit());
+    if (!checkedIndex) [[unlikely]]
+        IPINT_THROW(Wasm::ExceptionType::OutOfBoundsCallIndirect);
+
+    Wasm::FunctionSpaceIndex callIndex(*checkedIndex);
+
     const Wasm::FuncRefTable::Function* function = nullptr;
     if (!tableIndex) {
-        if (*functionIndex >= instance->cachedTable0Length()) [[unlikely]]
+        if (callIndex >= instance->cachedTable0Length()) [[unlikely]]
             IPINT_THROW(Wasm::ExceptionType::OutOfBoundsCallIndirect);
-        function = &instance->cachedTable0Buffer()[*functionIndex];
+        function = &instance->cachedTable0Buffer()[callIndex];
     } else {
         Wasm::FuncRefTable* table = instance->table(tableIndex)->asFuncrefTable();
-        if (*functionIndex >= table->length()) [[unlikely]]
+        if (callIndex >= table->length()) [[unlikely]]
             IPINT_THROW(Wasm::ExceptionType::OutOfBoundsCallIndirect);
-        function = &table->function(*functionIndex);
+        function = &table->function(callIndex);
     }
 
-    if (!function->m_function.rtt) [[unlikely]]
+    if (!function->rtt) [[unlikely]]
         IPINT_THROW(Wasm::ExceptionType::BadSignature);
 
-    if (!function->m_function.rtt->isSubRTT(*call->rtt)) [[unlikely]]
+    if (!function->rtt->isSubRTT(rtt)) [[unlikely]]
         IPINT_THROW(Wasm::ExceptionType::BadSignature);
 
-    auto boxedCallee = function->m_function.boxedCallee.encodedBits();
+    auto boxedCallee = function->boxedCallee.encodedBits();
+    Wasm::FunctionSpaceIndex savedFunctionIndex = callIndex;
     Register* calleeReturn = std::bit_cast<Register*>(functionIndex);
     *calleeReturn = boxedCallee;
 
     Register& functionInfoSlot = calleeReturn[1];
-    if (function->m_function.isJS())
-        functionInfoSlot = reinterpret_cast<uintptr_t>(uncheckedDowncast<WebAssemblyFunctionBase>(function->m_value.get())->callLinkInfo());
-    else {
-        auto* targetInstance = function->m_function.targetInstance.get();
+    if (function->isJS()) {
+        Wasm::FuncRefTable* funcTable = instance->table(tableIndex)->asFuncrefTable();
+        functionInfoSlot = reinterpret_cast<uintptr_t>(funcTable->get(savedFunctionIndex)->callLinkInfo());
+    } else {
+        auto* targetInstance = function->targetInstance.get();
         functionInfoSlot = targetInstance;
         if (instance != targetInstance)
             callProfile.observeCrossInstanceCall();
@@ -1157,16 +1224,16 @@ WASM_IPINT_EXTERN_CPP_DECL(prepare_call_indirect, CallFrame* callFrame, Wasm::Fu
             callProfile.observeCallIndirect(boxedCallee);
     }
 
-    IPINT_HANDLE_STEP_INTO_CALL(instance->vm(), function->m_function.boxedCallee, function->m_function.targetInstance.get());
+    IPINT_HANDLE_STEP_INTO_CALL(instance->vm(), function->boxedCallee, function->targetInstance.get());
 
-    auto callTarget = *function->m_function.entrypointLoadLocation;
-    WASM_CALL_RETURN(function->m_function.targetInstance.get(), callTarget);
+    auto callTarget = *function->entrypointLoadLocation;
+    WASM_CALL_RETURN(function->targetInstance.get(), callTarget);
 }
 
-WASM_IPINT_EXTERN_CPP_DECL(prepare_call_ref, CallFrame* callFrame, CallRefMetadata* call, IPIntStackEntry* sp)
+static ALWAYS_INLINE UGPRPair prepareCallRefImpl(JSWebAssemblyInstance* instance, CallFrame* callFrame, uint32_t callProfileIndex, IPIntStackEntry* sp)
 {
     auto* callee = IPINT_CALLEE(callFrame);
-    auto& callProfile = instance->ensureBaselineData(callee->functionIndex()).at(call->callProfileIndex);
+    auto& callProfile = instance->ensureBaselineData(callee->functionIndex()).at(callProfileIndex);
     callProfile.incrementCount();
 
     JSValue targetReference = JSValue::decode(sp->ref);
@@ -1201,6 +1268,48 @@ WASM_IPINT_EXTERN_CPP_DECL(prepare_call_ref, CallFrame* callFrame, CallRefMetada
     WASM_CALL_RETURN(calleeInstance, callTarget);
 }
 
+WASM_IPINT_EXTERN_CPP_DECL(prepare_call, CallFrame* callFrame, CallMetadata* call, Register* calleeAndWasmInstanceReturn)
+{
+    SUPPRESS_UNCOUNTED_LOCAL const auto& rtt = *call->signature.rtt;
+    ensureCallBytecodeForKind(rtt, PrepareCallKind::Call);
+    return prepareCallImpl(instance, callFrame, call->callProfileIndex, call->functionIndex, calleeAndWasmInstanceReturn);
+}
+
+WASM_IPINT_EXTERN_CPP_DECL(prepare_call_indirect, CallFrame* callFrame, Wasm::FunctionSpaceIndex* functionIndex, CallIndirectMetadata* call)
+{
+    SUPPRESS_UNCOUNTED_LOCAL const auto& rtt = *call->signature.rtt;
+    ensureCallBytecodeForKind(rtt, PrepareCallKind::Call);
+    return prepareCallIndirectImpl(instance, callFrame, rtt, call->callProfileIndex, call->tableIndex, functionIndex);
+}
+
+WASM_IPINT_EXTERN_CPP_DECL(prepare_call_ref, CallFrame* callFrame, CallRefMetadata* call, IPIntStackEntry* sp)
+{
+    SUPPRESS_UNCOUNTED_LOCAL const auto& rtt = *call->signature.rtt;
+    ensureCallBytecodeForKind(rtt, PrepareCallKind::Call);
+    return prepareCallRefImpl(instance, callFrame, call->callProfileIndex, sp);
+}
+
+WASM_IPINT_EXTERN_CPP_DECL(prepare_tail_call, CallFrame* callFrame, TailCallMetadata* call, Register* calleeAndWasmInstanceReturn)
+{
+    SUPPRESS_UNCOUNTED_LOCAL const auto& rtt = *call->rtt;
+    ensureCallBytecodeForKind(rtt, PrepareCallKind::TailCall);
+    return prepareCallImpl(instance, callFrame, call->callProfileIndex, call->functionIndex, calleeAndWasmInstanceReturn);
+}
+
+WASM_IPINT_EXTERN_CPP_DECL(prepare_tail_call_indirect, CallFrame* callFrame, Wasm::FunctionSpaceIndex* functionIndex, TailCallIndirectMetadata* call)
+{
+    SUPPRESS_UNCOUNTED_LOCAL const auto& rtt = *call->rtt;
+    ensureCallBytecodeForKind(rtt, PrepareCallKind::TailCall);
+    return prepareCallIndirectImpl(instance, callFrame, rtt, call->callProfileIndex, call->tableIndex, functionIndex);
+}
+
+WASM_IPINT_EXTERN_CPP_DECL(prepare_tail_call_ref, CallFrame* callFrame, TailCallRefMetadata* call, IPIntStackEntry* sp)
+{
+    SUPPRESS_UNCOUNTED_LOCAL const auto& rtt = *call->rtt;
+    ensureCallBytecodeForKind(rtt, PrepareCallKind::TailCall);
+    return prepareCallRefImpl(instance, callFrame, call->callProfileIndex, sp);
+}
+
 WASM_IPINT_EXTERN_CPP_DECL(set_global_ref, uint32_t globalIndex, JSValue value)
 {
     instance->setGlobal(globalIndex, value);
@@ -1227,10 +1336,20 @@ WASM_IPINT_EXTERN_CPP_DECL(get_global_64, unsigned index)
 WASM_IPINT_EXTERN_CPP_DECL(memory_atomic_wait32, IPIntStackEntry* args)
 {
 #if CPU(ARM64) || CPU(X86_64)
-    uint8_t memoryIndex = args[0].i32;
-    uint64_t timeout = args[1].i64;
-    uint32_t value = args[2].i32;
-    uint64_t pointerWithOffset = args[3].i64;
+    uint8_t memoryIndex = args[4].i32;
+    uint64_t timeout = args[5].i64;
+    uint32_t value = args[6].i32;
+    uint64_t pointerWithOffset = args[7].i64;
+#if ENABLE(WEBASSEMBLY_DEBUGGER)
+    if (Options::enableWasmDebugger()) [[unlikely]] {
+        auto* callee = std::bit_cast<Wasm::IPIntCallee*>(args[0].i64);
+        auto* callFrame = std::bit_cast<CallFrame*>(args[1].i64);
+        auto* pc = std::bit_cast<uint8_t*>(args[2].i64);
+        auto* mc = std::bit_cast<uint8_t*>(args[3].i64);
+        auto* stack = args + 4; // wasm expression stack: [memoryIndex, timeout, value, pointer+offset]
+        instance->vm().debugState()->setAtomicsWaitStopData(callee, instance, callFrame, pc, mc, stack);
+    }
+#endif
     int32_t result = Wasm::memoryAtomicWait32(instance, pointerWithOffset, value, timeout, memoryIndex);
     WASM_RETURN_TWO(std::bit_cast<void*>(static_cast<intptr_t>(result)), nullptr);
 #else
@@ -1243,10 +1362,20 @@ WASM_IPINT_EXTERN_CPP_DECL(memory_atomic_wait32, IPIntStackEntry* args)
 WASM_IPINT_EXTERN_CPP_DECL(memory_atomic_wait64, IPIntStackEntry* args)
 {
 #if CPU(ARM64) || CPU(X86_64)
-    uint8_t memoryIndex = args[0].i32;
-    uint64_t timeout = args[1].i64;
-    uint64_t value = args[2].i64;
-    uint64_t pointerWithOffset = args[3].i64;
+    uint8_t memoryIndex = args[4].i32;
+    uint64_t timeout = args[5].i64;
+    uint64_t value = args[6].i64;
+    uint64_t pointerWithOffset = args[7].i64;
+#if ENABLE(WEBASSEMBLY_DEBUGGER)
+    if (Options::enableWasmDebugger()) [[unlikely]] {
+        auto* callee = std::bit_cast<Wasm::IPIntCallee*>(args[0].i64);
+        auto* callFrame = std::bit_cast<CallFrame*>(args[1].i64);
+        auto* pc = std::bit_cast<uint8_t*>(args[2].i64);
+        auto* mc = std::bit_cast<uint8_t*>(args[3].i64);
+        auto* stack = args + 4; // wasm expression stack: [memoryIndex, timeout, value, pointer+offset]
+        instance->vm().debugState()->setAtomicsWaitStopData(callee, instance, callFrame, pc, mc, stack);
+    }
+#endif
     int32_t result = Wasm::memoryAtomicWait64(instance, pointerWithOffset, value, timeout, memoryIndex);
     WASM_RETURN_TWO(std::bit_cast<void*>(static_cast<intptr_t>(result)), nullptr);
 #else
@@ -1259,10 +1388,10 @@ WASM_IPINT_EXTERN_CPP_DECL(memory_atomic_wait64, IPIntStackEntry* args)
 WASM_IPINT_EXTERN_CPP_DECL(memory_atomic_notify, IPIntStackEntry* args)
 {
 #if CPU(ARM64) || CPU(X86_64)
-    unsigned offset = args[0].i32;
+    uint64_t offset = args[0].i64;
     uint8_t memoryIndex = args[1].i32;
     int32_t count = args[2].i32;
-    unsigned base = args[3].i32;
+    uint64_t base = instance->module().moduleInformation().memory(memoryIndex).isMemory64() ? args[3].i64 : static_cast<uint32_t>(args[3].i32);
     int32_t result = Wasm::memoryAtomicNotify(instance, base, offset, count, memoryIndex);
     WASM_RETURN_TWO(std::bit_cast<void*>(static_cast<intptr_t>(result)), nullptr);
 #else
@@ -1274,6 +1403,7 @@ WASM_IPINT_EXTERN_CPP_DECL(memory_atomic_notify, IPIntStackEntry* args)
 
 WASM_IPINT_EXTERN_CPP_DECL(ref_func, unsigned index)
 {
+    WasmSlowPathWithoutCallFrameTracer tracer(instance->vm());
     IPINT_RETURN(Wasm::refFunc(instance, index));
 }
 
@@ -1352,7 +1482,7 @@ static UNUSED_FUNCTION void displayWasmDebugState(JSWebAssemblyInstance* instanc
     dataLogLn("WASM Locals (", numLocals, " entries):");
     auto functionIndex = callee->functionIndex();
     const auto& moduleInfo = instance->module().moduleInformation();
-    const Vector<Wasm::Type>& localTypes = moduleInfo.debugInfo->ensureFunctionDebugInfo(functionIndex).locals;
+    const Vector<Wasm::Type>& localTypes = moduleInfo.ensureFunctionDebugInfo(functionIndex).locals;
     FrameAccess frame(callFrame, callee);
     for (uint32_t i = 0; i < numLocals; ++i)
         logWasmLocalValue(i, *frame.localSlot(i), localTypes[i]);
@@ -1376,14 +1506,12 @@ static UNUSED_FUNCTION void displayWasmDebugState(JSWebAssemblyInstance* instanc
 
 WASM_IPINT_EXTERN_CPP_DECL(handle_debugger_trap_if_needed, CallFrame* callFrame, Register* sp)
 {
-    // By default, the trap is a fatal Wasm trap and must propagate (shouldThrow = true).
-    // If the debugger is connected and determines this was solely a debugger trap (e.g. a
-    // breakpoint on unreachable), it sets shouldThrow = false and execution resumes.
-    bool shouldThrow = true;
+    // Unreachable propagates the trap; otherwise resumes with the displaced opcode.
+    Wasm::OpType resumeOpcode = Wasm::OpType::Unreachable;
 #if ENABLE(WEBASSEMBLY_DEBUGGER)
     if (Options::enableWasmDebugger()) [[unlikely]] {
         Wasm::DebugServer& debugServer = Wasm::DebugServer::singleton();
-        if (debugServer.hasDebugger()) {
+        if (debugServer.isConnected()) {
             uint8_t* pc = static_cast<uint8_t*>(sp[2].pointer());
             uint8_t* mc = static_cast<uint8_t*>(sp[3].pointer());
             auto* callee = static_cast<Wasm::IPIntCallee*>(sp[1].pointer());
@@ -1391,8 +1519,7 @@ WASM_IPINT_EXTERN_CPP_DECL(handle_debugger_trap_if_needed, CallFrame* callFrame,
             auto exceptionType = static_cast<Wasm::ExceptionType>(callFrame->argumentCountIncludingThis());
             if (Options::verboseWasmDebugger() && exceptionType == Wasm::ExceptionType::Unreachable)
                 displayWasmDebugState(instance, callee, callFrame, stack);
-            auto trapStatus = debugServer.execution().handleDebuggerTrapIfNeeded(callFrame, instance, callee, pc, mc, stack, exceptionType);
-            shouldThrow = trapStatus == Wasm::DebuggerTrapStatus::NotResolvedByDebugger;
+            resumeOpcode = debugServer.execution().handleDebuggerTrapIfNeeded(callFrame, instance, callee, pc, mc, stack, exceptionType);
         }
     }
 #else
@@ -1400,7 +1527,7 @@ WASM_IPINT_EXTERN_CPP_DECL(handle_debugger_trap_if_needed, CallFrame* callFrame,
     UNUSED_PARAM(callFrame);
     UNUSED_PARAM(sp);
 #endif
-    IPINT_RETURN(static_cast<EncodedJSValue>(static_cast<int32_t>(shouldThrow)));
+    IPINT_RETURN(static_cast<EncodedJSValue>(static_cast<uint32_t>(resumeOpcode)));
 }
 
 } } // namespace JSC::IPInt

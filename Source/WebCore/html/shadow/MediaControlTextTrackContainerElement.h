@@ -47,7 +47,7 @@ class TextTrack;
 class TextTrackCue;
 class VTTCue;
 
-using CueInterval = PODInterval<MediaTime, TextTrackCue*>;
+using CueInterval = PODInterval<MediaTime, CheckedPtr<TextTrackCue>>;
 using CueList = Vector<CueInterval>;
 
 class MediaControlTextTrackContainerElement final
@@ -82,7 +82,7 @@ private:
     explicit MediaControlTextTrackContainerElement(Document&, HTMLMediaElement&);
 
     // Element
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) final;
 
     // TextTrackRepresentationClient
     RefPtr<NativeImage> createTextTrackRepresentationImage() final;
@@ -95,6 +95,9 @@ private:
     void updateActiveCuesFontSize();
     void updateTextStrokeStyle();
     void processActiveVTTCue(VTTCue&);
+#if PLATFORM(IOS_FAMILY)
+    void updateDisplayedCaptionsForAccessibility(const CueList&);
+#endif
     void updateTextTrackStyle();
 
     void hide();

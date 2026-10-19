@@ -21,6 +21,7 @@
 #pragma once
 
 #include "JSWorkerGlobalScope.h"
+#include <WebCore/JSDOMBindingFacade.h>
 #include <WebCore/JSDOMWrapper.h>
 
 namespace WebCore {
@@ -48,7 +49,8 @@ public:
     static void analyzeHeap(JSCell*, JSC::HeapAnalyzer&);
     DedicatedWorkerGlobalScope& wrapped() const
     {
-        return static_cast<DedicatedWorkerGlobalScope&>(Base::wrapped());
+        // JSDedicatedWorkerGlobalScope wrappers always wrap DedicatedWorkerGlobalScope objects.
+        SUPPRESS_MEMORY_UNSAFE_CAST return static_cast<DedicatedWorkerGlobalScope&>(Base::wrapped());
     }
 
 public:

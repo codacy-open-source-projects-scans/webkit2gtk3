@@ -29,8 +29,8 @@
 
 #pragma once
 
-#include "InstrumentingAgents.h"
 #include <JavaScriptCore/PerGlobalObjectWrapperWorld.h>
+#include <WebCore/InstrumentingAgents.h>
 #include <wtf/RefCounted.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
@@ -55,7 +55,7 @@ struct EventListenerInfo;
 
 class CommandLineAPIHost : public RefCounted<CommandLineAPIHost> {
 public:
-    static Ref<CommandLineAPIHost> create();
+    static Ref<CommandLineAPIHost> LEGACY_NODELETE create();
     ~CommandLineAPIHost() = default;
 
     void copyText(const String& text);

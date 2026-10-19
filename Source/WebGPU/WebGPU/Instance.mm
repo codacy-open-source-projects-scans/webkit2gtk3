@@ -28,6 +28,7 @@
 
 #import "APIConversions.h"
 #import "Adapter.h"
+#import "CommandBuffer.h"
 #import "HardwareCapabilities.h"
 #import "PresentationContext.h"
 #import <cstring>
@@ -37,7 +38,7 @@
 #import <wtf/StdLibExtras.h>
 #import <wtf/TZoneMallocInlines.h>
 
-namespace WebGPU {
+namespace WebGPU::Metal {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(Instance);
 
@@ -55,9 +56,22 @@ static NSArray<id<MTLDevice>>* getDevices()
 
 Ref<Instance> Instance::create(const WGPUInstanceDescriptor& descriptor)
 {
-    const WGPUInstanceCocoaDescriptor& cocoaDescriptor = descriptor.cocoaDescriptor;
+    auto* cocoaDescriptor = findChainedStruct<WGPUInstanceCocoaDescriptor>(descriptor.nextInChain);
+    if (!cocoaDescriptor)
+        return adoptRef(*new Instance(nullptr, nullptr));
 
-    return adoptRef(*new Instance(cocoaDescriptor.scheduleWorkBlock, reinterpret_cast<const WTF::MachSendRight*>(cocoaDescriptor.webProcessResourceOwner)));
+    return adoptRef(*new Instance(cocoaDescriptor->scheduleWorkBlock, reinterpret_cast<const WTF::MachSendRight*>(cocoaDescriptor->webProcessResourceOwner)));
+}
+
+Ref<Instance> Instance::create(WebGPU::InstanceDescriptor&& descriptor)
+{
+    BlockPtr<void(WGPUWorkItem)> scheduleWorkBlock;
+    if (descriptor.scheduleWork) {
+        scheduleWorkBlock = makeBlockPtr([scheduleWork = WTF::move(descriptor.scheduleWork)](WGPUWorkItem workItem) {
+            scheduleWork(Function<void()>(makeBlockPtr(WTF::move(workItem))));
+        });
+    }
+    return adoptRef(*new Instance(scheduleWorkBlock.get(), descriptor.webProcessResourceOwner ? &*descriptor.webProcessResourceOwner : nullptr));
 }
 
 Instance::Instance(WGPUScheduleWorkBlock scheduleWorkBlock, const MachSendRight* webProcessResourceOwner)
@@ -74,7 +88,28 @@ Instance::Instance()
 
 Instance::~Instance() = default;
 
+void Instance::waitForCommandBufferCompletions()
+{
+    auto retainedCommandBuffers { std::exchange(m_retainedCommandBufferInstances, { }) };
+    auto retainedDevices { std::exchange(retainedDeviceInstances, { }) };
+    for (const auto& [_, weakCommandBuffer] : retainedCommandBuffers) {
+        if (id<MTLCommandBuffer> commandBuffer = weakCommandBuffer.get().get(); commandBuffer.status >= MTLCommandBufferStatusCommitted)
+            [commandBuffer waitUntilCompleted];
+    }
+    for (const auto& container : retainedDevices.values()) {
+        for (const auto& weakCommandBuffer : container) {
+            if (id<MTLCommandBuffer> commandBuffer = weakCommandBuffer.get().get(); commandBuffer.status >= MTLCommandBufferStatusCommitted)
+                [commandBuffer waitUntilCompleted];
+        }
+    }
+}
+
 Ref<PresentationContext> Instance::createSurface(const WGPUSurfaceDescriptor& descriptor)
+{
+    return PresentationContext::create(descriptor, *this);
+}
+
+RefPtr<WebGPU::PresentationContext> Instance::createPresentationContext(const WebGPU::PresentationContextDescriptor& descriptor)
 {
     return PresentationContext::create(descriptor, *this);
 }
@@ -119,10 +154,12 @@ static NSArray<id<MTLDevice>> *sortedDevices(NSArray<id<MTLDevice>> *devices, WG
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
         return [devices sortedArrayWithOptions:NSSortStable usingComparator:^NSComparisonResult (id<MTLDevice> obj1, id<MTLDevice> obj2)
         {
+            ALLOW_DEPRECATED_DECLARATIONS_BEGIN
             if (obj1.lowPower == obj2.lowPower)
                 return NSOrderedSame;
             if (obj1.lowPower)
                 return NSOrderedAscending;
+            ALLOW_DEPRECATED_DECLARATIONS_END
             return NSOrderedDescending;
         }];
 #else
@@ -132,10 +169,12 @@ static NSArray<id<MTLDevice>> *sortedDevices(NSArray<id<MTLDevice>> *devices, WG
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
         return [devices sortedArrayWithOptions:NSSortStable usingComparator:^NSComparisonResult (id<MTLDevice> obj1, id<MTLDevice> obj2)
         {
+            ALLOW_DEPRECATED_DECLARATIONS_BEGIN
             if (obj1.lowPower == obj2.lowPower)
                 return NSOrderedSame;
             if (obj1.lowPower)
                 return NSOrderedDescending;
+            ALLOW_DEPRECATED_DECLARATIONS_END
             return NSOrderedAscending;
         }];
 #else
@@ -147,55 +186,55 @@ static NSArray<id<MTLDevice>> *sortedDevices(NSArray<id<MTLDevice>> *devices, WG
     }
 }
 
-void Instance::requestAdapter(const WGPURequestAdapterOptions& options, CompletionHandler<void(WGPURequestAdapterStatus, Ref<Adapter>&&, String&&)>&& callback)
+void Instance::requestAdapter(const WebGPU::RequestAdapterOptions& options, CompletionHandler<void(RefPtr<WebGPU::Adapter>&&)>&& callback)
 {
     auto devices = getDevices();
 
     // FIXME: Deal with options.compatibleSurface.
 
-    auto sortedDevices = WebGPU::sortedDevices(devices, options.powerPreference);
+    auto sortedDevices = WebGPU::Metal::sortedDevices(devices, options.powerPreference ? toAPI(*options.powerPreference) : WGPUPowerPreference_Undefined);
 
-    if (options.forceFallbackAdapter) {
-        callback(WGPURequestAdapterStatus_Unavailable, Adapter::createInvalid(*this), "No adapters present"_s);
-        return;
-    }
-
-    if (!sortedDevices) {
-        callback(WGPURequestAdapterStatus_Error, Adapter::createInvalid(*this), "Unknown power preference"_s);
-        return;
-    }
-
-    if (!sortedDevices.count) {
-        callback(WGPURequestAdapterStatus_Unavailable, Adapter::createInvalid(*this), "No adapters present"_s);
-        return;
-    }
-
-    if (!sortedDevices[0]) {
-        callback(WGPURequestAdapterStatus_Error, Adapter::createInvalid(*this), "Adapter is internally null"_s);
+    // There is no fallback adapter.
+    if (options.forceFallbackAdapter || !sortedDevices || !sortedDevices.count || !sortedDevices[0]) {
+        callback(nullptr);
         return;
     }
 
     auto device = sortedDevices[0];
 
+    // The device does not support WebGPU.
     auto deviceCapabilities = hardwareCapabilities(device);
-
     if (!deviceCapabilities) {
-        callback(WGPURequestAdapterStatus_Error, Adapter::createInvalid(*this), "Device does not support WebGPU"_s);
+        callback(nullptr);
         return;
     }
 
     // FIXME: this should be asynchronous
-    callback(WGPURequestAdapterStatus_Success, Adapter::create(sortedDevices[0], *this, options.xrCompatible, WTF::move(*deviceCapabilities)), { });
+    callback(Adapter::create(sortedDevices[0], *this, options.xrCompatible, WTF::move(*deviceCapabilities)));
 }
 
 void Instance::retainDevice(Device& device, id<MTLCommandBuffer> commandBuffer)
 {
-    Locker locker(m_lock);
     auto& container = retainedDeviceInstances.ensure(device, [] {
         return CommandBufferContainer { };
     }).iterator->value;
 
     container.append(commandBuffer);
+
+    releaseCompletedCommandBuffers();
+}
+
+void Instance::retainCommandBuffer(CommandBuffer& commandBuffer, id<MTLCommandBuffer> mtlCommandBuffer)
+{
+    releaseCompletedCommandBuffers();
+    m_retainedCommandBufferInstances.append({ commandBuffer, mtlCommandBuffer });
+}
+
+void Instance::releaseCompletedCommandBuffers()
+{
+    m_retainedCommandBufferInstances.removeAllMatching([](auto& pair) {
+        return !pair.second;
+    });
 
     for (auto& container : retainedDeviceInstances.values()) {
         container.removeAllMatching([&](auto& pair) {
@@ -212,191 +251,205 @@ id<MTLDevice> Instance::device() const
     return getDevices().firstObject;
 }
 
+} // namespace WebGPU::Metal
+
+namespace WebGPU {
+
+RefPtr<Instance> createInstance(InstanceDescriptor&& descriptor)
+{
+    return Metal::Instance::create(WTF::move(descriptor));
+}
+
 } // namespace WebGPU
 
 #pragma mark WGPU Stubs
 
-void NODELETE wgpuInstanceReference(WGPUInstance instance)
+void LEGACY_NODELETE wgpuInstanceAddRef(WGPUInstance instance)
 {
-    WebGPU::fromAPI(instance).ref();
+    WebGPU::Metal::fromAPI(instance).ref();
 }
 
 void wgpuInstanceRelease(WGPUInstance instance)
 {
-    WebGPU::fromAPI(instance).deref();
+    protect(WebGPU::Metal::fromAPI(instance))->waitForCommandBufferCompletions();
+    WebGPU::Metal::fromAPI(instance).deref();
 }
 
 WGPUInstance wgpuCreateInstance(const WGPUInstanceDescriptor* descriptor)
 {
-    return WebGPU::releaseToAPI(WebGPU::Instance::create(*descriptor));
+    return WebGPU::Metal::releaseToAPI(WebGPU::Metal::Instance::create(*descriptor));
 }
 
-WGPUProc NODELETE wgpuGetProcAddress(WGPUDevice, const char*)
+WGPUProc LEGACY_NODELETE wgpuGetProcAddress(WGPUDevice, const char*)
 {
     return nullptr;
 }
 
 WGPUSurface wgpuInstanceCreateSurface(WGPUInstance instance, const WGPUSurfaceDescriptor* descriptor)
 {
-    return WebGPU::releaseToAPI(protect(WebGPU::fromAPI(instance))->createSurface(*descriptor));
+    return WebGPU::Metal::releaseToAPI(protect(WebGPU::Metal::fromAPI(instance))->createSurface(*descriptor));
 }
 
 void wgpuInstanceProcessEvents(WGPUInstance instance)
 {
-    protect(WebGPU::fromAPI(instance))->processEvents();
+    protect(WebGPU::Metal::fromAPI(instance))->processEvents();
+}
+
+// The C API reports an adapter that is not available with WGPURequestAdapterStatus_Unavailable and no adapter.
+static void requestAdapter(WGPUInstance instance, const WGPURequestAdapterOptions& options, Function<void(WGPURequestAdapterStatus, WGPUAdapter, const char*)>&& callback)
+{
+    Ref protectedInstance = WebGPU::Metal::fromAPI(instance);
+    auto apiOptions = WebGPU::Metal::fromAPI(options);
+    if (!apiOptions)
+        return callback(WGPURequestAdapterStatus_Error, nullptr, "Unknown power preference");
+    protectedInstance->requestAdapter(*apiOptions, [callback = WTF::move(callback)](RefPtr<WebGPU::Adapter>&& adapter) {
+        if (!adapter)
+            return callback(WGPURequestAdapterStatus_Unavailable, nullptr, "No adapters present");
+        callback(WGPURequestAdapterStatus_Success, WebGPU::Metal::releaseToAPIAs<WebGPU::Metal::Adapter>(WTF::move(adapter)), "");
+    });
 }
 
 void wgpuInstanceRequestAdapter(WGPUInstance instance, const WGPURequestAdapterOptions* options, WGPURequestAdapterCallback callback, void* userdata)
 {
-    protect(WebGPU::fromAPI(instance))->requestAdapter(*options, [callback, userdata](WGPURequestAdapterStatus status, Ref<WebGPU::Adapter>&& adapter, String&& message) {
-        if (status != WGPURequestAdapterStatus_Success) {
-            callback(status, nullptr, message.utf8().data(), userdata);
-            return;
-        }
-
-        callback(status, WebGPU::releaseToAPI(WTF::move(adapter)), message.utf8().data(), userdata);
+    requestAdapter(instance, *options, [callback, userdata](WGPURequestAdapterStatus status, WGPUAdapter adapter, const char* message) {
+        callback(status, adapter, message, userdata);
     });
 }
 
 void wgpuInstanceRequestAdapterWithBlock(WGPUInstance instance, WGPURequestAdapterOptions const * options, WGPURequestAdapterBlockCallback callback)
 {
-    protect(WebGPU::fromAPI(instance))->requestAdapter(*options, [callback = WebGPU::fromAPI(WTF::move(callback))](WGPURequestAdapterStatus status, Ref<WebGPU::Adapter>&& adapter, String&& message) {
-        if (status != WGPURequestAdapterStatus_Success) {
-            callback(status, nullptr, message.utf8().data());
-            return;
-        }
-
-        callback(status, WebGPU::releaseToAPI(WTF::move(adapter)), message.utf8().data());
+    requestAdapter(instance, *options, [callback = WebGPU::Metal::fromAPI(WTF::move(callback))](WGPURequestAdapterStatus status, WGPUAdapter adapter, const char* message) {
+        callback(status, adapter, message);
     });
 }
 
 // Fuzzer things
 WGPUBool wgpuBufferIsValid(WGPUBuffer buffer)
 {
-    return protect(WebGPU::fromAPI(buffer))->isValid();
+    return protect(WebGPU::Metal::fromAPI(buffer))->isValid();
 }
 
 WGPUBool wgpuAdapterIsValid(WGPUAdapter adapter)
 {
-    return protect(WebGPU::fromAPI(adapter))->isValid();
+    return protect(WebGPU::Metal::fromAPI(adapter))->isValid();
 }
 
 WGPUBool wgpuBindGroupIsValid(WGPUBindGroup bindGroup)
 {
-    return protect(WebGPU::fromAPI(bindGroup))->isValid();
+    return protect(WebGPU::Metal::fromAPI(bindGroup))->isValid();
 }
 
 WGPUBool wgpuBindGroupLayoutIsValid(WGPUBindGroupLayout bindGroupLayout)
 {
-    return protect(WebGPU::fromAPI(bindGroupLayout))->isValid();
+    return protect(WebGPU::Metal::fromAPI(bindGroupLayout))->isValid();
 }
 
 WGPUBool wgpuCommandBufferIsValid(WGPUCommandBuffer commandBuffer)
 {
-    return protect(WebGPU::fromAPI(commandBuffer))->isValid();
+    return protect(WebGPU::Metal::fromAPI(commandBuffer))->isValid();
 }
 
 WGPUBool wgpuCommandEncoderIsValid(WGPUCommandEncoder commandEncoder)
 {
-    return protect(WebGPU::fromAPI(commandEncoder))->isValid();
+    return protect(WebGPU::Metal::fromAPI(commandEncoder))->isValid();
 }
 
 WGPUBool wgpuComputePassEncoderIsValid(WGPUComputePassEncoder computePassEncoder)
 {
-    return protect(WebGPU::fromAPI(computePassEncoder))->isValid();
+    return protect(WebGPU::Metal::fromAPI(computePassEncoder))->isValid();
 }
 
 WGPUBool wgpuComputePipelineIsValid(WGPUComputePipeline computePipeline)
 {
-    return protect(WebGPU::fromAPI(computePipeline))->isValid();
+    return protect(WebGPU::Metal::fromAPI(computePipeline))->isValid();
 }
 
 WGPUBool wgpuDeviceIsValid(WGPUDevice device)
 {
-    return protect(WebGPU::fromAPI(device))->isValid();
+    return protect(WebGPU::Metal::fromAPI(device))->isValid();
 }
 
 WGPUBool wgpuExternalTextureIsValid(WGPUExternalTexture externalTexture)
 {
-    return protect(WebGPU::fromAPI(externalTexture))->isValid();
+    return protect(WebGPU::Metal::fromAPI(externalTexture))->isValid();
 }
 
 WGPUBool wgpuPipelineLayoutIsValid(WGPUPipelineLayout pipelineLayout)
 {
-    return protect(WebGPU::fromAPI(pipelineLayout))->isValid();
+    return protect(WebGPU::Metal::fromAPI(pipelineLayout))->isValid();
 }
 
 WGPUBool wgpuPresentationContextIsValid(WGPUSurface presentationContext)
 {
-    return protect(WebGPU::fromAPI(presentationContext))->isValid();
+    return protect(WebGPU::Metal::fromAPI(presentationContext))->isValid();
 }
 
 WGPUBool wgpuQuerySetIsValid(WGPUQuerySet querySet)
 {
-    return protect(WebGPU::fromAPI(querySet))->isValid();
+    return protect(WebGPU::Metal::fromAPI(querySet))->isValid();
 }
 
 WGPUBool wgpuQueueIsValid(WGPUQueue queue)
 {
-    return protect(WebGPU::fromAPI(queue))->isValid();
+    return protect(WebGPU::Metal::fromAPI(queue))->isValid();
 }
 
 WGPUBool wgpuRenderBundleEncoderIsValid(WGPURenderBundleEncoder renderBundleEncoder)
 {
-    return protect(WebGPU::fromAPI(renderBundleEncoder))->isValid();
+    return protect(WebGPU::Metal::fromAPI(renderBundleEncoder))->isValid();
 }
 
 WGPUBool wgpuRenderBundleIsValid(WGPURenderBundle renderBundle)
 {
-    return protect(WebGPU::fromAPI(renderBundle))->isValid();
+    return protect(WebGPU::Metal::fromAPI(renderBundle))->isValid();
 }
 
 WGPUBool wgpuRenderPassEncoderIsValid(WGPURenderPassEncoder renderPassEncoder)
 {
-    return protect(WebGPU::fromAPI(renderPassEncoder))->isValid();
+    return protect(WebGPU::Metal::fromAPI(renderPassEncoder))->isValid();
 }
 
 WGPUBool wgpuRenderPipelineIsValid(WGPURenderPipeline renderPipeline)
 {
-    return protect(WebGPU::fromAPI(renderPipeline))->isValid();
+    return protect(WebGPU::Metal::fromAPI(renderPipeline))->isValid();
 }
 
 WGPUBool wgpuSamplerIsValid(WGPUSampler sampler)
 {
-    return protect(WebGPU::fromAPI(sampler))->isValid();
+    return protect(WebGPU::Metal::fromAPI(sampler))->isValid();
 }
 
 WGPUBool wgpuShaderModuleIsValid(WGPUShaderModule shaderModule)
 {
-    return protect(WebGPU::fromAPI(shaderModule))->isValid();
+    return protect(WebGPU::Metal::fromAPI(shaderModule))->isValid();
 }
 
 WGPUBool wgpuTextureIsValid(WGPUTexture texture)
 {
-    return protect(WebGPU::fromAPI(texture))->isValid();
+    return protect(WebGPU::Metal::fromAPI(texture))->isValid();
 }
 
 WGPUBool wgpuTextureViewIsValid(WGPUTextureView textureView)
 {
-    return protect(WebGPU::fromAPI(textureView))->isValid();
+    return protect(WebGPU::Metal::fromAPI(textureView))->isValid();
 }
 
 WGPUBool wgpuXRBindingIsValid(WGPUXRBinding binding)
 {
-    return protect(WebGPU::fromAPI(binding))->isValid();
+    return protect(WebGPU::Metal::fromAPI(binding))->isValid();
 }
 
 WGPUBool wgpuXRSubImageIsValid(WGPUXRSubImage subImage)
 {
-    return protect(WebGPU::fromAPI(subImage))->isValid();
+    return protect(WebGPU::Metal::fromAPI(subImage))->isValid();
 }
 
 WGPUBool wgpuXRProjectionLayerIsValid(WGPUXRProjectionLayer layer)
 {
-    return protect(WebGPU::fromAPI(layer))->isValid();
+    return protect(WebGPU::Metal::fromAPI(layer))->isValid();
 }
 
 WGPUBool wgpuXRViewIsValid(WGPUXRView view)
 {
-    return protect(WebGPU::fromAPI(view))->isValid();
+    return protect(WebGPU::Metal::fromAPI(view))->isValid();
 }

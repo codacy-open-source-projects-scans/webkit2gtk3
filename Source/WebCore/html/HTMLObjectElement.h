@@ -35,11 +35,9 @@ class HTMLObjectElement final : public HTMLPlugInElement, public FormListedEleme
 public:
     USING_CAN_MAKE_WEAKPTR(HTMLPlugInElement);
 
-    static Ref<HTMLObjectElement> create(const QualifiedName&, Document&, HTMLFormElement*);
+    static Ref<HTMLObjectElement> create(const QualifiedName&, Document&);
 
-    bool isExposed() const;
-
-    bool hasFallbackContent() const;
+    bool LEGACY_NODELETE hasFallbackContent() const;
     bool useFallbackContent() const final { return m_useFallbackContent; }
     void renderFallbackContent();
 
@@ -54,7 +52,7 @@ public:
     using HTMLPlugInElement::deref;
 
 private:
-    HTMLObjectElement(const QualifiedName&, Document&, HTMLFormElement*);
+    HTMLObjectElement(const QualifiedName&, Document&);
     ~HTMLObjectElement();
 
     int defaultTabIndex() const final;
@@ -71,10 +69,10 @@ private:
 
     void childrenChanged(const ChildChange&) final;
 
-    bool NODELETE isURLAttribute(const Attribute&) const final;
+    bool LEGACY_NODELETE isURLAttribute(const Attribute&) const final;
     String imageSourceURL() const final;
 
-    void addSubresourceAttributeURLs(ListHashSet<URL>&) const final;
+    void addSubresourceAttributeURLs(OrderedHashSet<URL>&) const final;
 
     void updateWidget(CreatePlugins) final;
 
@@ -84,18 +82,18 @@ private:
     void refFormAssociatedElement() const final { ref(); }
     void derefFormAssociatedElement() const final { deref(); }
 
-    FormAssociatedElement* NODELETE asFormAssociatedElement() final { return this; }
-    FormListedElement* NODELETE asFormListedElement() final { return this; }
-    ValidatedFormListedElement* NODELETE asValidatedFormListedElement() final { return nullptr; }
+    FormAssociatedElement* LEGACY_NODELETE asFormAssociatedElement() final { return this; }
+    FormListedElement* LEGACY_NODELETE asFormListedElement() final { return this; }
+    ValidatedFormListedElement* LEGACY_NODELETE asValidatedFormListedElement() final { return nullptr; }
 
     // These functions can be called concurrently for ValidityState.
     HTMLObjectElement& asHTMLElement() final { return *this; }
     const HTMLObjectElement& asHTMLElement() const final { return *this; }
 
-    bool NODELETE isFormListedElement() const final { return true; }
-    bool NODELETE isValidatedFormListedElement() const final { return false; }
+    bool LEGACY_NODELETE isFormListedElement() const final { return true; }
+    bool LEGACY_NODELETE isValidatedFormListedElement() const final { return false; }
 
-    bool NODELETE isEnumeratable() const final { return true; }
+    bool LEGACY_NODELETE isEnumeratable() const final { return true; }
 
     bool canContainRangeEndPoint() const final;
 

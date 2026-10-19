@@ -58,8 +58,8 @@ class RenderTableSection final : public RenderBox {
     WTF_MAKE_TZONE_ALLOCATED(RenderTableSection);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderTableSection);
 public:
-    RenderTableSection(Element&, RenderStyle&&);
-    RenderTableSection(Document&, RenderStyle&&);
+    RenderTableSection(Element&, Style::ComputedStyle&&);
+    RenderTableSection(Document&, Style::ComputedStyle&&);
     virtual ~RenderTableSection();
 
     RenderTableRow* firstRow() const;
@@ -96,8 +96,8 @@ public:
 
     inline const BorderValue& borderAdjoiningTableStart() const LIFETIME_BOUND;
     inline const BorderValue& borderAdjoiningTableEnd() const LIFETIME_BOUND;
-    const BorderValue& NODELETE borderAdjoiningStartCell(const RenderTableCell&) const LIFETIME_BOUND;
-    const BorderValue& NODELETE borderAdjoiningEndCell(const RenderTableCell&) const LIFETIME_BOUND;
+    const BorderValue& LEGACY_NODELETE borderAdjoiningStartCell(const RenderTableCell&) const LIFETIME_BOUND;
+    const BorderValue& LEGACY_NODELETE borderAdjoiningEndCell(const RenderTableCell&) const LIFETIME_BOUND;
 
     CellStruct& cellAt(unsigned row,  unsigned col) LIFETIME_BOUND;
     const CellStruct& cellAt(unsigned row, unsigned col) const LIFETIME_BOUND;
@@ -124,10 +124,10 @@ public:
     inline LayoutUnit outerBorderBottom(const WritingMode) const;
 
     unsigned numRows() const;
-    unsigned NODELETE numColumns() const;
+    unsigned LEGACY_NODELETE numColumns() const;
     void recalcCells();
     void recalcCellsIfNeeded();
-    void NODELETE removeRedundantColumns();
+    void LEGACY_NODELETE removeRedundantColumns();
 
     bool needsCellRecalc() const { return m_needsCellRecalc; }
     void setNeedsCellRecalc();
@@ -154,9 +154,9 @@ public:
     bool backgroundIsKnownToBeOpaqueInRect(const LayoutRect&) const override { return false; }
 
 private:
-    void styleDidChange(Style::Difference, const RenderStyle* oldStyle) override;
+    void styleDidChange(Style::Difference, const Style::ComputedStyle* oldStyle) override;
 
-    static RenderPtr<RenderTableSection> createTableSectionWithStyle(Document&, const RenderStyle&);
+    static RenderPtr<RenderTableSection> createTableSectionWithStyle(Document&, const Style::ComputedStyle&);
 
     enum ShouldIncludeAllIntersectingCells {
         IncludeAllIntersectingCells,
@@ -176,13 +176,13 @@ private:
     Color rowGroupBorderColor(CSSPropertyID borderColor) const;
     void paintRowGroupBorder(const PaintInfo&, bool antialias, LayoutRect, BoxSide, CSSPropertyID borderColor, BorderStyle, BorderStyle tableBorderStyle);
     void paintRowGroupBorderIfRequired(const PaintInfo&, const LayoutPoint& paintOffset, unsigned row, unsigned col, BoxSide, RenderTableCell* = 0);
-    LayoutUnit NODELETE offsetLeftForRowGroupBorder(RenderTableCell*, const LayoutRect& rowGroupRect, unsigned row);
+    LayoutUnit LEGACY_NODELETE offsetLeftForRowGroupBorder(RenderTableCell*, const LayoutRect& rowGroupRect, unsigned row);
 
-    LayoutUnit NODELETE offsetTopForRowGroupBorder(RenderTableCell*, BoxSide borderSide, unsigned row);
-    LayoutUnit NODELETE verticalRowGroupBorderHeight(RenderTableCell*, const LayoutRect& rowGroupRect, unsigned row);
-    LayoutUnit NODELETE horizontalRowGroupBorderWidth(RenderTableCell*, const LayoutRect& rowGroupRect, unsigned row, unsigned column);
+    LayoutUnit LEGACY_NODELETE offsetTopForRowGroupBorder(RenderTableCell*, BoxSide borderSide, unsigned row);
+    LayoutUnit LEGACY_NODELETE verticalRowGroupBorderHeight(RenderTableCell*, const LayoutRect& rowGroupRect, unsigned row);
+    LayoutUnit LEGACY_NODELETE horizontalRowGroupBorderWidth(RenderTableCell*, const LayoutRect& rowGroupRect, unsigned row, unsigned column);
 
-    void computeIntrinsicLogicalWidths(LayoutUnit&, LayoutUnit&) const override { }
+    std::pair<LayoutUnit, LayoutUnit> computeIntrinsicLogicalWidths() const override { return { }; }
 
     void imageChanged(WrappedImagePtr, const IntRect* = 0) override;
 
@@ -192,10 +192,10 @@ private:
 
     void relayoutCellIfFlexed(RenderTableCell&, int rowIndex, int rowHeight);
     
-    LayoutUnit rowLogicalHeight(unsigned row) const;
+    LayoutUnit LEGACY_NODELETE rowLogicalHeight(unsigned row) const;
 
-    void distributeExtraLogicalHeightToPercentRows(LayoutUnit& extraLogicalHeight, int totalPercent);
-    void NODELETE distributeExtraLogicalHeightToAutoRows(LayoutUnit& extraLogicalHeight, unsigned autoRowsCount);
+    void LEGACY_NODELETE distributeExtraLogicalHeightToPercentRows(LayoutUnit& extraLogicalHeight, int totalPercent);
+    void LEGACY_NODELETE distributeExtraLogicalHeightToAutoRows(LayoutUnit& extraLogicalHeight, unsigned autoRowsCount);
     void distributeRemainingExtraLogicalHeight(LayoutUnit& extraLogicalHeight);
 
     bool hasOverflowingCell() const;
@@ -205,7 +205,7 @@ private:
     CellSpan fullTableColumnSpan() const { return CellSpan(0, table()->columns().size()); }
 
     // Flip the rect so it aligns with the coordinates used by the rowPos and columnPos vectors.
-    LayoutRect logicalRectForWritingModeAndDirection(const LayoutRect&) const;
+    LayoutRect LEGACY_NODELETE logicalRectForWritingModeAndDirection(const LayoutRect&) const;
 
     CellSpan dirtiedRows(const LayoutRect& repaintRect) const;
     CellSpan dirtiedColumns(const LayoutRect& repaintRect) const;

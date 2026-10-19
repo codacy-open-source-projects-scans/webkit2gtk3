@@ -17,12 +17,23 @@ PASS childScrollerScrollTopAfterScrollToReveal is > 0
 PASS scrollToRevealInPageError is ""
 PASS pageScrollTopAfterScrollToReveal is > 100
 PASS scrollToRevealNotFoundError is "'Nonexistent text' not found inside the target node"
-PASS invalidActionError is "Failed to resolve nodeIdentifier 4294967293"
+PASS invalidActionError is "Failed to resolve stale uid=4294967293"
 PASS clickDisabledError is "Click target is disabled"
 PASS textInputReadonlyError is "Target is readonly"
 PASS selectDisabledMenuItemError is "Select is disabled"
 PASS readonlyField.value is "readonly"
 PASS disabledSelect.value is "Beta"
+PASS clickSubmitButtonError is ""
+PASS clickImageButtonError is ""
+PASS clickImageWithAltTextError is ""
+PASS clickSubmitButtonWithWrongTextError is "'Register' not found inside the target node"
+PASS clickLinkWithWrongTextError is ""
+PASS clickImageWithWrongTextError is "'Account settings' not found inside the target node"
+PASS clickedTargetNames.join() is "commit,find,logo"
+PASS clickPasswordFieldWithLabelError is ""
+PASS passwordFieldFocusedAfterClick is true
+PASS clickPasswordFieldWithValueError is "'hunter2' not found inside the target node"
+PASS clickFieldWithPlaceholderError is ""
 PASS successfullyParsed is true
 
 TEST COMPLETE

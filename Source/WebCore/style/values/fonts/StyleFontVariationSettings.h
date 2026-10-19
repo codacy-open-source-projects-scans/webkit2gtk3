@@ -52,16 +52,16 @@ private:
 // MARK: - Conversion
 
 template<> struct CSSValueConversion<FontVariationSettings> { auto operator()(BuilderState&, const CSSValue&) -> FontVariationSettings; };
-template<> struct CSSValueCreation<FontVariationSettings> { Ref<CSSValue> operator()(CSSValuePool&, const RenderStyle&, const FontVariationSettings&); };
+template<> struct CSSValueCreation<FontVariationSettings> { Ref<CSSValue> operator()(CSSValuePool&, const Style::ComputedStyle&, const FontVariationSettings&); };
 
 // MARK: - Serialization
 
-template<> struct Serialize<FontVariationSettings> { void operator()(StringBuilder&, const CSS::SerializationContext&, const RenderStyle&, const FontVariationSettings&); };
+template<> struct Serialize<FontVariationSettings> { void operator()(StringBuilder&, const CSS::SerializationContext&, const Style::ComputedStyle&, const FontVariationSettings&); };
 
 // MARK: - Blending
 
 template<> struct Blending<FontVariationSettings> {
-    bool NODELETE canBlend(const FontVariationSettings&, const FontVariationSettings&);
+    bool LEGACY_NODELETE canBlend(const FontVariationSettings&, const FontVariationSettings&);
     auto blend(const FontVariationSettings&, const FontVariationSettings&, const BlendingContext&) -> FontVariationSettings;
 };
 

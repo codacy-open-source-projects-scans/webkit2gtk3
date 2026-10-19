@@ -34,12 +34,12 @@ namespace WebCore {
 namespace MIMESniffer {
 
 template<std::size_t N>
-constexpr auto NODELETE span8(const char(&p)[N])
+constexpr auto LEGACY_NODELETE span8(const char(&p)[N])
 {
     return unsafeMakeSpan<const uint8_t, N - 1>(byteCast<uint8_t>(static_cast<const char*>(p)), N - 1);
 }
 
-static bool NODELETE hasSignatureForMP4(std::span<const uint8_t> sequence)
+static bool LEGACY_NODELETE hasSignatureForMP4(std::span<const uint8_t> sequence)
 {
     // To determine whether a byte sequence matches the signature for MP4, use the following steps:
     // Let sequence be the byte sequence to be matched, where sequence[s] is byte s in sequence and sequence[0] is the first byte in sequence.
@@ -77,7 +77,7 @@ static bool NODELETE hasSignatureForMP4(std::span<const uint8_t> sequence)
     return false;
 }
 
-static std::optional<std::pair<uint8_t, int64_t>> NODELETE parseWebMVint(std::span<const uint8_t> sequence)
+static std::optional<std::pair<uint8_t, int64_t>> LEGACY_NODELETE parseWebMVint(std::span<const uint8_t> sequence)
 {
     size_t index = 0;
     // Let mask be 128.
@@ -123,7 +123,7 @@ static std::optional<std::pair<uint8_t, int64_t>> NODELETE parseWebMVint(std::sp
     return std::make_pair(numberSize, parsedNumber);
 }
 
-static bool NODELETE hasSignatureForWebM(std::span<const uint8_t> sequence)
+static bool LEGACY_NODELETE hasSignatureForWebM(std::span<const uint8_t> sequence)
 {
     // To determine whether a byte sequence matches the signature for WebM, use the following steps:
     //   1. Let sequence be the byte sequence to be matched, where sequence[s] is byte s in sequence and sequence[0] is the first byte in sequence.
@@ -140,7 +140,7 @@ static bool NODELETE hasSignatureForWebM(std::span<const uint8_t> sequence)
     //   6. While iter is less than length and iter is less than 38, continuously loop through these steps:
     while (iter < length && iter < 38) {
         //  1. If the two bytes from sequence[iter] to sequence[iter + 1] are equal to 0x42 0x82,
-        if (sequence[iter] == 0x42 && sequence[iter + 1] == 0x82) {
+        if (iter + 1 < length && sequence[iter] == 0x42 && sequence[iter + 1] == 0x82) {
             //  1. Increment iter by 2.
             iter += 2;
             //  2. If iter is greater or equal than length, abort these steps.
@@ -156,7 +156,7 @@ static bool NODELETE hasSignatureForWebM(std::span<const uint8_t> sequence)
             //  5. If iter is less than length - 4, abort these steps.
             // TODO: this is a spec error. It will always be less than length - 4 unless an error occurred.
             //  6. Let matched be the result of matching a padded sequence 0x77 0x65 0x62 0x6D ("webm") on sequence at offset iter.
-            while (!sequence[iter] && iter < length)
+            while (iter < length && !sequence[iter])
                 iter++;
             if (iter >= length - 4)
                 break;
@@ -177,7 +177,7 @@ static bool NODELETE hasSignatureForWebM(std::span<const uint8_t> sequence)
     return false;
 }
 
-static bool NODELETE matchMP3Header(std::span<const uint8_t> sequence)
+static bool LEGACY_NODELETE matchMP3Header(std::span<const uint8_t> sequence)
 {
     // To match an mp3 header, using a byte sequence sequence of length length at offset s execute these steps:
 
@@ -226,7 +226,7 @@ struct MP3Frame {
     uint8_t pad;
 };
 
-static uint32_t NODELETE mp3FrameSize(const MP3Frame& frame)
+static uint32_t LEGACY_NODELETE mp3FrameSize(const MP3Frame& frame)
 {
     // To compute an mp3 frame size, execute these steps:
     // If version is 1, let scale be 144, else, let scale be 72.
@@ -240,7 +240,7 @@ static uint32_t NODELETE mp3FrameSize(const MP3Frame& frame)
     return size;
 }
 
-static MP3Frame NODELETE parseMP3Frame(std::span<const uint8_t> sequence)
+static MP3Frame LEGACY_NODELETE parseMP3Frame(std::span<const uint8_t> sequence)
 {
     // Let version be sequence[s + 1] & 0x18 >> 3.
     uint8_t version = (sequence[1] & 0x18) >> 3;
@@ -267,7 +267,7 @@ static MP3Frame NODELETE parseMP3Frame(std::span<const uint8_t> sequence)
     return { version, bitRate, sampleRate, pad };
 }
 
-static bool NODELETE hasSignatureForMP3WithoutID3(std::span<const uint8_t> sequence)
+static bool LEGACY_NODELETE hasSignatureForMP3WithoutID3(std::span<const uint8_t> sequence)
 {
     // To determine whether a byte sequence matches the signature for MP3 without ID3, use the following steps:
 
@@ -300,7 +300,7 @@ static String mimeTypeFromSnifferEntries(std::span<const uint8_t> sequence)
         const ASCIILiteral contentType;
     };
 
-    static const auto sSnifferEntries = std::to_array<MIMESniffEntry>({
+    static const auto sSnifferEntries = WTF::toArray<MIMESniffEntry>({
         // The string "FORM" followed by four bytes followed by the string "AIFF", the AIFF signature.
         { span8("\x46\x4F\x52\x4D\x00\x00\x00\x00\x41\x49\x46\x46"), span8("\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF\xFF\xFF"), "audio/aiff"_s },
         // The string "ID3", the ID3v2-tagged MP3 signature.
@@ -308,9 +308,9 @@ static String mimeTypeFromSnifferEntries(std::span<const uint8_t> sequence)
         // The string "OggS" followed by NUL, the Ogg container signature.
         { span8("\x4F\x67\x67\x53\x00"), span8("\xFF\xFF\xFF\xFF\xFF"), "application/ogg"_s },
         // The string "MThd" followed by four bytes representing the number 6 in 32 bits (big-endian), the MIDI signature.
-        { span8("\0x4D\x54\x68\x64\x00\x00\x00\x06"), span8("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"), "audio/midi"_s },
+        { span8("\x4D\x54\x68\x64\x00\x00\x00\x06"), span8("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"), "audio/midi"_s },
         // The string "RIFF" followed by four bytes followed by the string "AVI ", the AVI signature.
-        { span8("\0x52\x49\x46\x46\x00\x00\x00\x00\x41\x56\x49\x20"), span8("\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF\xFF\xFF"), "video/avi"_s },
+        { span8("\x52\x49\x46\x46\x00\x00\x00\x00\x41\x56\x49\x20"), span8("\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF\xFF\xFF"), "video/avi"_s },
         // The string "RIFF" followed by four bytes followed by the string "WAVE", the WAVE signature.
         { span8("\x52\x49\x46\x46\x00\x00\x00\x00\x57\x41\x56\x45"), span8("\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF\xFF\xFF"), "audio/wave"_s },
         // Out of W3C spec, fLaC signature

@@ -111,7 +111,7 @@ void DocumentImmersive::requestImmersive(HTMLModelElement* element, CompletionHa
         return handleImmersiveError(element, *errorMessage, document().isFullyActive() ? EmitErrorEvent::Yes : EmitErrorEvent::No, ExceptionCode::InvalidAccessError, WTF::move(completionHandler));
 
     if (RefPtr window = document().window(); !window || !window->consumeTransientActivation())
-        return handleImmersiveError(element, "Cannot request immersive without transient activation."_s, EmitErrorEvent::Yes, ExceptionCode::TypeError, WTF::move(completionHandler));
+        return handleImmersiveError(element, "Cannot request immersive without transient activation."_s, EmitErrorEvent::Yes, ExceptionCode::NotAllowedError, WTF::move(completionHandler));
 
     if (immersiveElement() == element && !m_pendingExitImmersive)
         return completionHandler({ });
@@ -208,7 +208,7 @@ void DocumentImmersive::exitImmersiveIfNeeded(CompletionHandler<void()>&& comple
         exitImmersive([weakThis = WeakPtr { *this }, completionHandler = WTF::move(completionHandler)](auto result) mutable {
             RefPtr protectedThis = weakThis.get();
             if (protectedThis && result.hasException())
-                RELEASE_LOG_ERROR(Immersive, "%p - DocumentImmersive: %s", protectedThis.get(), result.releaseException().message().utf8().data());
+                RELEASE_LOG_ERROR(Immersive, "%p - DocumentImmersive: %s", protectedThis.get(), result.releaseException().message().utf8());
 
             if (completionHandler)
                 completionHandler();
@@ -250,7 +250,7 @@ void DocumentImmersive::exitRemovedImmersiveElementIfNeeded(HTMLModelElement* el
 
 void DocumentImmersive::handleImmersiveError(HTMLModelElement* element, const String& message, EmitErrorEvent emitErrorEvent, ExceptionCode code, CompletionHandler<void(ExceptionOr<void>)>&& completionHandler)
 {
-    RELEASE_LOG_ERROR(Immersive, "%p - DocumentImmersive: %s", this, message.utf8().data());
+    RELEASE_LOG_ERROR(Immersive, "%p - DocumentImmersive: %s", this, message.utf8());
 
     if (m_activeRequest.element == element) {
         m_activeRequest.stage = ActiveRequest::Stage::None;
@@ -466,6 +466,19 @@ void DocumentImmersive::clear()
 
     releaseDeferredRequest();
     clearPendingEvents();
+}
+
+void DocumentImmersive::didResumeFromBackForwardCache()
+{
+    // The ImmersiveSpace was dismissed by the navigation, clean-up state.
+    RefPtr previouslyImmersiveElement = m_immersiveElement;
+
+    clear();
+
+    if (previouslyImmersiveElement) {
+        previouslyImmersiveElement->exitImmersivePresentation([] { });
+        updateElementIsImmersive(previouslyImmersiveElement.get(), false);
+    }
 }
 
 }

@@ -38,7 +38,6 @@
 #include <wtf/Forward.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
-#include <wtf/Threading.h>
 #include <wtf/TypeCasts.h>
 
 namespace WTF {
@@ -182,7 +181,6 @@ public:
     virtual bool isRubberBandInProgress(std::optional<ScrollingNodeID>) const { return false; }
     virtual bool isUserScrollInProgress(std::optional<ScrollingNodeID>) const { return false; }
     virtual bool isScrollSnapInProgress(std::optional<ScrollingNodeID>) const { return false; }
-    virtual void updateScrollSnapPropertiesWithFrameView(const LocalFrameView&) { }
     virtual void setScrollPinningBehavior(ScrollPinningBehavior) { }
     virtual bool hasSubscrollers(FrameIdentifier) const { return false; }
 
@@ -226,7 +224,7 @@ public:
     virtual void setScrollbarOpacity(ScrollableArea&) { }
 #endif
 
-    FrameIdentifier NODELETE mainFrameIdentifier() const;
+    FrameIdentifier LEGACY_NODELETE mainFrameIdentifier() const;
 
 protected:
     explicit ScrollingCoordinator(Page*);
@@ -242,7 +240,7 @@ protected:
 
     virtual void willCommitTree(FrameIdentifier) { }
 
-    WEBCORE_EXPORT Page* NODELETE page() const;
+    WEBCORE_EXPORT Page* LEGACY_NODELETE page() const;
 
 private:
     virtual bool hasVisibleSlowRepaintViewportConstrainedObjects(const LocalFrameView&) const;

@@ -62,7 +62,6 @@ static constexpr uint8_t numberOfRelevantExtensionKeys = 0 JSC_INTL_RELEVANT_EXT
 #undef JSC_COUNT_INTL_RELEVANT_EXTENSION_KEYS
 
 struct MeasureUnit {
-    ASCIILiteral type;
     ASCIILiteral subType;
 };
 
@@ -104,10 +103,12 @@ inline const LocaleSet& intlListFormatAvailableLocales() { return intlAvailableL
 inline const LocaleSet& intlDurationFormatAvailableLocales() { return intlAvailableLocales(); }
 
 using CalendarID = unsigned;
-const Vector<String>& intlAvailableCalendars();
+JS_EXPORT_PRIVATE const Vector<String>& intlAvailableCalendars();
 
-extern CalendarID iso8601CalendarIDStorage;
-CalendarID iso8601CalendarIDSlow();
+JS_EXPORT_PRIVATE const UncheckedKeyHashMap<String, CalendarID, ASCIICaseInsensitiveHash>& intlAvailableCalendarIndex();
+
+extern CalendarID JS_EXPORT_PRIVATE iso8601CalendarIDStorage;
+CalendarID JS_EXPORT_PRIVATE iso8601CalendarIDSlow();
 inline CalendarID iso8601CalendarID()
 {
     unsigned value = iso8601CalendarIDStorage;
@@ -115,6 +116,38 @@ inline CalendarID iso8601CalendarID()
         return iso8601CalendarIDSlow();
     return value;
 }
+
+// Cached CalendarIDs for calendars compared frequently in the Temporal bridge layer.
+// Each follows the iso8601CalendarID() pattern: extern storage + Slow() + inline fast path.
+#define FOR_EACH_CACHED_CALENDAR_ID(macro) \
+    macro(buddhist, "buddhist"_s) \
+    macro(chinese, "chinese"_s) \
+    macro(coptic, "coptic"_s) \
+    macro(dangi, "dangi"_s) \
+    macro(ethioaa, "ethioaa"_s) \
+    macro(ethiopic, "ethiopic"_s) \
+    macro(gregory, "gregory"_s) \
+    macro(hebrew, "hebrew"_s) \
+    macro(indian, "indian"_s) \
+    macro(islamicCivil, "islamic-civil"_s) \
+    macro(islamicTbla, "islamic-tbla"_s) \
+    macro(islamicUmalqura, "islamic-umalqura"_s) \
+    macro(japanese, "japanese"_s) \
+    macro(persian, "persian"_s) \
+    macro(roc, "roc"_s)
+
+#define DECLARE_CALENDAR_ID(name, str) \
+    extern CalendarID JS_EXPORT_PRIVATE name##CalendarIDStorage; \
+    CalendarID JS_EXPORT_PRIVATE name##CalendarIDSlow(); \
+    inline CalendarID name##CalendarID() \
+    { \
+        unsigned value = name##CalendarIDStorage; \
+        if (value == std::numeric_limits<CalendarID>::max()) \
+            return name##CalendarIDSlow(); \
+        return value; \
+    }
+FOR_EACH_CACHED_CALENDAR_ID(DECLARE_CALENDAR_ID)
+#undef DECLARE_CALENDAR_ID
 
 // Resolve any accepted time zone string (case-insensitive; accepts IANA primary
 // identifiers, IANA Backward links such as "Asia/Calcutta", and UTC-equivalent
@@ -146,7 +179,7 @@ TriState intlBooleanOption(JSGlobalObject*, JSObject* options, PropertyName);
 String intlStringOption(JSGlobalObject*, JSObject* options, PropertyName, std::initializer_list<ASCIILiteral> values, ASCIILiteral notFound, ASCIILiteral fallback);
 unsigned intlNumberOption(JSGlobalObject*, JSObject* options, PropertyName, unsigned minimum, unsigned maximum, unsigned fallback);
 unsigned intlDefaultNumberOption(JSGlobalObject*, JSValue, PropertyName, unsigned minimum, unsigned maximum, unsigned fallback);
-Vector<char, 32> localeIDBufferForLanguageTagWithNullTerminator(const CString&);
+Vector<char, 32> localeIDBufferForLanguageTagWithNullTerminator(const ASCIICString&);
 String languageTagForLocaleID(const char*, bool isImmortal = false);
 Vector<String> canonicalizeLocaleList(JSGlobalObject*, JSValue locales);
 
@@ -172,16 +205,16 @@ Vector<char, 32> canonicalizeUnicodeExtensionsAfterICULocaleCanonicalization(Vec
 
 bool isUnicodeLocaleIdentifierType(StringView);
 
-bool NODELETE isUnicodeLanguageSubtag(StringView);
-bool NODELETE isUnicodeScriptSubtag(StringView);
-bool NODELETE isUnicodeRegionSubtag(StringView);
-bool NODELETE isUnicodeVariantSubtag(StringView);
+bool LEGACY_NODELETE isUnicodeLanguageSubtag(StringView);
+bool LEGACY_NODELETE isUnicodeScriptSubtag(StringView);
+bool LEGACY_NODELETE isUnicodeRegionSubtag(StringView);
+bool LEGACY_NODELETE isUnicodeVariantSubtag(StringView);
 bool isUnicodeLanguageId(StringView);
 JS_EXPORT_PRIVATE bool isStructurallyValidLanguageTag(StringView);
-String canonicalizeUnicodeLocaleID(const CString& languageTag);
+String canonicalizeUnicodeLocaleID(const ASCIICString& languageTag);
 JS_EXPORT_PRIVATE String canonicalizeUnicodeLocaleID(const StringView);
 
-bool NODELETE isWellFormedCurrencyCode(StringView);
+bool LEGACY_NODELETE isWellFormedCurrencyCode(StringView);
 
 std::optional<Vector<char, 32>> canonicalizeLocaleIDWithoutNullTerminator(const char* localeID);
 

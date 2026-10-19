@@ -34,6 +34,7 @@
 #include <wtf/RunLoop.h>
 #include <wtf/TZoneMalloc.h>
 
+OBJC_CLASS CALayer;
 OBJC_CLASS NSScrollerImp;
 
 namespace WebCore {
@@ -58,7 +59,7 @@ public:
     void willDoProgrammaticScroll(const FloatPoint&);
     void currentScrollPositionChanged();
 
-    bool NODELETE isRubberBandInProgress() const;
+    bool LEGACY_NODELETE isRubberBandInProgress() const;
     void startRubberBandSnapBack();
     void rubberBandTargetOffsetDidChange();
 
@@ -76,6 +77,8 @@ public:
     void initScrollbars() final;
     String scrollbarStateForOrientation(ScrollbarOrientation) const final;
 
+    Vector<RetainPtr<CALayer>, 2> hitTestableScrollbarLayers() const final;
+
 private:
     void updateFromStateNode(const ScrollingStateScrollingNode&) final;
 
@@ -91,9 +94,9 @@ private:
     void didStopRubberBandAnimation() final;
     void rubberBandingStateChanged(bool) final;
     FloatSize rubberBandTargetOffset() const final;
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    bool hasBannerViewOverlay() const final;
-    float bannerViewMaximumHeight() const final;
+#if HAVE(NSREFRESHCONTROLLER)
+    bool hasRefreshController() const final;
+    float refreshControllerSnappingThreshold() const final;
 #endif
     bool scrollPositionIsNotRubberbandingEdge(const FloatPoint&) const;
 

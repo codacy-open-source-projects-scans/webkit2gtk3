@@ -35,6 +35,7 @@
 #include "JSPromise.h"
 #include "JSWithScope.h"
 #include "ModuleAnalyzer.h"
+#include "Options.h"
 #include "Parser.h"
 #include "ScriptProfilingScope.h"
 #include "TopExceptionScope.h"
@@ -90,7 +91,7 @@ bool checkModuleSyntax(JSGlobalObject* globalObject, const SourceCode& source, P
         return false;
 
     PrivateName privateName(PrivateName::Description, "EntrypointModule"_s);
-    ModuleAnalyzer moduleAnalyzer(globalObject, Identifier::fromUid(privateName), source, moduleProgramNode->varDeclarations(), moduleProgramNode->lexicalVariables(), moduleProgramNode->features());
+    ModuleAnalyzer moduleAnalyzer(globalObject, Identifier::fromUid(privateName), source, moduleProgramNode->features());
     return !!moduleAnalyzer.analyze(*moduleProgramNode);
 }
 
@@ -181,7 +182,7 @@ static JSPromise* rejectPromise(ThrowScope& scope, JSGlobalObject* globalObject)
 {
     VM& vm = globalObject->vm();
     JSPromise* promise = JSPromise::create(vm, globalObject->promiseStructure());
-    return promise->rejectWithCaughtException(globalObject, scope);
+    return promise->rejectWithCaughtException(vm, scope);
 }
 
 JSPromise* loadAndEvaluateModule(JSGlobalObject* globalObject, const String& moduleName, RefPtr<ScriptFetchParameters> parameters, RefPtr<ScriptFetcher> scriptFetcher)
@@ -195,7 +196,7 @@ JSPromise* loadAndEvaluateModule(JSGlobalObject* globalObject, const String& mod
     Identifier resolved = globalObject->moduleLoader()->resolve(globalObject, Identifier::fromString(vm, moduleName), { }, scriptFetcher, /* useImportMap */ false);
     RETURN_IF_EXCEPTION(scope, nullptr);
 
-    RELEASE_AND_RETURN(scope, globalObject->moduleLoader()->loadModule(globalObject, resolved, WTF::move(parameters), WTF::move(scriptFetcher), /* evaluate */ true, /* dynamic */ false, /* useImportMap */ false));
+    RELEASE_AND_RETURN(scope, globalObject->moduleLoader()->loadModule(globalObject, resolved, WTF::move(parameters), WTF::move(scriptFetcher), { ModuleLoadFlag::Evaluate }));
 }
 
 static ScriptFetchParameters::Type getSourceType(const SourceCode& source)
@@ -203,6 +204,10 @@ static ScriptFetchParameters::Type getSourceType(const SourceCode& source)
     switch (source.provider()->sourceType()) {
     case SourceProviderSourceType::JSON:
         return ScriptFetchParameters::Type::JSON;
+    case SourceProviderSourceType::Text:
+        return ScriptFetchParameters::Type::Text;
+    case SourceProviderSourceType::CSS:
+        return ScriptFetchParameters::Type::CSS;
     case SourceProviderSourceType::WebAssembly:
         return ScriptFetchParameters::Type::WebAssembly;
     case SourceProviderSourceType::Module:
@@ -234,12 +239,12 @@ JSPromise* loadAndEvaluateModule(JSGlobalObject* globalObject, SourceCode&& sour
 
     AbstractModuleRecord::ModuleRequest request { WTF::move(key), ScriptFetchParameters::create(type) };
 
-    JSPromise* promise = globalObject->moduleLoader()->loadModule(globalObject, globalObject, request, graphLoadingState, WTF::move(scriptFetcher), /* evaluate */ true, /* useImportMap */ false);
+    JSPromise* promise = globalObject->moduleLoader()->loadModule(globalObject, globalObject, request, graphLoadingState, WTF::move(scriptFetcher), { ModuleLoadFlag::Evaluate });
     RETURN_IF_EXCEPTION(scope, rejectPromise(scope, globalObject));
 
     JSPromise* resultPromise = JSPromise::create(vm, globalObject->promiseStructure());
     resultPromise->markAsHandled();
-    promise->performPromiseThenWithInternalMicrotask(vm, globalObject, InternalMicrotask::ModuleLoadReturnModuleKey, resultPromise, jsUndefined());
+    promise->performPromiseThenWithInternalMicrotask(vm, InternalMicrotask::ModuleLoadReturnModuleKey, resultPromise, jsUndefined());
 
     return resultPromise;
 }
@@ -251,10 +256,10 @@ JSPromise* loadModule(JSGlobalObject* globalObject, const Identifier& moduleKey,
     RELEASE_ASSERT(vm.atomStringTable() == Thread::currentSingleton().atomStringTable());
     RELEASE_ASSERT(!vm.isCollectorBusyOnCurrentThread());
 
-    return globalObject->moduleLoader()->loadModule(globalObject, moduleKey, WTF::move(parameters), WTF::move(scriptFetcher), /* evaluate */ false, /* dynamic */ false, /* useImportMap */ false);
+    return globalObject->moduleLoader()->loadModule(globalObject, moduleKey, WTF::move(parameters), WTF::move(scriptFetcher), { });
 }
 
-JSPromise* loadModule(JSGlobalObject* globalObject, SourceCode&& source, RefPtr<ScriptFetcher> scriptFetcher)
+JSPromise* loadModule(JSGlobalObject* globalObject, const Identifier& moduleKey, SourceCode&& source, RefPtr<ScriptFetcher> scriptFetcher)
 {
     VM& vm = globalObject->vm();
     JSLockHolder lock(vm);
@@ -262,12 +267,18 @@ JSPromise* loadModule(JSGlobalObject* globalObject, SourceCode&& source, RefPtr<
     RELEASE_ASSERT(vm.atomStringTable() == Thread::currentSingleton().atomStringTable());
     RELEASE_ASSERT(!vm.isCollectorBusyOnCurrentThread());
 
-    Identifier key = createEntrypointModuleKey(vm);
-
     // Insert the given source code to the ModuleLoader registry as the fetched registry entry.
-    globalObject->moduleLoader()->provideFetch(globalObject, key, getSourceType(source), WTF::move(source));
+    globalObject->moduleLoader()->provideFetch(globalObject, moduleKey, getSourceType(source), WTF::move(source));
     RETURN_IF_EXCEPTION(scope, rejectPromise(scope, globalObject));
-    RELEASE_AND_RETURN(scope, globalObject->moduleLoader()->loadModule(globalObject, key, nullptr, WTF::move(scriptFetcher), /* evaluate */ false, /* dynamic */ false, /* useImportMap */ false));
+    RELEASE_AND_RETURN(scope, globalObject->moduleLoader()->loadModule(globalObject, moduleKey, nullptr, WTF::move(scriptFetcher), { }));
+}
+
+JSPromise* loadModule(JSGlobalObject* globalObject, SourceCode&& source, RefPtr<ScriptFetcher> scriptFetcher)
+{
+    VM& vm = globalObject->vm();
+    JSLockHolder lock(vm);
+    Identifier key = createEntrypointModuleKey(vm);
+    return loadModule(globalObject, key, WTF::move(source), WTF::move(scriptFetcher));
 }
 
 JSPromise* linkAndEvaluateModule(JSGlobalObject* globalObject, const Identifier& moduleKey, RefPtr<ScriptFetcher> scriptFetcher)
@@ -280,14 +291,14 @@ JSPromise* linkAndEvaluateModule(JSGlobalObject* globalObject, const Identifier&
     return globalObject->moduleLoader()->linkAndEvaluateModule(globalObject, moduleKey, nullptr, WTF::move(scriptFetcher));
 }
 
-JSPromise* importModule(JSGlobalObject* globalObject, const Identifier& moduleName, const Identifier& referrer, RefPtr<ScriptFetchParameters> parameters, RefPtr<ScriptFetcher> scriptFetcher)
+JSPromise* importModule(JSGlobalObject* globalObject, const Identifier& moduleName, const Identifier& referrer, RefPtr<ScriptFetchParameters> parameters, RefPtr<ScriptFetcher> scriptFetcher, bool deferred)
 {
     VM& vm = globalObject->vm();
     JSLockHolder lock(vm);
     RELEASE_ASSERT(vm.atomStringTable() == Thread::currentSingleton().atomStringTable());
     RELEASE_ASSERT(!vm.isCollectorBusyOnCurrentThread());
 
-    return globalObject->moduleLoader()->requestImportModule(globalObject, moduleName, referrer, WTF::move(parameters), WTF::move(scriptFetcher));
+    return globalObject->moduleLoader()->requestImportModule(globalObject, moduleName, referrer, WTF::move(parameters), WTF::move(scriptFetcher), deferred);
 }
 
 UncheckedKeyHashMap<RefPtr<UniquedStringImpl>, String> retrieveImportAttributesFromDynamicImportOptions(JSGlobalObject* globalObject, JSValue options, const Vector<RefPtr<UniquedStringImpl>>& supportedImportAttributes)
@@ -361,7 +372,14 @@ std::optional<ScriptFetchParameters::Type> retrieveTypeImportAttribute(JSGlobalO
         return { };
 
     String value = iterator->value;
-    if (auto result = ScriptFetchParameters::parseType(value))
+    auto result = ScriptFetchParameters::parseType(value);
+
+    if (result == ScriptFetchParameters::Type::Text && !Options::useImportText())
+        result = std::nullopt;
+    else if (result == ScriptFetchParameters::Type::CSS && !Options::useCSSModuleScripts())
+        result = std::nullopt;
+
+    if (result)
         return result;
 
     throwTypeError(globalObject, scope, makeString("Import attribute type \""_s, value, "\" is not valid"_s));

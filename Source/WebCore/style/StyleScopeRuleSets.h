@@ -27,6 +27,7 @@
 #include "UserAgentStyle.h"
 #include <memory>
 #include <wtf/HashMap.h>
+#include <wtf/OptionSet.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
 
@@ -46,6 +47,20 @@ enum class DeclarationOrigin : uint8_t;
 class InspectorCSSOMWrappers;
 class Resolver;
 
+// Properties of a :has() argument used to limit sibling-combinator invalidation visits.
+enum class HasArgumentProperty : uint8_t {
+    // The argument depends on sibling order/position (a sibling combinator or a sibling-relative pseudo-class
+    // anywhere). Order-insensitive arguments don't need sibling-combinator invalidation visits — the changed
+    // element's own SelfOrDescendant traversal covers them — so they are skipped there to avoid re-walking the
+    // bearer subtree on every mutation.
+    OrderSensitive = 1 << 0,
+    // The order-sensitivity is *purely* structural sibling combinators (+/~) with no positional or stateful
+    // pseudo-classes (recursing into :is()/:where()/:not()). For these an element's match depends only on itself
+    // and its preceding siblings, so the hasAlreadyMatchedAndMutationIsIrrelevant short-circuit can be applied on
+    // sibling-combinator visits when the mutation is at the end of the element list.
+    StructuralSibling = 1 << 1,
+};
+
 struct InvalidationRuleSet {
     RefPtr<RuleSet> ruleSet;
     // Invalidation selectors are used for attribute selector and :has() invalidation.
@@ -55,9 +70,13 @@ struct InvalidationRuleSet {
     CSSSelectorList invalidationSelectors;
     MatchElement matchElement;
     IsNegation isNegation;
-    // For non-subject :has(), a selector matching the :has() scope element.
-    // Used to bound the invalidation traversal to the scope element's subtree.
-    CSSSelectorList scopeSelector;
+    OptionSet<HasArgumentProperty> hasArgumentProperties;
+    // Selector for the :has() scope element, used to bound invalidation traversal.
+    //   - Specific selectors: strong scope.
+    //   - Universal `*`: weak scope (bearer has no compound peer); scope element is still
+    //     DOM-identifiable relative to a changed element.
+    //   - Null: scope-breaking (nested :is()/:not() reaches outside the scope).
+    RefPtr<const RefCountedCSSSelectorList> scopeSelector;
 };
 
 enum class SelectorsForStyleAttribute : uint8_t { None, SubjectPositionOnly, NonSubjectPosition };
@@ -69,7 +88,7 @@ public:
 
     bool isAuthorStyleDefined() const { return m_isAuthorStyleDefined; }
     RuleSet* userAgentMediaQueryStyle() const;
-    RuleSet* NODELETE dynamicViewTransitionsStyle() const;
+    RuleSet* LEGACY_NODELETE dynamicViewTransitionsStyle() const;
     RuleSet& authorStyle() const { return *m_authorStyle; }
     RuleSet* userStyle() const;
     RuleSet* styleForDeclarationOrigin(DeclarationOrigin);
@@ -94,15 +113,13 @@ public:
 
     void resetUserAgentMediaQueryStyle();
 
-    bool NODELETE hasViewportDependentMediaQueries() const;
-    bool NODELETE hasContainerQueries() const;
-    bool NODELETE hasScopeRules() const;
+    bool LEGACY_NODELETE hasViewportDependentMediaQueries() const;
+    bool LEGACY_NODELETE hasContainerQueries() const;
+    bool LEGACY_NODELETE hasScopeRules() const;
 
-    RefPtr<StyleRuleViewTransition> NODELETE viewTransitionRule() const;
+    RefPtr<StyleRuleViewTransition> viewTransitionRule() const;
 
     std::optional<DynamicMediaQueryEvaluationChanges> evaluateDynamicMediaQueryRules(const MQ::MediaQueryEvaluator&);
-
-    RuleFeatureSet& mutableFeatures() LIFETIME_BOUND;
 
     void setDynamicViewTransitionsStyle(RuleSet* ruleSet)
     {
@@ -146,14 +163,6 @@ private:
 };
 
 inline const RuleFeatureSet& ScopeRuleSets::features() const
-{
-    if (m_defaultStyleVersionOnFeatureCollection < UserAgentStyle::defaultStyleVersion)
-        collectFeatures();
-    return m_features;
-}
-
-// FIXME: There should be just the const version.
-inline RuleFeatureSet& ScopeRuleSets::mutableFeatures()
 {
     if (m_defaultStyleVersionOnFeatureCollection < UserAgentStyle::defaultStyleVersion)
         collectFeatures();

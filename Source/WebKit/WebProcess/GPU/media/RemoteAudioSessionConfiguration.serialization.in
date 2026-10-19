@@ -31,10 +31,10 @@ struct WebKit::RemoteAudioSessionConfiguration {
     uint64_t preferredBufferSize;
     uint64_t outputLatency;
     bool isMuted;
-    bool isActive;
     String sceneIdentifier;
     WebCore::AudioSessionSoundStageSize soundStageSize;
     WebCore::AudioSessionCategory categoryOverride;
+    bool isActive;
 };
 
 #endif

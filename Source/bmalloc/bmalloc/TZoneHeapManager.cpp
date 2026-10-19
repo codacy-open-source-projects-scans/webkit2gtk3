@@ -46,8 +46,6 @@
 
 namespace bmalloc { namespace api {
 
-static bool (*hasDisableTZoneEntitlement)();
-
 #define BUSE_BUCKETS_FOR_SIZE_CLASSES_FROM_ENVVAR 0
 
 TZoneHeapManager* tzoneHeapManager;
@@ -97,11 +95,6 @@ static void dumpRegisteredTypesAtExit(void)
     TZoneHeapManager::singleton().dumpRegisteredTypes();
 }
 
-void TZoneHeapManager::setHasDisableTZoneEntitlementCallback(bool (*disableTZoneEntitlementCheck)())
-{
-    hasDisableTZoneEntitlement = disableTZoneEntitlementCheck;
-}
-
 TZoneHeapManager::TZoneHeapManager()
 {
     determineTZoneMallocFallback();
@@ -127,6 +120,11 @@ void determineTZoneMallocFallback()
 
     if (Environment::get()->shouldBmallocAllocateThroughSystemHeap()) {
         tzoneMallocFallback = TZoneMallocFallback::ForceDebugMalloc;
+        return;
+    }
+
+    if (isMTEEnabled()) {
+        tzoneMallocFallback = TZoneMallocFallback::ForceFastMalloc;
         return;
     }
 
@@ -597,7 +595,6 @@ TZoneHeapManager::Group* TZoneHeapManager::populateGroupBuckets(LockHolder& lock
     group->nonCompactBucket.type.alignment = spec.alignment;
     group->nonCompactBucket.type.name = group->nonCompactBucket.typeName;
     group->nonCompactBucket.heapref.type = (const pas_heap_type*)(&group->nonCompactBucket.type);
-    group->nonCompactBucket.heapref.is_non_compact_heap = true;
 
     for (unsigned i = 0; i < bucketCount; ++i) {
 #if TZONE_VERBOSE_DEBUG
@@ -612,7 +609,6 @@ TZoneHeapManager::Group* TZoneHeapManager::populateGroupBuckets(LockHolder& lock
         group->buckets[i].type.name = group->buckets[i].typeName;
 
         group->buckets[i].heapref.type = (const pas_heap_type*)(&group->buckets[i].type);
-        group->buckets[i].heapref.is_non_compact_heap = false;
     }
 
     m_groupByDescriptor.set(descriptor, group);

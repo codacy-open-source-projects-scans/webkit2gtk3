@@ -31,12 +31,11 @@
 #include "FrameInlines.h"
 #include "RenderBox.h"
 #include "RenderBoxModelObject.h"
-#include "RenderInline.h"
 #include "RenderLineBreak.h"
 #include "RenderObjectDocument.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderText.h"
 #include "RenderView.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -50,7 +49,7 @@ AccessibilityRegionContext::~AccessibilityRegionContext()
     for (auto renderTextToFrame : m_accumulatedRenderTextRects) {
         if (!cache) {
             // Use this RenderText to get to the "canonical" AXObjectCache (attached to the page).
-            cache = renderTextToFrame.key.document().axObjectCache();
+            cache = protect(renderTextToFrame.key.document())->axObjectCache();
         }
 
         if (cache) {
@@ -61,9 +60,9 @@ AccessibilityRegionContext::~AccessibilityRegionContext()
     }
 }
 
-void AccessibilityRegionContext::takeBounds(const RenderInline& renderInline, LayoutRect&& paintRect)
+void AccessibilityRegionContext::takeBoundsForInlineBox(const RenderBoxModelObject& inlineBox, LayoutRect&& paintRect)
 {
-    takeBoundsInternal(renderInline, enclosingIntRect(mapRect(WTF::move(paintRect))));
+    takeBoundsInternal(inlineBox, enclosingIntRect(mapRect(WTF::move(paintRect))));
 }
 
 void AccessibilityRegionContext::takeBounds(const RenderBox& renderBox, LayoutPoint paintOffset)
@@ -72,7 +71,7 @@ void AccessibilityRegionContext::takeBounds(const RenderBox& renderBox, LayoutPo
         takeBounds(*renderView, WTF::move(paintOffset));
         return;
     }
-    auto mappedPaintRect = enclosingIntRect(mapRect(LayoutRect(paintOffset, renderBox.size())));
+    auto mappedPaintRect = enclosingIntRect(mapRect(LayoutRect(paintOffset, renderBox.borderBoxSize())));
     takeBoundsInternal(renderBox, WTF::move(mappedPaintRect));
 }
 
@@ -107,12 +106,6 @@ void AccessibilityRegionContext::takeBounds(const RenderLineBreak* renderLineBre
     takeBoundsInternal(*renderLineBreak, WTF::move(mappedPaintRect));
 }
 
-void AccessibilityRegionContext::takeBounds(const RenderInline* renderInline, LayoutRect&& paintRect)
-{
-    if (renderInline)
-        takeBounds(*renderInline, WTF::move(paintRect));
-};
-
 void AccessibilityRegionContext::takeBoundsInternal(const RenderBoxModelObject& renderObject, IntRect&& paintRect)
 {
 #if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
@@ -123,7 +116,7 @@ void AccessibilityRegionContext::takeBoundsInternal(const RenderBoxModelObject& 
         paintRect = view->contentsToRootView(paintRect);
 #endif
 
-    if (CheckedPtr cache = renderObject.document().axObjectCache())
+    if (CheckedPtr cache = protect(renderObject.document())->axObjectCache())
         cache->onPaint(renderObject, WTF::move(paintRect));
 }
 
@@ -147,7 +140,7 @@ void AccessibilityRegionContext::takeBounds(const RenderText& renderText, FloatR
     else
         accumulatedRectIterator->value.unite(mappedPaintRect);
 
-    if (CheckedPtr cache = renderText.document().axObjectCache()) {
+    if (CheckedPtr cache = protect(renderText.document())->axObjectCache()) {
         // Note that the line-index provided here is relative to the containing-block, which could include lines
         // belonging to other RenderTexts. Concretely, this means the first painted line for |renderText| could
         // have a line index greater than zero. We adjust this later in AXObjectCache::onAccessibilityPaintFinished.

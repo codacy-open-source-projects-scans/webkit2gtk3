@@ -40,7 +40,7 @@
 
 namespace WebCore {
 
-RetainPtr<CVPixelBufferRef> createScratchCVPixelBuffer(unsigned width, unsigned height, OSType pixelFormat, CFDictionaryRef attributes, CGColorSpaceRef colorSpace)
+RetainPtr<CVPixelBufferRef> createScratchCVPixelBuffer(unsigned width, unsigned height, OSType pixelFormat, CFDictionaryRef attributes, CGColorSpaceRef colorSpace, float headroom)
 {
     CVPixelBufferRef pixelBuffer = nullptr;
     auto status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, pixelFormat, attributes, &pixelBuffer);
@@ -53,6 +53,13 @@ RetainPtr<CVPixelBufferRef> createScratchCVPixelBuffer(unsigned width, unsigned 
     if (colorSpace)
         CVBufferSetAttachment(pixelBuffer, kCVImageBufferCGColorSpaceKey, colorSpace, kCVAttachmentMode_ShouldPropagate);
 
+    if (headroom > 1.0) {
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        RetainPtr headroomNumber = adoptCF(CFNumberCreate(nullptr,  kCFNumberFloatType,  &headroom));
+        CVBufferSetAttachment(pixelBuffer, kIOSurfaceContentHeadroom, headroomNumber, kCVAttachmentMode_ShouldPropagate);
+#endif
+    }
+
     return adoptCF(pixelBuffer);
 }
 
@@ -60,18 +67,73 @@ RetainPtr<CVPixelBufferRef> createScratchMetalCompatibleCVPixelBuffer(unsigned w
 {
     RetainPtr attributes = adoptCF(CFDictionaryCreateMutable(nullptr, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
     RetainPtr surfaceProperties = adoptCF(CFDictionaryCreateMutable(nullptr, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
-    CFDictionarySetValue(attributes.get(), kCVPixelBufferIOSurfacePropertiesKey, surfaceProperties.get());
-    CFDictionarySetValue(attributes.get(), kCVPixelBufferMetalCompatibilityKey, kCFBooleanTrue);
-
+    CFDictionarySetValue(attributes, kCVPixelBufferIOSurfacePropertiesKey, surfaceProperties);
+    CFDictionarySetValue(attributes, kCVPixelBufferMetalCompatibilityKey, kCFBooleanTrue);
     return createScratchCVPixelBuffer(width, height, pixelFormat, attributes, colorSpace);
+}
+
+RetainPtr<CVPixelBufferRef> createScratchMetalCompatibleCVPixelBuffer(CVPixelBufferRef pixelBuffer, CGColorSpaceRef colorSpace)
+{
+    unsigned width = CVPixelBufferGetWidth(pixelBuffer);
+    unsigned height = CVPixelBufferGetHeight(pixelBuffer);
+    OSType pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer);
+    return createScratchMetalCompatibleCVPixelBuffer(width, height, pixelFormat, colorSpace);
 }
 
 RetainPtr<CVPixelBufferRef> createScratchMetalCompatibleCVPixelBuffer(const ShareableCVPixelBuffer& pixelBuffer, CGColorSpaceRef colorSpace)
 {
     unsigned width = pixelBuffer.configuration().width();
     unsigned height = pixelBuffer.configuration().height();
-    ShareableCVPixelFormat pixelFormat = pixelBuffer.configuration().pixelFormat();
-    return createScratchMetalCompatibleCVPixelBuffer(width, height, toCVPixelFormat(pixelFormat), colorSpace);
+    OSType pixelFormat = toCVPixelFormat(pixelBuffer.configuration().pixelFormat());
+    return createScratchMetalCompatibleCVPixelBuffer(width, height, pixelFormat, colorSpace);
+}
+
+static RetainPtr<CVPixelBufferRef> createCVPixelBufferFromImage(PlatformImagePtr platformImage, RetainPtr<CVPixelBufferRef>&& targetPixelBuffer)
+{
+    if (!targetPixelBuffer)
+        return nullptr;
+
+    unsigned width = CGImageGetWidth(platformImage);
+    unsigned height = CGImageGetHeight(platformImage);
+    RetainPtr colorSpace = CGImageGetColorSpace(platformImage);
+
+    // FIXME: There should be an API that does the opposite of VTCreateCGImageFromCVPixelBuffer()
+    // - one that converts a CGImage into a CVPixelBuffer.
+    CVPixelBufferLockBaseAddress(targetPixelBuffer, 0);
+    {
+        unsigned destinationBytesPerRow = CVPixelBufferGetBytesPerRow(targetPixelBuffer);
+        auto* destinationBaseAddress = static_cast<uint8_t*>(CVPixelBufferGetBaseAddress(targetPixelBuffer));
+
+        // kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst => BGRA layout
+        auto bitmapInfo = static_cast<CGBitmapInfo>(kCGBitmapByteOrder32Little) | static_cast<CGBitmapInfo>(kCGImageAlphaPremultipliedFirst);
+
+        RetainPtr context = adoptCF(CGBitmapContextCreate(destinationBaseAddress, width, height, 8, destinationBytesPerRow, colorSpace, bitmapInfo));
+        CGContextDrawImage(context, CGRectMake(0, 0, static_cast<CGFloat>(width), static_cast<CGFloat>(height)), platformImage);
+    }
+    CVPixelBufferUnlockBaseAddress(targetPixelBuffer, 0);
+
+    return WTF::move(targetPixelBuffer);
+}
+
+RetainPtr<CVPixelBufferRef> createMetalCompatibleCVPixelBufferFromImage(PlatformImagePtr platformImage)
+{
+    unsigned width = CGImageGetWidth(platformImage);
+    unsigned height = CGImageGetHeight(platformImage);
+    RetainPtr colorSpace = CGImageGetColorSpace(platformImage);
+
+    RetainPtr targetPixelBuffer = createScratchMetalCompatibleCVPixelBuffer(width, height, kCVPixelFormatType_32BGRA);
+    return createCVPixelBufferFromImage(platformImage, WTF::move(targetPixelBuffer));
+}
+
+RetainPtr<CVPixelBufferRef> createCVPixelBufferFromImage(PlatformImagePtr platformImage)
+{
+    unsigned width = CGImageGetWidth(platformImage);
+    unsigned height = CGImageGetHeight(platformImage);
+    RetainPtr colorSpace = CGImageGetColorSpace(platformImage);
+    OSType pixelFormat = CGImageGetAlphaInfo(platformImage) == kCGImageAlphaNone ? kCVPixelFormatType_24RGB : kCVPixelFormatType_32BGRA;
+
+    RetainPtr targetPixelBuffer = createScratchCVPixelBuffer(width, height, pixelFormat);
+    return createCVPixelBufferFromImage(platformImage, WTF::move(targetPixelBuffer));
 }
 
 #if ENABLE(DUMP_GAIN_MAP_IMAGES)

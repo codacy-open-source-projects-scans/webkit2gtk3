@@ -39,14 +39,14 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderFrameBase);
 
-RenderFrameBase::RenderFrameBase(Type type, HTMLFrameElementBase& element, RenderStyle&& style)
+RenderFrameBase::RenderFrameBase(Type type, HTMLFrameElementBase& element, Style::ComputedStyle&& style)
     : RenderWidget(type, element, WTF::move(style))
 {
 }
 
 RenderFrameBase::~RenderFrameBase() = default;
 
-void RenderFrameBase::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
+void RenderFrameBase::styleDidChange(Style::Difference diff, const Style::ComputedStyle* oldStyle)
 {
     RenderWidget::styleDidChange(diff, oldStyle);
 
@@ -60,12 +60,12 @@ void RenderFrameBase::styleDidChange(Style::Difference diff, const RenderStyle* 
     RefPtr document = this->document();
 
     if (document->useDarkAppearance(oldStyle) != document->useDarkAppearance(protect(&style()))) {
-        childFrameView->invalidateForBaseBackgroundOrColorSchemeChange();
+        childFrameView->invalidateForFrameOwnerColorSchemeChange();
         protect(childFrameView->layoutContext())->scheduleLayout();
     }
 }
 
-inline bool NODELETE shouldExpandFrame(LayoutUnit width, LayoutUnit height, bool hasFixedWidth, bool hasFixedHeight)
+inline bool LEGACY_NODELETE shouldExpandFrame(LayoutUnit width, LayoutUnit height, bool hasFixedWidth, bool hasFixedHeight)
 {
     // If the size computed to zero never expand.
     if (!width || !height)

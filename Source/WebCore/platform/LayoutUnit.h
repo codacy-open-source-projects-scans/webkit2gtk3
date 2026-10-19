@@ -38,7 +38,7 @@
 #include <wtf/HashFunctions.h>
 #include <wtf/HashTraits.h>
 #include <wtf/MathExtras.h>
-#include <wtf/SaturatedArithmetic.h>
+#include <wtf/SaturatingArithmetic.h>
 
 namespace WTF {
 class TextStream;
@@ -69,7 +69,7 @@ class LayoutUnit {
 public:
     constexpr LayoutUnit() : m_value(0) { }
     LayoutUnit(const LayoutUnit&) = default;
-    LayoutUnit(int value) { setValue(value); }
+    constexpr LayoutUnit(int value) { setValue(value); }
     LayoutUnit(unsigned short value) { setValue(value); }
     LayoutUnit(unsigned value) { setValue(value); }
     explicit LayoutUnit(unsigned long value)
@@ -82,7 +82,7 @@ public:
     }
     explicit LayoutUnit(double value)
     {
-        m_value = clampToInteger(value * kFixedPointDenominator);
+        m_value = clampTo<int>(value * kFixedPointDenominator);
     }
 
     LayoutUnit& operator=(const LayoutUnit&) = default;
@@ -92,12 +92,12 @@ public:
 
     static LayoutUnit fromFloatCeil(float value)
     {
-        return fromRawValue(clampToInteger(ceilf(value * kFixedPointDenominator)));
+        return fromRawValue(clampTo<int>(ceilf(value * kFixedPointDenominator)));
     }
 
     static LayoutUnit fromFloatFloor(float value)
     {
-        return fromRawValue(clampToInteger(floorf(value * kFixedPointDenominator)));
+        return fromRawValue(clampTo<int>(floorf(value * kFixedPointDenominator)));
     }
 
     static LayoutUnit fromFloatRound(float value)
@@ -126,7 +126,7 @@ public:
 
     LayoutUnit& operator++()
     {
-        m_value = saturatedSum<int>(m_value, kFixedPointDenominator);
+        m_value = saturatingSum<int>(m_value, kFixedPointDenominator);
         return *this;
     }
 
@@ -227,7 +227,7 @@ private:
         return ::abs(value) <= std::numeric_limits<int>::max() / kFixedPointDenominator;
     }
 
-    inline void setValue(int value)
+    constexpr void setValue(int value)
     {
         if (value > intMaxForLayoutUnit)
             m_value = std::numeric_limits<int>::max();
@@ -361,7 +361,7 @@ inline double operator*(const double a, const LayoutUnit& b)
     return a * b.toDouble();
 }
 
-inline LayoutUnit operator/(const LayoutUnit& a, const LayoutUnit& b)
+constexpr LayoutUnit operator/(const LayoutUnit& a, const LayoutUnit& b)
 {
     long long rawVal = static_cast<long long>(kFixedPointDenominator) * a.rawValue() / b.rawValue();
     return LayoutUnit::fromRawValue(clampTo<int>(rawVal));
@@ -377,7 +377,7 @@ inline double operator/(const LayoutUnit& a, double b)
     return a.toDouble() / b;
 }
 
-inline LayoutUnit operator/(const LayoutUnit& a, int b)
+constexpr LayoutUnit operator/(const LayoutUnit& a, int b)
 {
     return a / LayoutUnit(b);
 }
@@ -439,7 +439,7 @@ inline LayoutUnit operator/(unsigned long long a, const LayoutUnit& b)
 
 inline LayoutUnit operator+(const LayoutUnit& a, const LayoutUnit& b)
 {
-    return LayoutUnit::fromRawValue(saturatedSum<int>(a.rawValue(), b.rawValue()));
+    return LayoutUnit::fromRawValue(saturatingSum<int>(a.rawValue(), b.rawValue()));
 }
 
 inline LayoutUnit operator+(const LayoutUnit& a, int b)
@@ -474,7 +474,7 @@ inline double operator+(const double a, const LayoutUnit& b)
 
 inline LayoutUnit operator-(const LayoutUnit& a, const LayoutUnit& b)
 {
-    return LayoutUnit::fromRawValue(saturatedDifference<int>(a.rawValue(), b.rawValue()));
+    return LayoutUnit::fromRawValue(saturatingDifference<int>(a.rawValue(), b.rawValue()));
 }
 
 inline LayoutUnit operator-(const LayoutUnit& a, int b)
@@ -537,7 +537,7 @@ inline LayoutUnit operator%(int a, const LayoutUnit& b)
 
 inline LayoutUnit& operator+=(LayoutUnit& a, const LayoutUnit& b)
 {
-    a.setRawValue(saturatedSum<int>(a.rawValue(), b.rawValue()));
+    a.setRawValue(saturatingSum<int>(a.rawValue(), b.rawValue()));
     return a;
 }
 
@@ -567,7 +567,7 @@ inline LayoutUnit& operator-=(LayoutUnit& a, int b)
 
 inline LayoutUnit& operator-=(LayoutUnit& a, const LayoutUnit& b)
 {
-    a.setRawValue(saturatedDifference<int>(a.rawValue(), b.rawValue()));
+    a.setRawValue(saturatingDifference<int>(a.rawValue(), b.rawValue()));
     return a;
 }
 

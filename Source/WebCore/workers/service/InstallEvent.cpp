@@ -122,7 +122,7 @@ static std::optional<Exception> verifyRouterCondition(RouterCondition& condition
 {
     bool hasCondition = false;
     if (condition.urlPattern) {
-        auto urlPatternOrException = URLPattern::create(scope, std::exchange(*condition.urlPattern, { }), scope.contextData().scriptURL.string());
+        auto urlPatternOrException = URLPattern::create(std::exchange(*condition.urlPattern, { }), scope.contextData().scriptURL.string());
         if (urlPatternOrException.hasException())
             return urlPatternOrException.releaseException();
         condition.urlPattern = urlPatternOrException.releaseReturnValue();
@@ -171,7 +171,7 @@ static ExceptionOr<ServiceWorkerRoute> convertServiceWorkerRule(RouterRule&& rul
 // https://w3c.github.io/ServiceWorker/#dom-installevent-addroutes
 void InstallEvent::addRoutes(JSC::JSGlobalObject& globalObject, Variant<RouterRule, Vector<RouterRule>>&& rules, Ref<DeferredPromise>&& promise)
 {
-    auto& jsDOMGlobalObject = uncheckedDowncast<JSDOMGlobalObject>(globalObject);
+    auto& jsDOMGlobalObject = downcast<JSDOMGlobalObject>(globalObject);
     RefPtr serviceWorkerGlobalScope = dynamicDowncast<ServiceWorkerGlobalScope>(jsDOMGlobalObject.scriptExecutionContext());
 
     auto rulesVector = switchOn(WTF::move(rules), [](RouterRule&& rule) -> Vector<RouterRule> {
@@ -205,7 +205,7 @@ void InstallEvent::addRoutes(JSC::JSGlobalObject& globalObject, Variant<RouterRu
 
     RefPtr delayPromise = DeferredPromise::create(jsDOMGlobalObject);
     if (delayPromise) {
-        auto& jsPromise = *uncheckedDowncast<JSC::JSPromise>(delayPromise->promise());
+        auto& jsPromise = *downcast<JSC::JSPromise>(delayPromise->promise());
         waitUntil(DOMPromise::create(jsDOMGlobalObject, jsPromise));
     }
 

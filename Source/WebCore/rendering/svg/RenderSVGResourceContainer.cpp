@@ -27,6 +27,7 @@
 #include "RenderObjectInlines.h"
 #include "RenderSVGModelObjectInlines.h"
 #include "RenderSVGRoot.h"
+#include "SVGElement.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGResourceElementClient.h"
 #include "SVGVisitedElementTracking.h"
@@ -38,17 +39,19 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderSVGResourceContainer);
 
-RenderSVGResourceContainer::RenderSVGResourceContainer(Type type, SVGElement& element, RenderStyle&& style)
+RenderSVGResourceContainer::RenderSVGResourceContainer(Type type, SVGElement& element, Style::ComputedStyle&& style)
     : RenderSVGHiddenContainer(type, element, WTF::move(style), SVGModelObjectFlag::IsResourceContainer)
     , m_id(element.getIdAttribute())
 {
     ASSERT(isRenderSVGResourceContainer());
+    ASSERT(SVGElement::isResourceContainerTagName(element.tagQName()));
 }
 
 RenderSVGResourceContainer::~RenderSVGResourceContainer() = default;
 
 void RenderSVGResourceContainer::layout()
 {
+    clearCacheBeforeLayout();
     RenderSVGHiddenContainer::layout();
     repaintAllClients();
 }
@@ -56,10 +59,12 @@ void RenderSVGResourceContainer::layout()
 void RenderSVGResourceContainer::willBeDestroyed()
 {
     m_registered = false;
+    if (!renderTreeBeingDestroyed())
+        repaintAllClients();
     RenderSVGHiddenContainer::willBeDestroyed();
 }
 
-void RenderSVGResourceContainer::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
+void RenderSVGResourceContainer::styleDidChange(Style::Difference diff, const Style::ComputedStyle* oldStyle)
 {
     RenderSVGHiddenContainer::styleDidChange(diff, oldStyle);
 
@@ -71,6 +76,10 @@ void RenderSVGResourceContainer::styleDidChange(Style::Difference diff, const Re
 
 void RenderSVGResourceContainer::idChanged()
 {
+    // Clients resolved this resource under the old id and may now resolve elsewhere or to nothing.
+    // Notify them to drop any cached resolution and repaint.
+    repaintAllClients();
+
     // Remove old id, that is guaranteed to be present in cache.
     m_id = element().getIdAttribute();
 
@@ -87,7 +96,7 @@ static inline void notifyResourceChanged(SVGElement& element)
 
     SVGVisitedElementTracking::Scope recursionScope(recursionTracking, element);
 
-    for (auto& cssClient : element.referencingCSSClients()) {
+    for (CheckedPtr cssClient : element.referencingCSSClients()) {
         if (!cssClient)
             continue;
         cssClient->resourceChanged(element);

@@ -80,13 +80,14 @@ struct VideoFrameAdaptor {
 #endif
 };
 
-static RealtimeMediaSource::Type NODELETE toSourceType(CaptureDevice::DeviceType type)
+static RealtimeMediaSource::Type LEGACY_NODELETE toSourceType(CaptureDevice::DeviceType type)
 {
     switch (type) {
     case CaptureDevice::DeviceType::Microphone:
     case CaptureDevice::DeviceType::SystemAudio:
         return RealtimeMediaSource::Type::Audio;
     case CaptureDevice::DeviceType::Camera:
+    case CaptureDevice::DeviceType::Canvas:
     case CaptureDevice::DeviceType::Screen:
     case CaptureDevice::DeviceType::Window:
         return RealtimeMediaSource::Type::Video;
@@ -348,7 +349,7 @@ void RealtimeMediaSource::videoFrameAvailable(VideoFrame& videoFrame, VideoFrame
             return videoFrame;
 
         if (!m_rotationSession)
-            m_rotationSession = makeUnique<ImageRotationSessionVT>(m_canUseIOSurface ? ImageRotationSessionVT::ShouldUseIOSurface::Yes : ImageRotationSessionVT::ShouldUseIOSurface::No);
+            lazyInitialize(m_rotationSession, makeUnique<ImageRotationSessionVT>(m_canUseIOSurface ? ImageRotationSessionVT::ShouldUseIOSurface::Yes : ImageRotationSessionVT::ShouldUseIOSurface::No));
 
         RefPtr rotatedVideoFrame = m_rotationSession->applyRotation(videoFrame);
         if (!rotatedVideoFrame)
@@ -361,32 +362,60 @@ void RealtimeMediaSource::videoFrameAvailable(VideoFrame& videoFrame, VideoFrame
 #endif
     }();
 
-    for (auto& [key, value] : m_videoFrameObservers) {
-        if (auto* adaptor = value.get()) {
-            if (adaptor->frameDecimation > 1 && ++adaptor->frameDecimationCounter % adaptor->frameDecimation)
-                continue;
+    // videoFrameObservers needs to be passed as parameter because if m_videoFrameObservers
+    // is used, that confuses the thread safety static analysis, which can't deduce that
+    // the lock has been taken by the outer scope of the videoFrameAvailable() method.
+    auto deliverFrame = [&] (Ref<VideoFrame>&& frame, VideoFrameTimeMetadata&& frameMetadata,
+        HashMap<VideoFrameObserver*, std::unique_ptr<VideoFrameAdaptor>>& videoFrameObservers) {
+        for (auto& [key, value] : videoFrameObservers) {
+            if (auto* adaptor = value.get()) {
+                if (adaptor->frameDecimation > 1 && ++adaptor->frameDecimationCounter % adaptor->frameDecimation)
+                    continue;
 
-            adaptor->frameDecimation = adaptor->frameRate ? static_cast<size_t>(observedFrameRate() / adaptor->frameRate) : 1;
-            if (!adaptor->frameDecimation)
-                adaptor->frameDecimation = 1;
+                adaptor->frameDecimation = adaptor->frameRate ? static_cast<size_t>(observedFrameRate() / adaptor->frameRate) : 1;
+                if (!adaptor->frameDecimation)
+                    adaptor->frameDecimation = 1;
 
-            if (!adaptor->size.isZero()) {
-                auto actualSize = expandedIntSize(currentVideoFrame->presentationSize());
-                auto adaptorSize = adaptor->size;
-                if (shouldSwapAdaptorSize)
-                    adaptorSize = adaptorSize.transposedSize();
-                auto desiredSize = computeResizedVideoFrameSize(adaptorSize, actualSize);
+                if (!adaptor->size.isZero()) {
+                    auto actualSize = expandedIntSize(frame->presentationSize());
+                    auto adaptorSize = adaptor->size;
+                    if (shouldSwapAdaptorSize)
+                        adaptorSize = adaptorSize.transposedSize();
+                    auto desiredSize = computeResizedVideoFrameSize(adaptorSize, actualSize);
 
-                if (desiredSize != actualSize) {
-                    if (auto newVideoFrame = adaptVideoFrame(*adaptor, currentVideoFrame, desiredSize)) {
-                        key->videoFrameAvailable(*newVideoFrame, metadata);
-                        continue;
+                    if (desiredSize != actualSize) {
+                        if (auto newVideoFrame = adaptVideoFrame(*adaptor, frame, desiredSize)) {
+                            key->videoFrameAvailable(*newVideoFrame, frameMetadata);
+                            continue;
+                        }
                     }
                 }
             }
+            key->videoFrameAvailable(frame, frameMetadata);
         }
-        key->videoFrameAvailable(currentVideoFrame, metadata);
+    };
+
+    // Store encoded (H.264, vp9, etc.) video frames to avoid missing the headers when the first observer starts listening.
+    if (m_videoFrameObservers.isEmpty() && currentVideoFrame->isEncoded()) {
+        // If the encoded format has changed, empty the pending frames, because there's no point on delivering them anymore.
+        if (!m_pendingVideoFrames.isEmpty() && !(protect(m_pendingVideoFrames.last().frame)->hasSameEncodedFormat(currentVideoFrame)))
+            m_pendingVideoFrames.clear();
+
+        if (m_pendingVideoFrames.size() < maxPendingVideoFramesBeforeAddTrack)
+            m_pendingVideoFrames.append(PendingVideoFrame { WTF::move(currentVideoFrame), WTF::move(metadata) });
+        else
+            ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER, "RealtimeMediaSource: Dropping video frame (queue is full) ", m_pendingVideoFrames.size(), " frames");
+        return;
     }
+
+    if (!m_pendingVideoFrames.isEmpty()) {
+        ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER, "RealtimeMediaSource: Delivering ", m_pendingVideoFrames.size(), " queued frame(s) (observer ready)");
+        for (auto& pending : m_pendingVideoFrames)
+            deliverFrame(WTF::move(pending.frame), WTF::move(pending.metadata), m_videoFrameObservers);
+        m_pendingVideoFrames.clear();
+    }
+
+    deliverFrame(WTF::move(currentVideoFrame), WTF::move(metadata), m_videoFrameObservers);
 }
 
 void RealtimeMediaSource::audioSamplesAvailable(const MediaTime& time, const PlatformAudioData& audioData, const AudioStreamDescription& description, size_t numberOfFrames)
@@ -427,6 +456,12 @@ void RealtimeMediaSource::stop()
     ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER);
 
     m_isProducingData = false;
+
+    {
+        Locker locker { m_videoFrameObserversLock };
+        m_pendingVideoFrames.clear();
+    }
+
     stopProducingData();
 }
 
@@ -825,7 +860,7 @@ void RealtimeMediaSource::setSizeFrameRateAndZoom(const VideoPresetConstraints& 
         setZoom(*constraints.zoom);
 }
 
-static bool NODELETE booleanSettingFromConstraint(const BooleanConstraint& boolConstraint)
+static bool LEGACY_NODELETE booleanSettingFromConstraint(const BooleanConstraint& boolConstraint)
 {
     bool setting = true;
     boolConstraint.getExact(setting) || boolConstraint.getIdeal(setting);
@@ -985,12 +1020,12 @@ void RealtimeMediaSource::applyConstraint(MediaConstraintType constraintType, co
     }
 
     case MediaConstraintType::DeviceId:
+    case MediaConstraintType::DisplaySurface:
     case MediaConstraintType::GroupId:
         ASSERT(constraint.isString());
         // There is nothing to do here, neither can be changed.
         break;
 
-    case MediaConstraintType::DisplaySurface:
     case MediaConstraintType::LogicalSurface:
         ASSERT(constraint.isBoolean());
         break;

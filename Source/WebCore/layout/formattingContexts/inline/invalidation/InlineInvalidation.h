@@ -26,14 +26,16 @@
 #pragma once
 
 #include "InlineDamage.h"
+#include "InlineDisplayContent.h"
 #include "StyleDifference.h"
-#include <WebCore/InlineDisplayContent.h>
 #include <optional>
 #include <wtf/Forward.h>
 
 namespace WebCore {
 
-class RenderStyle;
+namespace Style {
+class ComputedStyle;
+}
 
 namespace Layout {
 
@@ -46,8 +48,8 @@ class InlineInvalidation {
 public:
     InlineInvalidation(InlineDamage&, const InlineItemList&, const InlineDisplay::Content&);
 
-    bool rootStyleWillChange(const ElementBox& formattingContextRoot, const RenderStyle& newStyle);
-    bool styleWillChange(const Box&, const RenderStyle& newStyle, Style::Difference);
+    bool rootStyleWillChange(const ElementBox& formattingContextRoot, const Style::ComputedStyle& newStyle);
+    bool styleWillChange(const Box&, const Style::ComputedStyle& newStyle, Style::Difference);
 
     bool textInserted(const InlineTextBox& newOrDamagedInlineTextBox, std::optional<size_t> offset = { });
     bool textWillBeRemoved(const InlineTextBox&, std::optional<size_t> offset = { });
@@ -60,6 +62,9 @@ public:
 
     static bool mayOnlyNeedPartialLayout(const InlineDamage* inlineDamage) { return inlineDamage && inlineDamage->layoutStartPosition(); }
     static void resetInlineDamage(InlineDamage&);
+    static void LEGACY_NODELETE inlineItemListWillChange(InlineDamage&);
+    // For content that was never laid out.
+    static bool LEGACY_NODELETE isSafeToRemoveWithoutFullInvalidation(const Box&);
 
 private:
     enum class ShouldApplyRangeLayout : bool { No, Yes };

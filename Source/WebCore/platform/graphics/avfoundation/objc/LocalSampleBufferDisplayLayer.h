@@ -60,8 +60,10 @@ public:
     void rootLayerBoundsDidChange();
 
     CGRect bounds() const;
+    CGRect sampleLayerBoundsForTesting() const;
+    void LEGACY_NODELETE setVideoFrameRotationForTesting(WebCore::VideoFrameRotation);
 
-    PlatformLayer* NODELETE displayLayer();
+    PlatformLayer* LEGACY_NODELETE displayLayer();
 
     void updateSampleLayerBoundsAndPosition(std::optional<CGRect>);
 
@@ -100,7 +102,7 @@ private:
     WorkQueue& workQueue() { return m_processingQueue.get(); }
 
 private:
-    RetainPtr<WebAVSampleBufferStatusChangeListener> m_statusChangeListener;
+    const RetainPtr<WebAVSampleBufferStatusChangeListener> m_statusChangeListener;
     RetainPtr<AVSampleBufferDisplayLayer> m_sampleBufferDisplayLayer;
     RetainPtr<PlatformLayer> m_rootLayer;
     RenderPolicy m_renderPolicy { RenderPolicy::TimingInfo };

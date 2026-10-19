@@ -48,16 +48,16 @@
 
 namespace WebCore {
 
-static bool& NODELETE mockEnabled()
+static bool& LEGACY_NODELETE mockEnabled()
 {
     static bool enabled;
     return enabled;
 }
 
-using FactoryVector = Vector<PlatformMediaEngineConfigurationFactory::MediaEngineFactory>;
-static FactoryVector defaultFactories()
+using MediaEngineFactoryVector = Vector<PlatformMediaEngineConfigurationFactory::MediaEngineFactory>;
+static MediaEngineFactoryVector defaultFactories()
 {
-    FactoryVector factories;
+    MediaEngineFactoryVector factories;
 #if PLATFORM(COCOA)
     factories.append({ &createMediaPlayerDecodingConfigurationCocoa, nullptr });
 #endif
@@ -67,7 +67,7 @@ static FactoryVector defaultFactories()
     return factories;
 }
 
-static FactoryVector& factories()
+static MediaEngineFactoryVector& factories()
 {
     static NeverDestroyed factories = defaultFactories();
     return factories;
@@ -170,7 +170,7 @@ void PlatformMediaEngineConfigurationFactory::disableMock()
     mockEnabled() = false;
 }
 
-static PlatformMediaEngineConfigurationFactory::MediaSessionManagerProvider& mediaSessionManagerProvider()
+static PlatformMediaEngineConfigurationFactory::MediaSessionManagerProvider& LEGACY_NODELETE mediaSessionManagerProvider()
 {
     static NeverDestroyed<PlatformMediaEngineConfigurationFactory::MediaSessionManagerProvider> provider;
     return provider.get();

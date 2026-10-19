@@ -30,6 +30,7 @@
 #include <wtf/Forward.h>
 #include <wtf/HashFunctions.h>
 #include <wtf/HashTraits.h>
+#include <wtf/MathExtras.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Nonmovable.h>
 #include <wtf/TriState.h>
@@ -39,8 +40,6 @@ namespace JSC {
 class AssemblyHelpers;
 class DeletePropertySlot;
 class JSBigInt;
-class JSHeapDouble;
-class JSHeapInt32;
 class CallFrame;
 class JSCell;
 class JSValueSource;
@@ -86,17 +85,6 @@ struct CallData;
 inline void updateEncodedJSValueConcurrent(EncodedJSValue&, EncodedJSValue);
 inline void clearEncodedJSValueConcurrent(EncodedJSValue&);
 
-#if USE(JSVALUE64)
-#define CellPayloadOffset 0
-#else
-#define CellPayloadOffset PayloadOffset
-#endif
-
-enum WhichValueWord {
-    TagWord,
-    PayloadWord
-};
-
 inline int64_t tryConvertToInt52(double);
 inline bool isInt52(double);
 
@@ -111,7 +99,7 @@ extern JS_EXPORT_PRIVATE const ASCIILiteral SymbolCoercionError;
 extern JS_EXPORT_PRIVATE std::atomic<unsigned> activeJSGlobalObjectSignpostIntervalCount;
 
 class JSValue {
-    friend struct OrderedHashTableTraits;
+    friend struct JSOrderedHashTableTraits;
     friend struct EncodedJSValueHashTraits;
     friend struct EncodedJSValueWithRepresentationHashTraits;
     friend class AssemblyHelpers;
@@ -132,31 +120,12 @@ class JSValue {
 #endif
 
 public:
-#if USE(JSVALUE32_64)
-    static constexpr uint32_t Int32Tag =        0xffffffff;
-    static constexpr uint32_t BooleanTag =      0xfffffffe;
-    static constexpr uint32_t NullTag =         0xfffffffd;
-    static constexpr uint32_t UndefinedTag =    0xfffffffc;
-    static constexpr uint32_t CellTag =         0xfffffffb;
-    static constexpr uint32_t NativeCalleeTag = 0xfffffffa;
-    static constexpr uint32_t EmptyValueTag =   0xfffffff9;
-    static constexpr uint32_t DeletedValueTag = 0xfffffff8;
-    static constexpr uint32_t InvalidTag      = 0xfffffff7;
-
-    static constexpr uint32_t LowestTag =  InvalidTag;
-#endif
-
     static EncodedJSValue encode(JSValue);
     static JSValue decode(EncodedJSValue);
 
-    /* read a JSValue from storage not owned by this thread
-     * on 64-bit ports, or when JIT is not enabled, equivalent to
-     * JSValue::decode(*ptr) */
-#if USE(JSVALUE64) || !ENABLE(CONCURRENT_JS)
+    /* Read a JSValue from storage not owned by this thread. Equivalent to
+     * JSValue::decode(*ptr). */
     static JSValue decodeConcurrent(const EncodedJSValue*);
-#else
-    static JSValue decodeConcurrent(const volatile EncodedJSValue*);
-#endif
 
     enum JSNullTag { JSNull };
     enum JSUndefinedTag { JSUndefined };
@@ -167,9 +136,6 @@ public:
     enum EncodeAsBigInt32Tag { EncodeAsBigInt32 };
 #endif
     enum EncodeAsDoubleTag { EncodeAsDouble };
-#if ENABLE(WEBASSEMBLY) && USE(JSVALUE32_64)
-    enum EncodeAsUnboxedFloatTag { EncodeAsUnboxedFloat };
-#endif
 
     JSValue();
     JSValue(JSNullTag);
@@ -180,9 +146,6 @@ public:
     JSValue(const JSCell* ptr);
 #if USE(BIGINT32)
     JSValue(EncodeAsBigInt32Tag, int32_t);
-#endif
-#if ENABLE(WEBASSEMBLY) && USE(JSVALUE32_64)
-    JSValue(EncodeAsUnboxedFloatTag, float);
 #endif
 
     // Numbers
@@ -253,9 +216,9 @@ public:
     inline const ClassInfo* classInfoOrNull() const; // Defined in JSCJSValueStructure.h
 
     // Non-inline versions of above for use in header ASSERT macros:
-    JS_EXPORT_PRIVATE bool NODELETE isGetterSetterSlow() const;
-    JS_EXPORT_PRIVATE bool NODELETE isCustomGetterSetterSlow() const;
-    JS_EXPORT_PRIVATE bool NODELETE isStringSlow() const;
+    JS_EXPORT_PRIVATE bool LEGACY_NODELETE isGetterSetterSlow() const;
+    JS_EXPORT_PRIVATE bool LEGACY_NODELETE isCustomGetterSetterSlow() const;
+    JS_EXPORT_PRIVATE bool LEGACY_NODELETE isStringSlow() const;
 
     // Extracting the value.
     inline bool getString(JSGlobalObject*, WTF::String&) const; // Defined in JSCJSValueCell.h
@@ -279,7 +242,7 @@ public:
     inline JSBigInt* asHeapBigInt() const; // Defined in JSCJSValueBigInt.h
 
     // toNumber conversion if it can be done without side effects.
-    std::optional<double> NODELETE toNumberFromPrimitive() const;
+    std::optional<double> LEGACY_NODELETE toNumberFromPrimitive() const;
 
     inline JSString* toString(JSGlobalObject*) const; // On exception, this returns the empty string. Defined in JSCJSValuePropertyInlines.h
     inline JSString* toStringOrNull(JSGlobalObject*) const; // On exception, this returns null, to make exception checks faster. Defined in JSCJSValuePropertyInlines.h
@@ -310,6 +273,7 @@ public:
 
     // Object operations, with the toObject operation included.
     inline JSValue get(JSGlobalObject*, PropertyName) const; // Defined in JSCJSValuePropertyInlines.h
+    template<bool debugLLIntGetById = false>
     inline JSValue get(JSGlobalObject*, PropertyName, PropertySlot&) const; // Defined in JSCJSValuePropertyInlines.h
     inline JSValue get(JSGlobalObject*, unsigned propertyName) const; // Defined in JSCJSValuePropertyInlines.h
     inline JSValue get(JSGlobalObject*, unsigned propertyName, PropertySlot&) const; // Defined in JSCJSValuePropertyInlines.h
@@ -318,6 +282,7 @@ public:
     template<typename T, typename PropertyNameType>
     inline T getAs(JSGlobalObject*, PropertyNameType) const; // Defined in JSCJSValuePropertyInlines.h
 
+    template<bool debugLLIntGetById = false>
     inline bool getPropertySlot(JSGlobalObject*, PropertyName, PropertySlot&) const; // Defined in JSCJSValuePropertyInlines.h
     template<typename CallbackWhenNoException> inline typename std::invoke_result<CallbackWhenNoException, bool, PropertySlot&>::type getPropertySlot(JSGlobalObject*, PropertyName, CallbackWhenNoException) const; // Defined in JSCJSValuePropertyInlines.h
     template<typename CallbackWhenNoException> inline typename std::invoke_result<CallbackWhenNoException, bool, PropertySlot&>::type getPropertySlot(JSGlobalObject*, PropertyName, PropertySlot&, CallbackWhenNoException) const; // Defined in JSCJSValuePropertyInlines.h
@@ -334,7 +299,7 @@ public:
     JSValue toThis(JSGlobalObject*, ECMAMode) const;
 
     inline static bool equal(JSGlobalObject*, JSValue v1, JSValue v2); // Defined below
-    static bool equalSlowCase(JSGlobalObject*, JSValue v1, JSValue v2);
+    JS_EXPORT_PRIVATE static bool equalSlowCase(JSGlobalObject*, JSValue v1, JSValue v2);
     inline static bool equalSlowCaseInline(JSGlobalObject*, JSValue v1, JSValue v2); // Defined in JSCJSValueInlines.h
     inline static bool strictEqual(JSGlobalObject*, JSValue v1, JSValue v2); // Defined in JSCJSValueInlines.h
     inline static bool strictEqualForCells(JSGlobalObject*, JSCell* v1, JSCell* v2); // Defined in JSCJSValueInlines.h
@@ -359,39 +324,8 @@ public:
     static constexpr const int64_t notInt52 = static_cast<int64_t>(1) << numberOfInt52Bits;
     static constexpr const unsigned int52ShiftAmount = 12;
 
-    static constexpr ptrdiff_t offsetOfPayload() { return OBJECT_OFFSETOF(JSValue, u.asBits.payload); }
-    static constexpr ptrdiff_t offsetOfTag() { return OBJECT_OFFSETOF(JSValue, u.asBits.tag); }
-
-#if USE(JSVALUE32_64)
     /*
-     * On 32-bit platforms USE(JSVALUE32_64) should be defined, and we use a NaN-encoded
-     * form for immediates.
-     *
-     * The encoding makes use of unused NaN space in the IEEE754 representation.  Any value
-     * with the top 13 bits set represents a QNaN (with the sign bit set).  QNaN values
-     * can encode a 51-bit payload.  Hardware produced and C-library payloads typically
-     * have a payload of zero.  We assume that non-zero payloads are available to encode
-     * pointer and integer values.  Since any 64-bit bit pattern where the top 15 bits are
-     * all set represents a NaN with a non-zero payload, we can use this space in the NaN
-     * ranges to encode other values (however there are also other ranges of NaN space that
-     * could have been selected).
-     *
-     * For JSValues that do not contain a double value, the high 32 bits contain the tag
-     * values listed in the enums below, which all correspond to NaN-space. In the case of
-     * cell, integer and bool values the lower 32 bits (the 'payload') contain the pointer
-     * integer or boolean value; in the case of all other tags the payload is 0.
-     */
-    uint32_t tag() const;
-    int32_t payload() const;
-
-    // This should only be used by the LLInt C Loop interpreter and OSRExit code who needs
-    // synthesize JSValue from its "register"s holding tag and payload values.
-    explicit JSValue(int32_t tag, int32_t payload);
-
-#elif USE(JSVALUE64)
-    /*
-     * On 64-bit platforms USE(JSVALUE64) should be defined, and we use a NaN-encoded
-     * form for immediates.
+     * We use a NaN-encoded form for immediates.
      *
      * The encoding makes use of unused NaN space in the IEEE754 representation.  Any value
      * with the top 13 bits set represents a QNaN (with the sign bit set).  QNaN values
@@ -508,7 +442,6 @@ public:
     // OtherTag. The other tests also trivially fail, since it won't be a number,
     // and it won't be equal to null, undefined, true, or false. The isBoolean() predicate
     // will fail because we won't have BoolTag set.
-#endif
 
 private:
     template <class T> JSValue(WriteBarrierBase<T, WriteBarrierTraitsSelect<T>>);
@@ -526,26 +459,7 @@ private:
     EncodedValueDescriptor u;
 };
 
-#if USE(JSVALUE32_64)
-struct OrderedHashTableTraits {
-    ALWAYS_INLINE static void set(JSValue* value, uint32_t number)
-    {
-        value->u.asBits.tag = JSValue::Int32Tag;
-        value->u.asBits.payload = number;
-    }
-    ALWAYS_INLINE static void increment(JSValue* value)
-    {
-        ASSERT(value->isInt32());
-        value->u.asBits.payload++;
-    }
-    ALWAYS_INLINE static void decrement(JSValue* value)
-    {
-        ASSERT(value->isInt32());
-        value->u.asBits.payload--;
-    }
-};
-#else
-struct OrderedHashTableTraits {
+struct JSOrderedHashTableTraits {
     ALWAYS_INLINE static void set(JSValue* value, uint32_t number)
     {
         value->u.asInt64 = JSValue::NumberTag | number;
@@ -561,23 +475,13 @@ struct OrderedHashTableTraits {
         value->u.asInt64--;
     }
 };
-#endif
 
 typedef IntHash<EncodedJSValue> EncodedJSValueHash;
 
-#if USE(JSVALUE32_64)
-struct EncodedJSValueHashTraits : HashTraits<EncodedJSValue> {
-    static constexpr bool emptyValueIsZero = false;
-    static EncodedJSValue emptyValue() { return JSValue::encode(JSValue()); }
-    static void constructDeletedValue(EncodedJSValue& slot) { slot = JSValue::encode(JSValue(JSValue::HashTableDeletedValue)); }
-    static bool isDeletedValue(EncodedJSValue value) { return value == JSValue::encode(JSValue(JSValue::HashTableDeletedValue)); }
-};
-#else
 struct EncodedJSValueHashTraits : HashTraits<EncodedJSValue> {
     static void constructDeletedValue(EncodedJSValue& slot) { slot = JSValue::encode(JSValue(JSValue::HashTableDeletedValue)); }
     static bool isDeletedValue(EncodedJSValue value) { return value == JSValue::encode(JSValue(JSValue::HashTableDeletedValue)); }
 };
-#endif
 
 typedef std::pair<EncodedJSValue, SourceCodeRepresentation> EncodedJSValueWithRepresentation;
 
@@ -625,13 +529,6 @@ inline JSValue jsBoolean(bool b)
 ALWAYS_INLINE JSValue jsBigInt32(int32_t intValue)
 {
     return JSValue(JSValue::EncodeAsBigInt32, intValue);
-}
-#endif
-
-#if ENABLE(WEBASSEMBLY) && USE(JSVALUE32_64)
-ALWAYS_INLINE JSValue wasmUnboxedFloat(float f)
-{
-    return JSValue(JSValue::EncodeAsUnboxedFloat, f);
 }
 #endif
 
@@ -716,181 +613,6 @@ inline JSValue JSValue::decode(EncodedJSValue encodedJSValue)
     v.u.asInt64 = encodedJSValue;
     return v;
 }
-
-#if USE(JSVALUE32_64)
-inline JSValue::JSValue()
-{
-    u.asBits.tag = EmptyValueTag;
-    u.asBits.payload = 0;
-}
-
-inline JSValue::JSValue(JSNullTag)
-{
-    u.asBits.tag = NullTag;
-    u.asBits.payload = 0;
-}
-
-inline JSValue::JSValue(JSUndefinedTag)
-{
-    u.asBits.tag = UndefinedTag;
-    u.asBits.payload = 0;
-}
-
-inline JSValue::JSValue(JSTrueTag)
-{
-    u.asBits.tag = BooleanTag;
-    u.asBits.payload = 1;
-}
-
-inline JSValue::JSValue(JSFalseTag)
-{
-    u.asBits.tag = BooleanTag;
-    u.asBits.payload = 0;
-}
-
-inline JSValue::JSValue(HashTableDeletedValueTag)
-{
-    u.asBits.tag = DeletedValueTag;
-    u.asBits.payload = 0;
-}
-
-inline JSValue::JSValue(JSCell* ptr)
-{
-    if (ptr)
-        u.asBits.tag = CellTag;
-    else
-        u.asBits.tag = EmptyValueTag;
-    u.asBits.payload = reinterpret_cast<int32_t>(ptr);
-}
-
-inline JSValue::JSValue(const JSCell* ptr)
-{
-    if (ptr)
-        u.asBits.tag = CellTag;
-    else
-        u.asBits.tag = EmptyValueTag;
-    u.asBits.payload = reinterpret_cast<int32_t>(const_cast<JSCell*>(ptr));
-}
-
-inline JSValue::operator bool() const
-{
-    ASSERT(tag() != DeletedValueTag);
-    return tag() != EmptyValueTag;
-}
-
-inline bool JSValue::operator==(const JSValue& other) const
-{
-    return u.asInt64 == other.u.asInt64;
-}
-
-inline bool JSValue::isEmpty() const
-{
-    return tag() == EmptyValueTag;
-}
-
-inline bool JSValue::isUndefined() const
-{
-    return tag() == UndefinedTag;
-}
-
-inline bool JSValue::isNull() const
-{
-    return tag() == NullTag;
-}
-
-inline bool JSValue::isUndefinedOrNull() const
-{
-    return isUndefined() || isNull();
-}
-
-inline bool JSValue::isCell() const
-{
-    return tag() == CellTag;
-}
-
-inline bool JSValue::isInt32() const
-{
-    return tag() == Int32Tag;
-}
-
-inline bool JSValue::isDouble() const
-{
-    return tag() < LowestTag;
-}
-
-inline bool JSValue::isTrue() const
-{
-    return tag() == BooleanTag && payload();
-}
-
-inline bool JSValue::isFalse() const
-{
-    return tag() == BooleanTag && !payload();
-}
-
-inline uint32_t JSValue::tag() const
-{
-    return u.asBits.tag;
-}
-
-inline int32_t JSValue::payload() const
-{
-    return u.asBits.payload;
-}
-
-inline int32_t JSValue::asInt32() const
-{
-    ASSERT(isInt32());
-    return u.asBits.payload;
-}
-
-inline double JSValue::asDouble() const
-{
-    ASSERT(isDouble());
-    return u.asDouble;
-}
-
-ALWAYS_INLINE JSCell* JSValue::asCell() const
-{
-    ASSERT(isCell());
-    return reinterpret_cast<JSCell*>(u.asBits.payload);
-}
-
-ALWAYS_INLINE JSValue::JSValue(EncodeAsDoubleTag, double d)
-{
-    ASSERT(!isImpureNaN(d));
-    u.asDouble = d;
-}
-
-inline JSValue::JSValue(int i)
-{
-    u.asBits.tag = Int32Tag;
-    u.asBits.payload = i;
-}
-
-inline JSValue::JSValue(int32_t tag, int32_t payload)
-{
-    u.asBits.tag = tag;
-    u.asBits.payload = payload;
-}
-
-inline bool JSValue::isNumber() const
-{
-    return isInt32() || isDouble();
-}
-
-inline bool JSValue::isBoolean() const
-{
-    return tag() == BooleanTag;
-}
-
-inline bool JSValue::asBoolean() const
-{
-    ASSERT(isBoolean());
-    return payload();
-}
-
-#else // !USE(JSVALUE32_64) i.e. USE(JSVALUE64)
 
 // 0x0 can never occur naturally because it has a tag of 00, indicating a pointer value, but a payload of 0x0, which is in the (invalid) zero page.
 inline JSValue::JSValue()
@@ -1044,7 +766,6 @@ ALWAYS_INLINE JSCell* JSValue::asCell() const
     return u.ptr;
 }
 
-#endif // USE(JSVALUE64)
 
 #if USE(BIGINT32)
 inline JSValue::JSValue(EncodeAsBigInt32Tag, int32_t value)
@@ -1054,13 +775,6 @@ inline JSValue::JSValue(EncodeAsBigInt32Tag, int32_t value)
     u.asInt64 = shiftedValue | BigInt32Tag;
 }
 #endif // USE(BIGINT32)
-
-#if ENABLE(WEBASSEMBLY) && USE(JSVALUE32_64)
-inline JSValue::JSValue(EncodeAsUnboxedFloatTag, float value)
-{
-    u.asBits.payload = std::bit_cast<int32_t>(value);
-}
-#endif
 
 inline bool JSValue::isBigInt32() const
 {
@@ -1194,6 +908,21 @@ inline bool operator==(const JSValue a, const JSCell* b) { return a == JSValue(b
 
 inline int64_t tryConvertToInt52(double number)
 {
+#if CPU(ARM64) || CPU(X86_64)
+    // Unlike static_cast, these conversions are defined for NaN and out-of-range inputs. Comparing
+    // bit patterns after the round trip rejects NaN, infinities, fractions, and -0.0 at once, since
+    // 0 converts back to +0.0.
+#if CPU(ARM64)
+    int64_t asInt64 = vcvtd_s64_f64(number);
+#else
+    int64_t asInt64 = _mm_cvttsd_si64(_mm_set_sd(number));
+#endif
+    if (std::bit_cast<uint64_t>(static_cast<double>(asInt64)) != std::bit_cast<uint64_t>(number))
+        return JSValue::notInt52;
+    if (static_cast<uint64_t>(asInt64) + (static_cast<uint64_t>(1) << (JSValue::numberOfInt52Bits - 1)) >= (static_cast<uint64_t>(1) << JSValue::numberOfInt52Bits))
+        return JSValue::notInt52;
+    return asInt64;
+#else
     if (number != number)
         return JSValue::notInt52;
 #if OS(WINDOWS) && CPU(X86)
@@ -1215,6 +944,7 @@ inline int64_t tryConvertToInt52(double number)
     if (asInt64 < -(static_cast<int64_t>(1) << (JSValue::numberOfInt52Bits - 1)))
         return JSValue::notInt52;
     return asInt64;
+#endif
 }
 
 inline bool isInt52(double number)
@@ -1278,11 +1008,7 @@ inline bool sameValue(JSGlobalObject*, JSValue, JSValue);
 
 ALWAYS_INLINE void ensureStillAliveHere(JSValue value)
 {
-#if USE(JSVALUE64)
     asm volatile ("" : : "g"(std::bit_cast<uint64_t>(value)) : "memory");
-#else
-    asm volatile ("" : : "g"(value.payload()) : "memory");
-#endif
 }
 
 // Use EnsureStillAliveScope when you have a data structure that includes GC pointers, and you need
@@ -1309,8 +1035,6 @@ private:
     JSValue m_value;
 };
 
-#if USE(JSVALUE64) || !ENABLE(CONCURRENT_JS)
-
 ALWAYS_INLINE JSValue JSValue::decodeConcurrent(const EncodedJSValue* encodedJSValue)
 {
     return JSValue::decode(*encodedJSValue);
@@ -1325,49 +1049,6 @@ ALWAYS_INLINE void clearEncodedJSValueConcurrent(EncodedJSValue& dest)
 {
     dest = JSValue::encode(JSValue());
 }
-
-#elif USE(JSVALUE32_64)
-
-inline JSValue JSValue::decodeConcurrent(const volatile EncodedJSValue *encodedJSValue)
-{
-    for (;;) {
-        auto v = JSValue::decode(reinterpret_cast<const volatile std::atomic<EncodedJSValue>*>(encodedJSValue)->load());
-        if (v.tag() != InvalidTag)
-            return v;
-    }
-}
-
-inline void updateEncodedJSValueConcurrent(EncodedJSValue& dest, EncodedJSValue value)
-{
-    auto destDesc = const_cast<volatile EncodedValueDescriptor*>(reinterpret_cast<EncodedValueDescriptor*>(&dest));
-
-    EncodedValueDescriptor desc;
-    memcpy(&desc, &value, sizeof(value));
-
-    auto destTag = const_cast<volatile int32_t*>(&destDesc->asBits.tag);
-    auto destPayload = const_cast<volatile int32_t*>(&destDesc->asBits.payload);
-
-    *destTag = JSValue::InvalidTag;
-    WTF::storeStoreFence();
-    *destPayload = desc.asBits.payload;
-    WTF::storeStoreFence();
-    *destTag = desc.asBits.tag;
-}
-
-inline void clearEncodedJSValueConcurrent(EncodedJSValue& dest)
-{
-    auto destDesc = const_cast<volatile EncodedValueDescriptor*>(reinterpret_cast<EncodedValueDescriptor*>(&dest));
-    auto destTag = const_cast<volatile int32_t*>(&destDesc->asBits.tag);
-    auto destPayload = const_cast<volatile int32_t*>(&destDesc->asBits.payload);
-
-    *destTag = JSValue::EmptyValueTag;
-    WTF::storeStoreFence();
-    *destPayload = 0;
-}
-
-#else
-#  error "Unsupported configuration"
-#endif
 
 #if USE(BIGINT32)
 inline int32_t JSValue::bigInt32AsInt32() const
@@ -1386,7 +1067,7 @@ ALWAYS_INLINE bool JSValue::getUInt32(uint32_t& v) const
     }
     if (isDouble()) {
         double d = asDouble();
-        v = static_cast<uint32_t>(d);
+        v = truncateDoubleToUint32(d);
         return v == d;
     }
     return false;

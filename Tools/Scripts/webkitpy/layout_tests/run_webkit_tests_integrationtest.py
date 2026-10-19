@@ -31,6 +31,7 @@
 import json
 import logging
 import unittest
+from unittest.mock import patch
 
 from webkitcorepy import StringIO, OutputCapture
 
@@ -45,6 +46,7 @@ from webkitpy.layout_tests.models.test_run_results import INTERRUPTED_EXIT_STATU
 from webkitpy.layout_tests.views import printing
 from webkitpy.port import test
 from webkitpy.port.image_diff import ImageDiffResult
+from webkitpy.results.upload import Upload
 from webkitpy.xcode.device_type import DeviceType
 
 
@@ -180,7 +182,7 @@ class RunTest(unittest.TestCase, StreamTestingMixin):
         self.should_test_processes = not self._platform.is_win()
 
     def serial_test_basic(self):
-        options, args = parse_args(tests_included=True)
+        options, args = parse_args(['--show-results'], tests_included=True)
         logging_stream = StringIO()
         host = MockHost()
         port_obj = host.port_factory.get(options.platform, options)
@@ -272,6 +274,44 @@ class RunTest(unittest.TestCase, StreamTestingMixin):
         details, err, _ = logging_run(['foo'], tests_included=True)
         self.assertEqual(details.exit_code, 0)
         self.assertContains(err, 'All tests skipped.\n')
+
+    def test_target_host_available_when_capturing_upload_configuration(self):
+        # Regression for 314080@main: capture configuration_for_upload(target_host(0))
+        # before _run_test_subset, because the subset's finally calls clean_up_test_run,
+        # which on iOS deletes the simulator and leaves target_host(0) raising
+        # 'No initialized devices for testing'.
+        extra_args = ['--report', 'http://example.invalid/', 'passes/text.html']
+        options, _ = parse_args(extra_args=extra_args, tests_included=True)
+        host = MockHost()
+        port = host.port_factory.get(port_name=options.platform, options=options)
+
+        device_torn_down = False
+        original_clean_up = port.clean_up_test_run
+        original_target_host = port.target_host
+
+        def patched_clean_up_test_run(*args, **kwargs):
+            nonlocal device_torn_down
+            device_torn_down = True
+            return original_clean_up(*args, **kwargs)
+
+        def patched_target_host(*args, **kwargs):
+            if device_torn_down:
+                raise RuntimeError('No initialized devices for testing')
+            return original_target_host(*args, **kwargs)
+
+        port.clean_up_test_run = patched_clean_up_test_run
+        port.target_host = patched_target_host
+
+        with patch.object(Upload, 'upload', return_value=False) as mock_upload, \
+             patch.object(Upload, 'upload_archive', return_value=False):
+            details, _, _ = logging_run(extra_args=extra_args, tests_included=True, port_obj=port, host=host)
+
+        # If the regression returns, patched_target_host raises in the guarded path
+        # and logging_run never returns. mock_upload.called proves the report_urls
+        # code was actually exercised, so the test cannot silently pass if a future
+        # refactor moves upload prep behind a different option.
+        self.assertTrue(mock_upload.called)
+        self.assertIsNotNone(details.initial_results)
 
     def test_natural_order(self):
         tests_to_run = ['passes/audio.html', 'failures/expected/text.html', 'failures/expected/missing_text.html', 'passes/args.html']
@@ -880,7 +920,7 @@ class RunTest(unittest.TestCase, StreamTestingMixin):
 
         host = MockHost()
         with host.filesystem.mkdtemp() as tmpdir:
-            _, _, user = logging_run(['--results-directory=' + str(tmpdir)], tests_included=True, host=host)
+            _, _, user = logging_run(['--show-results', '--results-directory=' + str(tmpdir)], tests_included=True, host=host)
             self.assertEqual(user.opened_urls, [path.abspath_to_uri(host.platform, host.filesystem.join(tmpdir, 'results.html'))])
 
     def serial_test_results_directory_default(self):
@@ -888,7 +928,7 @@ class RunTest(unittest.TestCase, StreamTestingMixin):
         # look for what the output results url was.
 
         # This is the default location.
-        _, _, user = logging_run(tests_included=True)
+        _, _, user = logging_run(['--show-results'], tests_included=True)
         self.assertEqual(user.opened_urls, [path.abspath_to_uri(MockHost().platform, '/tmp/layout-test-results/results.html')])
 
     def serial_test_results_directory_relative(self):
@@ -897,8 +937,18 @@ class RunTest(unittest.TestCase, StreamTestingMixin):
         host = MockHost()
         host.filesystem.maybe_make_directory('/tmp/cwd')
         host.filesystem.chdir('/tmp/cwd')
-        _, _, user = logging_run(['--results-directory=foo'], tests_included=True, host=host)
+        _, _, user = logging_run(['--show-results', '--results-directory=foo'], tests_included=True, host=host)
         self.assertEqual(user.opened_urls, [path.abspath_to_uri(host.platform, '/tmp/cwd/foo/results.html')])
+
+    def serial_test_no_show_results_by_default(self):
+        # We run a configuration that should fail, to generate output, and check
+        # that no browser is launched with the results unless asked for.
+        options, _ = parse_args([])
+        self.assertFalse(options.show_results)
+
+        _, err, user = logging_run(tests_included=True)
+        self.assertEqual(user.opened_urls, [])
+        self.assertIn('/tmp/layout-test-results/results.html', err.getvalue())
 
     def test_retrying_and_flaky_tests(self):
         host = MockHost()

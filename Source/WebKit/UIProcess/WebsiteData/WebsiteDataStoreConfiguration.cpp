@@ -26,11 +26,21 @@
 #include "config.h"
 #include "WebsiteDataStoreConfiguration.h"
 
+#include "TimeBasedEvictionMode.h"
 #include "UnifiedOriginStorageLevel.h"
 #include "WebPushDaemonConnectionConfiguration.h"
 #include "WebsiteDataStore.h"
 
 namespace WebKit {
+
+TimeBasedEvictionMode WebsiteDataStoreConfiguration::defaultTimeBasedEvictionMode()
+{
+#if ENABLE(TIME_BASED_EVICTION_SERVICE_WORKER_ONLY)
+    return TimeBasedEvictionMode::ServiceWorkerRegistrationsOnly;
+#else
+    return TimeBasedEvictionMode::AllTypes;
+#endif
+}
 
 WebsiteDataStoreConfiguration::WebsiteDataStoreConfiguration(IsPersistent isPersistent, ShouldInitializePaths shouldInitializePaths)
     : m_isPersistent(isPersistent)
@@ -101,6 +111,7 @@ void WebsiteDataStoreConfiguration::initializePaths()
 
     setAlternativeServicesDirectory(WebsiteDataStore::defaultAlternativeServicesDirectory(m_baseDataDirectory));
     setIndexedDBDatabaseDirectory(WebsiteDataStore::defaultIndexedDBDatabaseDirectory(m_baseDataDirectory));
+    setIsolatedSitesDirectory(WebsiteDataStore::defaultIsolatedSitesDirectory(m_baseDataDirectory));
     setServiceWorkerRegistrationDirectory(WebsiteDataStore::defaultServiceWorkerRegistrationDirectory(m_baseDataDirectory));
     setWebSQLDatabaseDirectory(WebsiteDataStore::defaultWebSQLDatabaseDirectory(m_baseDataDirectory));
     setLocalStorageDirectory(WebsiteDataStore::defaultLocalStorageDirectory(m_baseDataDirectory));
@@ -150,6 +161,7 @@ Ref<WebsiteDataStoreConfiguration> WebsiteDataStoreConfiguration::copy() const
     copy->m_allowsCellularAccess = this->m_allowsCellularAccess;
     copy->m_legacyTLSEnabled = this->m_legacyTLSEnabled;
     copy->m_dataConnectionServiceType = this->m_dataConnectionServiceType;
+    copy->m_ipAddressSpaceOverridesForTesting = this->m_ipAddressSpaceOverridesForTesting;
     copy->m_testingSessionEnabled = this->m_testingSessionEnabled;
     copy->m_testSpeedMultiplier = this->m_testSpeedMultiplier;
     copy->m_suppressesConnectionTerminationOnSystemChange = this->m_suppressesConnectionTerminationOnSystemChange;
@@ -161,6 +173,7 @@ Ref<WebsiteDataStoreConfiguration> WebsiteDataStoreConfiguration::copy() const
     copy->m_standaloneApplicationURL = this->m_standaloneApplicationURL;
     copy->m_enableInAppBrowserPrivacyForTesting = this->m_enableInAppBrowserPrivacyForTesting;
     copy->m_allowsHSTSWithUntrustedRootCertificate = this->m_allowsHSTSWithUntrustedRootCertificate;
+    copy->m_qualifiedServerTrustDebugEnabledForTesting = this->m_qualifiedServerTrustDebugEnabledForTesting;
     copy->m_pcmMachServiceName = this->m_pcmMachServiceName;
     copy->m_webPushMachServiceName = this->m_webPushMachServiceName;
     copy->m_webPushPartitionString = this->m_webPushPartitionString;
@@ -177,6 +190,12 @@ Ref<WebsiteDataStoreConfiguration> WebsiteDataStoreConfiguration::copy() const
     copy->m_webContentRestrictionsConfigurationFile = this->m_webContentRestrictionsConfigurationFile;
 #endif
     copy->m_additionalDomainsWithUserInteractionForTesting = this->m_additionalDomainsWithUserInteractionForTesting;
+    copy->m_timeBasedEvictionMode = this->m_timeBasedEvictionMode;
+    copy->m_timeBasedEvictionThreshold = this->m_timeBasedEvictionThreshold;
+    copy->m_lastModificationTimeUpdateIntervalOverride = this->m_lastModificationTimeUpdateIntervalOverride;
+    copy->m_timeBasedEvictionIntervalOverride = this->m_timeBasedEvictionIntervalOverride;
+    copy->m_mockPushSubscriptionOriginsForTesting = this->m_mockPushSubscriptionOriginsForTesting;
+    copy->m_defaultTrackingPreventionEnabledOverride = this->m_defaultTrackingPreventionEnabledOverride;
 
     return copy;
 }
@@ -199,6 +218,7 @@ WebsiteDataStoreConfiguration::Directories WebsiteDataStoreConfiguration::Direct
         crossThreadCopy(generalStorageDirectory),
         crossThreadCopy(hstsStorageDirectory),
         crossThreadCopy(indexedDBDatabaseDirectory),
+        crossThreadCopy(isolatedSitesDirectory),
         crossThreadCopy(javaScriptConfigurationDirectory),
         crossThreadCopy(localStorageDirectory),
         crossThreadCopy(mediaCacheDirectory),
@@ -228,6 +248,7 @@ WebsiteDataStoreConfiguration::Directories WebsiteDataStoreConfiguration::Direct
         crossThreadCopy(WTF::move(generalStorageDirectory)),
         crossThreadCopy(WTF::move(hstsStorageDirectory)),
         crossThreadCopy(WTF::move(indexedDBDatabaseDirectory)),
+        crossThreadCopy(WTF::move(isolatedSitesDirectory)),
         crossThreadCopy(WTF::move(javaScriptConfigurationDirectory)),
         crossThreadCopy(WTF::move(localStorageDirectory)),
         crossThreadCopy(WTF::move(mediaCacheDirectory)),

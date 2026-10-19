@@ -26,8 +26,9 @@
 #include <WebCore/HTMLElement.h>
 
 namespace WebCore {
-    
+
 class HTMLDivElement;
+class HTMLLegendElement;
 class HTMLSelectElement;
 
 class HTMLOptGroupElement final : public HTMLElement {
@@ -37,12 +38,11 @@ public:
     static Ref<HTMLOptGroupElement> create(const QualifiedName&, Document&);
 
     bool isDisabledFormControl() const final;
-    WEBCORE_EXPORT HTMLSelectElement* NODELETE ownerSelectElement() const;
-    
-    WEBCORE_EXPORT String groupLabelText() const;
+    bool isActuallyDisabled() const final;
+    WEBCORE_EXPORT HTMLSelectElement* LEGACY_NODELETE ownerSelectElement() const;
 
-    void legendChildAdded();
-    void legendChildRemoved();
+    WEBCORE_EXPORT String groupLabelText() const;
+    static HTMLOptGroupElement* LEGACY_NODELETE optGroupForLabel(const Element&);
 
     void updateUserAgentShadowTree() final;
 
@@ -51,10 +51,12 @@ private:
 
     NeedsPostConnectionSteps insertionSteps(InsertionType, ContainerNode&) final;
     void removingSteps(RemovalType, ContainerNode& oldParentOfRemovedTree) final;
+    void movingSteps(MovingType, ContainerNode& oldParent) final;
 
     const AtomString& formControlType() const;
     bool isFocusable() const final;
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;
+    void parseDisabledAttribute(const AtomString&);
 
     void didAddUserAgentShadowRoot(ShadowRoot&) final;
 
@@ -64,11 +66,12 @@ private:
 
     void recalcSelectOptions();
 
+    HTMLLegendElement* LEGACY_NODELETE legendElement() const;
+
     void invalidateShadowTree();
 
     bool m_isDisabled { false };
     bool m_shadowTreeNeedsUpdate { false };
-    unsigned m_legendChildCount { 0 };
     WeakPtr<HTMLSelectElement, WeakPtrImplWithEventTargetData> m_ownerSelect;
     WeakPtr<HTMLDivElement, WeakPtrImplWithEventTargetData> m_labelContainer;
 };

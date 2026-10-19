@@ -40,24 +40,23 @@
 #include "NodeRenderStyle.h"
 #include "Page.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle+SettersInlines.h"
 #include "RenderView.h"
 #include "Settings.h"
 #include "StyleAdjuster.h"
+#include "StyleComputedStyle+SettersInlines.h"
 #include "StyleFontSizeFunctions.h"
 #include "StyleResolver.h"
 
 namespace WebCore {
-
 namespace Style {
 
-RenderStyle resolveForDocument(const Document& document)
+Style::ComputedStyle resolveForDocument(const Document& document)
 {
-    ASSERT(document.hasLivingRenderTree());
+    ASSERT(document.renderTreeState() == Document::RenderTreeState::Built);
 
     CheckedRef renderView = *document.renderView();
 
-    auto documentStyle = RenderStyle::create();
+    auto documentStyle = Style::ComputedStyle::create();
 
     documentStyle.setDisplay(DisplayType::BlockFlow);
     documentStyle.setRTLOrdering(document.visuallyOrdered() ? WebCore::Order::Visual : WebCore::Order::Logical);
@@ -88,18 +87,16 @@ RenderStyle resolveForDocument(const Document& document)
         auto& settings = renderView->frame().settings();
 
         FontCascadeDescription fontDescription;
-        fontDescription.setSpecifiedLocale(document.contentLanguage());
+        fontDescription.setComputedLocale(document.contentLanguage());
         fontDescription.setOneFamily(WebCore::FontFamily { standardFamily, FontFamilyKind::Generic });
         fontDescription.setShouldAllowUserInstalledFonts(settings.shouldAllowUserInstalledFonts() ? AllowUserInstalledFonts::Yes : AllowUserInstalledFonts::No);
-        // FIXME: We need evaluationTimeZoomEnabled to be accessible from FontDescription, not only from RenderStyle. Would it be weird to move it to FontDescription (which is already accessible from RenderStyle)?
-        fontDescription.setEvaluationTimeZoomEnabled(document.settings().evaluationTimeZoomEnabled());
 
-        fontDescription.setKeywordSizeFromIdentifier(CSSValueMedium);
-        int size = fontSizeForKeyword(CSSValueMedium, false, document);
-        fontDescription.setSpecifiedSize(size);
+        fontDescription.setKeywordSizeFromIdentifier(CSSValueID::Medium);
+        int size = fontSizeForKeyword(CSSValueID::Medium, false, document);
+        fontDescription.setComputedSize(size);
         bool useSVGZoomRules = document.isSVGDocument();
-        auto computedFontSize = computedFontSizeFromSpecifiedSize(size, fontDescription.isAbsoluteSize(), useSVGZoomRules, documentStyle.computedStyle(), document);
-        fontDescription.setComputedSize(computedFontSize.size, computedFontSize.usedZoomFactor);
+        auto usedFontSize = usedFontSizeFromComputedSize(size, fontDescription.isAbsoluteSize(), useSVGZoomRules, documentStyle, document);
+        fontDescription.setUsedSize(usedFontSize.size, usedFontSize.zoomFactor);
 
         auto [fontOrientation, glyphOrientation] = documentStyle.fontAndGlyphOrientation();
         fontDescription.setOrientation(fontOrientation);
@@ -107,17 +104,17 @@ RenderStyle resolveForDocument(const Document& document)
         return fontDescription;
     }();
 
-    auto fontCascade = FontCascade { WTF::move(fontDescription), documentStyle.fontCascade() };
+    auto fontCascade = FontCascade { WTF::move(fontDescription), protect(documentStyle.fontCascade()) };
 
     // We don't just call setFontDescription() because we need to provide the fontSelector to the FontCascade.
     RefPtr fontSelector = document.fontSelector();
     fontCascade.update(WTF::move(fontSelector));
     documentStyle.setFontCascade(WTF::move(fontCascade));
 
-    documentStyle.setEvaluationTimeZoomEnabled(document.settings().evaluationTimeZoomEnabled());
+    documentStyle.setDeviceScaleFactor(document.deviceScaleFactor());
 
     return documentStyle;
 }
 
-}
-}
+} // namespace Style
+} // namespace WebCore

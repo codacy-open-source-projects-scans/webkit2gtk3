@@ -56,15 +56,9 @@ void WebAssemblyFunctionBase::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 
 DEFINE_VISIT_CHILDREN(WebAssemblyFunctionBase);
 
-void WebAssemblyFunctionBase::finishCreation(VM& vm, NativeExecutable* executable, unsigned length, const String& name)
+const Wasm::RTT& WebAssemblyFunctionBase::signature() const
 {
-    Base::finishCreation(vm, executable, length, name);
-    ASSERT(inherits(info()));
-}
-
-const Wasm::FunctionSignature& WebAssemblyFunctionBase::signature() const
-{
-    return Wasm::TypeInformation::getFunctionSignature(typeIndex());
+    return *m_importableFunction.rtt;
 }
 
 } // namespace JSC

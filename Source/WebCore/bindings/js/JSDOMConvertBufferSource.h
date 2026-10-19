@@ -25,7 +25,9 @@
 
 #pragma once
 
+#include <JavaScriptCore/JSGenericTypedArrayViewInlinesLight.h>
 #include <JavaScriptCore/JSTypedArrays.h>
+#include <JavaScriptCore/TypedArrays.h>
 #include <WebCore/BufferSource.h>
 #include <WebCore/IDLTypes.h>
 #include <WebCore/JSDOMConvertBase.h>
@@ -81,22 +83,22 @@ inline JSC::JSValue toJS(JSC::JSGlobalObject* lexicalGlobalObject, JSC::JSGlobal
 
 template<> struct JSConverter<IDLBufferSource> {
     static constexpr bool needsState = true;
-    static constexpr bool needsGlobalObject = false;
+    static constexpr bool needsGlobalObject = true;
 
-    static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const BufferSource& bufferSource)
+    static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& globalObject, const BufferSource& bufferSource)
     {
-        auto* jsDOMGlobalObject = uncheckedDowncast<JSDOMGlobalObject>(&lexicalGlobalObject);
-
-        return WTF::switchOn(bufferSource.variant(),
+        return bufferSource.switchOn(
             [&](const Ref<JSC::ArrayBufferView>& buffer) {
-                return toJS(&lexicalGlobalObject, &lexicalGlobalObject, const_cast<Ref<JSC::ArrayBufferView>&>(buffer));
+                return toJS(&lexicalGlobalObject, &globalObject, const_cast<Ref<JSC::ArrayBufferView>&>(buffer));
             },
             [&](const Ref<JSC::ArrayBuffer>& buffer)  {
-                return toJS(&lexicalGlobalObject, jsDOMGlobalObject, const_cast<Ref<JSC::ArrayBuffer>&>(buffer));
+                return toJS(&lexicalGlobalObject, &globalObject, const_cast<Ref<JSC::ArrayBuffer>&>(buffer));
             }
         );
     }
 };
+
+template<> struct JSConverter<IDLAllowSharedAdaptor<IDLBufferSource>> : JSConverter<IDLBufferSource> { };
 
 inline RefPtr<JSC::ArrayBufferView> toPossiblySharedArrayBufferView(JSC::VM&, JSC::JSValue value)
 {
@@ -124,7 +126,7 @@ struct BufferSourceConverter {
     using Result = ConversionResult<BufferSourceType>;
 
     template<typename ExceptionThrower = DefaultExceptionThrower>
-    static Result convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, ExceptionThrower&& exceptionThrower = ExceptionThrower())
+    static Result convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, NOESCAPE ExceptionThrower&& exceptionThrower = ExceptionThrower())
     {
         auto& vm = JSC::getVM(&lexicalGlobalObject);
         auto scope = DECLARE_THROW_SCOPE(vm);
@@ -174,7 +176,7 @@ struct TypedArrayConverter : DefaultConverter<IDL> {
     using WrapperType = Wrapper;
 
     template<typename ExceptionThrower = DefaultExceptionThrower>
-    static ConversionResult<IDL> convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, ExceptionThrower&& exceptionThrower = ExceptionThrower())
+    static ConversionResult<IDL> convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, NOESCAPE ExceptionThrower&& exceptionThrower = ExceptionThrower())
     {
         return Detail::BufferSourceConverter<IDL, Detail::BufferSourceConverterAllowSharedMode::Disallow>::convert(lexicalGlobalObject, value, std::forward<ExceptionThrower>(exceptionThrower));
     }
@@ -301,7 +303,7 @@ struct Converter<IDLAllowSharedAdaptor<IDL>> : DefaultConverter<IDL> {
     using ReturnType = typename ConverterType::ReturnType;
 
     template<typename ExceptionThrower = DefaultExceptionThrower>
-    static ConversionResult<IDL> convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, ExceptionThrower&& exceptionThrower = ExceptionThrower())
+    static ConversionResult<IDL> convert(JSC::JSGlobalObject& lexicalGlobalObject, JSC::JSValue value, NOESCAPE ExceptionThrower&& exceptionThrower = ExceptionThrower())
     {
         return Detail::BufferSourceConverter<IDL, Detail::BufferSourceConverterAllowSharedMode::Allow>::convert(lexicalGlobalObject, value, std::forward<ExceptionThrower>(exceptionThrower));
     }

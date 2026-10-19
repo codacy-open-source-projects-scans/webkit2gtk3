@@ -26,6 +26,7 @@
 #if PLATFORM(IOS_FAMILY)
 
 #import "AXObjectCache.h"
+#import "AXTextMarker.h"
 #import "AccessibilityObject.h"
 #import "WAKView.h"
 #import "WebAccessibilityObjectWrapperBase.h"
@@ -79,7 +80,7 @@ enum class IsAccessibilityElement : uint8_t { No, Yes, Unknown };
 @end
 
 @interface WebAccessibilityTextMarker : NSObject {
-    WebCore::AXObjectCache* _cache;
+    WeakPtr<WebCore::AXObjectCache> _cache;
     WebCore::TextMarkerData _textMarkerData;
 }
 

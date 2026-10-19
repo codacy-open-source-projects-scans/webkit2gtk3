@@ -170,7 +170,7 @@ inline uint16_t getHalfword(uint64_t value, int which)
 
 namespace RegisterNames {
 
-typedef enum : int8_t {
+enum RegisterID : int8_t {
 #define REGISTER_ID(id, name, r, cs) id,
     FOR_EACH_GP_REGISTER(REGISTER_ID)
 #undef REGISTER_ID
@@ -180,22 +180,22 @@ typedef enum : int8_t {
 #undef REGISTER_ALIAS
 
     InvalidGPRReg = -1,
-} RegisterID;
+};
 
-typedef enum : int8_t {
+enum SPRegisterID : int8_t {
 #define REGISTER_ID(id, name) id,
     FOR_EACH_SP_REGISTER(REGISTER_ID)
 #undef REGISTER_ID
-} SPRegisterID;
+};
 
 // ARM64 always has 32 FPU registers 128-bits each. See http://llvm.org/devmtg/2012-11/Northover-AArch64.pdf
 // and Section 5.1.2 in http://infocenter.arm.com/help/topic/com.arm.doc.ihi0055b/IHI0055B_aapcs64.pdf.
-typedef enum : int8_t {
+enum FPRegisterID : int8_t {
 #define REGISTER_ID(id, name, r, cs) id,
     FOR_EACH_FP_REGISTER(REGISTER_ID)
 #undef REGISTER_ID                       
     InvalidFPRReg = -1,
-} FPRegisterID;
+};
 
 static constexpr bool isSp(RegisterID reg) { return reg == sp; }
 static constexpr bool isZr(RegisterID reg) { return reg == zr; }
@@ -1810,6 +1810,17 @@ public:
     ALWAYS_INLINE void smull2v(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane) { smullv(vd, vn, vm, inputLane, 1, 0); }
     ALWAYS_INLINE void umullv(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane) { smullv(vd, vn, vm, inputLane, 0, 1); }
     ALWAYS_INLINE void umull2v(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane) { smullv(vd, vn, vm, inputLane, 1, 1); }
+
+    ALWAYS_INLINE void smlalv(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane, bool Q = 0, bool U = 0)
+    {
+        // https://www.scs.stanford.edu/~zyedidia/arm64/smlal_advsimd_vec.html
+        RELEASE_ASSERT(inputLane != SIMDLane::i64x2 && scalarTypeIsIntegral(inputLane));
+        insn(0b00'0'01110'00'1'00000'10'0'000'00000'00000 | (Q << 30) | (U << 29) | (sizeForIntegralSIMDOp(inputLane) << 22) | (vm << 16) | (vn << 5) | vd);
+    }
+
+    ALWAYS_INLINE void smlal2v(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane) { smlalv(vd, vn, vm, inputLane, 1, 0); }
+    ALWAYS_INLINE void umlalv(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane) { smlalv(vd, vn, vm, inputLane, 0, 1); }
+    ALWAYS_INLINE void umlal2v(FPRegisterID vd, FPRegisterID vn, FPRegisterID vm, SIMDLane inputLane) { smlalv(vd, vn, vm, inputLane, 1, 1); }
 
     // SDOT Vd.4S, Vn.16B, Vm.16B — signed dot product, accumulating into Vd
     // Requires FEAT_DotProd (ARMv8.2-A optional, ARMv8.4-A mandatory)
@@ -3962,21 +3973,41 @@ public:
     // and jump patching as they're modifying existing (linked) code,
     // so the address being provided is correct for relative address
     // computation.
+    template<RepatchingInfo repatch = jitMemcpyRepatchFlush>
     static void relinkJump(void* from, void* to)
     {
-        relinkJumpOrCall<BranchType_JMP>(reinterpret_cast<int*>(from), reinterpret_cast<const int*>(from), to);
-        cacheFlush(from, sizeof(int));
+        relinkJumpOrCall<BranchType_JMP, noFlush(repatch)>(reinterpret_cast<int*>(from), reinterpret_cast<const int*>(from), to);
+        if constexpr ((*repatch).contains(RepatchingFlag::Flush))
+            flushJump(from);
     }
-    
+
+    template<RepatchingInfo repatch = jitMemcpyRepatchFlush>
     static void relinkCall(void* from, void* to)
     {
-        relinkJumpOrCall<BranchType_CALL>(reinterpret_cast<int*>(from) - 1, reinterpret_cast<const int*>(from) - 1, to);
+        relinkJumpOrCall<BranchType_CALL, noFlush(repatch)>(reinterpret_cast<int*>(from) - 1, reinterpret_cast<const int*>(from) - 1, to);
+        if constexpr ((*repatch).contains(RepatchingFlag::Flush))
+            flushCall(from);
+    }
+
+    template<RepatchingInfo repatch = jitMemcpyRepatchFlush>
+    static void relinkTailCall(void* from, void* to)
+    {
+        relinkJump<repatch>(from, to);
+    }
+
+    static void flushJump(void* from)
+    {
+        cacheFlush(from, sizeof(int));
+    }
+
+    static void flushCall(void* from)
+    {
         cacheFlush(reinterpret_cast<int*>(from) - 1, sizeof(int));
     }
 
-    static void relinkTailCall(void* from, void* to)
+    static void flushTailCall(void* from)
     {
-        relinkJump(from, to);
+        flushJump(from);
     }
 
 #if ENABLE(JUMP_ISLANDS)
@@ -4325,7 +4356,7 @@ protected:
         }
     }
 
-    template<BranchType type>
+    template<BranchType type, RepatchingInfo repatch = jitMemcpyRepatch>
     static void relinkJumpOrCall(int* from, const int* fromInstruction, void* to)
     {
         static_assert(type == BranchType_JMP || type == BranchType_CALL);
@@ -4342,7 +4373,7 @@ protected:
                 if (imm19 == 8)
                     condition = invert(condition);
 
-                linkConditionalBranch<IndirectBranch>(condition, from - 1, fromInstruction - 1, to);
+                linkConditionalBranch<IndirectBranch, repatch>(condition, from - 1, fromInstruction - 1, to);
                 return;
             }
 
@@ -4355,7 +4386,7 @@ protected:
                 if (imm19 == 8)
                     op = !op;
 
-                linkCompareAndBranch<IndirectBranch>(op ? ConditionNE : ConditionEQ, opSize == Datasize_64, rt, from - 1, fromInstruction - 1, to);
+                linkCompareAndBranch<IndirectBranch, repatch>(op ? ConditionNE : ConditionEQ, opSize == Datasize_64, rt, from - 1, fromInstruction - 1, to);
                 return;
             }
 
@@ -4367,12 +4398,12 @@ protected:
                 if (imm14 == 8)
                     op = !op;
 
-                linkTestAndBranch<IndirectBranch>(op ? ConditionNE : ConditionEQ, bitNumber, rt, from - 1, fromInstruction - 1, to);
+                linkTestAndBranch<IndirectBranch, repatch>(op ? ConditionNE : ConditionEQ, bitNumber, rt, from - 1, fromInstruction - 1, to);
                 return;
             }
         }
 
-        linkJumpOrCall<type>(from, fromInstruction, to);
+        linkJumpOrCall<type, repatch>(from, fromInstruction, to);
     }
 
     static int* addressOf(void* code, AssemblerLabel label)

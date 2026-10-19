@@ -33,7 +33,10 @@
 namespace WebCore {
 
 class RenderElement;
-class RenderStyle;
+
+namespace Style {
+class ComputedStyle;
+}
 
 namespace Layout {
 
@@ -41,32 +44,28 @@ class ElementBox : public Box {
     WTF_MAKE_TZONE_ALLOCATED(ElementBox);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ElementBox);
 public:
-    ElementBox(ElementAttributes&&, RenderStyle&&, std::unique_ptr<RenderStyle>&& firstLineStyle = nullptr, EnumSet<BaseTypeFlag> = { ElementBoxFlag });
+    ElementBox(ElementAttributes&&, Style::ComputedStyle&&, std::unique_ptr<Style::ComputedStyle>&& firstLineStyle = nullptr, EnumSet<BaseTypeFlag> = { ElementBoxFlag });
 
-    enum class ListMarkerAttribute : uint8_t {
-        Image,
-        Outside,
-        ShouldCollapseAnonymousBlockParent,
-    };
-    ElementBox(ElementAttributes&&, EnumSet<ListMarkerAttribute>, RenderStyle&&, std::unique_ptr<RenderStyle>&& firstLineStyle = nullptr);
+    enum class IsListMarkerImage : bool { No, Yes };
+    ElementBox(ElementAttributes&&, IsListMarkerImage, Style::ComputedStyle&&, std::unique_ptr<Style::ComputedStyle>&& firstLineStyle = nullptr);
 
     struct ReplacedAttributes {
         LayoutSize intrinsicSize;
         std::optional<LayoutUnit> intrinsicRatio { };
         WeakPtr<CachedImage> cachedImage { };
     };
-    ElementBox(ElementAttributes&&, ReplacedAttributes&&, RenderStyle&&, std::unique_ptr<RenderStyle>&& firstLineStyle = nullptr);
+    ElementBox(ElementAttributes&&, ReplacedAttributes&&, Style::ComputedStyle&&, std::unique_ptr<Style::ComputedStyle>&& firstLineStyle = nullptr);
 
     ~ElementBox();
 
     const Box* firstChild() const { return m_firstChild.get(); }
-    const Box* NODELETE firstInFlowChild() const;
-    const Box* NODELETE firstInFlowOrFloatingChild() const;
-    const Box* NODELETE firstOutOfFlowChild() const;
+    const Box* LEGACY_NODELETE firstInFlowChild() const;
+    const Box* LEGACY_NODELETE firstInFlowOrFloatingChild() const;
+    const Box* LEGACY_NODELETE firstOutOfFlowChild() const;
     const Box* lastChild() const { return m_lastChild.get(); }
-    const Box* NODELETE lastInFlowChild() const;
-    const Box* NODELETE lastInFlowOrFloatingChild() const;
-    const Box* NODELETE lastOutOfFlowChild() const;
+    const Box* LEGACY_NODELETE lastInFlowChild() const;
+    const Box* LEGACY_NODELETE lastInFlowOrFloatingChild() const;
+    const Box* LEGACY_NODELETE lastOutOfFlowChild() const;
 
     // FIXME: This is currently needed for style updates.
     Box* firstChild() { return m_firstChild.get(); }
@@ -74,7 +73,7 @@ public:
     bool hasChild() const { return firstChild(); }
     bool hasInFlowChild() const { return firstInFlowChild(); }
     bool hasInFlowOrFloatingChild() const { return firstInFlowOrFloatingChild(); }
-    bool NODELETE hasOutOfFlowChild() const;
+    bool LEGACY_NODELETE hasOutOfFlowChild() const;
 
     void appendChild(UniqueRef<Box>);
     void insertChild(UniqueRef<Box>, Box* beforeChild = nullptr);
@@ -83,19 +82,21 @@ public:
     void setBaselineForIntegration(LayoutUnit baseline) { m_baselineForIntegration = baseline; }
     std::optional<LayoutUnit> baselineForIntegration() const { return m_baselineForIntegration; }
 
-    bool NODELETE hasIntrinsicWidth() const;
-    bool NODELETE hasIntrinsicHeight() const;
-    bool NODELETE hasIntrinsicRatio() const;
-    LayoutUnit NODELETE intrinsicWidth() const;
-    LayoutUnit NODELETE intrinsicHeight() const;
-    LayoutUnit NODELETE intrinsicRatio() const;
-    bool NODELETE hasAspectRatio() const;
+    bool LEGACY_NODELETE hasIntrinsicWidth() const;
+    bool LEGACY_NODELETE hasIntrinsicHeight() const;
+    bool LEGACY_NODELETE hasIntrinsicRatio() const;
+    bool LEGACY_NODELETE hasNaturalWidth() const;
+    bool LEGACY_NODELETE hasNaturalHeight() const;
+    LayoutUnit LEGACY_NODELETE naturalWidth() const;
+    LayoutUnit LEGACY_NODELETE naturalHeight() const;
+    LayoutUnit LEGACY_NODELETE intrinsicWidth() const;
+    LayoutUnit LEGACY_NODELETE intrinsicHeight() const;
+    LayoutUnit LEGACY_NODELETE intrinsicRatio() const;
+    bool LEGACY_NODELETE hasAspectRatio() const;
 
-    void setListMarkerAttributes(EnumSet<ListMarkerAttribute> listMarkerAttributes) { m_replacedData->listMarkerAttributes = listMarkerAttributes; }
+    void setIsListMarkerImage(IsListMarkerImage isListMarkerImage) { m_replacedData->isListMarkerImage = isListMarkerImage == IsListMarkerImage::Yes; }
 
-    bool isListMarkerImage() const { return m_replacedData && m_replacedData->listMarkerAttributes.contains(ListMarkerAttribute::Image); }
-    bool isListMarkerOutside() const { return m_replacedData && m_replacedData->listMarkerAttributes.contains(ListMarkerAttribute::Outside); }
-    bool shouldCollapseAnonymousBlockParentForListMarker() const { return m_replacedData && m_replacedData->listMarkerAttributes.contains(ListMarkerAttribute::ShouldCollapseAnonymousBlockParent); }
+    bool isListMarkerImage() const { return m_replacedData && m_replacedData->isListMarkerImage; }
 
     // FIXME: This is temporary until after list marker content is accessible by IFC (webkit.org/b/294342)
     void setListMarkerLayoutBounds(std::pair<float, float> layoutBounds) { m_replacedData->layoutBounds = layoutBounds; }
@@ -104,7 +105,7 @@ public:
     // FIXME: This doesn't belong.
     CachedImage* cachedImage() const { return m_replacedData ? m_replacedData->cachedImage : nullptr; }
 
-    RenderElement* NODELETE rendererForIntegration() const;
+    RenderElement* LEGACY_NODELETE rendererForIntegration() const;
 
 private:
     friend class Box;
@@ -112,7 +113,7 @@ private:
     struct ReplacedData {
         WTF_DEPRECATED_MAKE_STRUCT_FAST_ALLOCATED(ReplacedData);
 
-        EnumSet<ListMarkerAttribute> listMarkerAttributes;
+        bool isListMarkerImage { false };
         std::pair<float, float> layoutBounds;
 
         std::optional<LayoutSize> intrinsicSize;
@@ -123,7 +124,7 @@ private:
     std::unique_ptr<Box> m_firstChild;
     CheckedPtr<Box> m_lastChild;
 
-    std::unique_ptr<ReplacedData> m_replacedData;
+    const std::unique_ptr<ReplacedData> m_replacedData;
     std::optional<LayoutUnit> m_baselineForIntegration;
 };
 

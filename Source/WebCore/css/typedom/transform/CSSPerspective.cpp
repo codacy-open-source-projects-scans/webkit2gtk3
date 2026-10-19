@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Samuel Weinig <sam@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,7 +32,9 @@
 #include "CSSPerspective.h"
 
 #include "CSSFunctionValue.h"
+#include "CSSKeywordValue.h"
 #include "CSSNumericFactory.h"
+#include "CSSPrimitiveValue.h"
 #include "CSSStyleValueFactory.h"
 #include "CSSUnitValue.h"
 #include "DOMMatrix.h"
@@ -73,7 +76,7 @@ ExceptionOr<Ref<CSSPerspective>> CSSPerspective::create(CSSPerspectiveValue leng
 
 ExceptionOr<Ref<CSSPerspective>> CSSPerspective::create(Ref<const CSSFunctionValue> cssFunctionValue, Document& document)
 {
-    if (cssFunctionValue->name() != CSSValuePerspective) {
+    if (cssFunctionValue->name() != CSSValueID::Perspective) {
         ASSERT_NOT_REACHED();
         return CSSPerspective::create("none"_s);
     }
@@ -83,17 +86,16 @@ ExceptionOr<Ref<CSSPerspective>> CSSPerspective::create(Ref<const CSSFunctionVal
         return Exception { ExceptionCode::TypeError, "Unexpected number of values."_s };
     }
 
-    auto keywordOrNumeric = CSSStyleValueFactory::reifyValue(document, *cssFunctionValue->item(0), std::nullopt);
-    if (keywordOrNumeric.hasException())
-        return keywordOrNumeric.releaseException();
-    Ref keywordOrNumericValue = keywordOrNumeric.returnValue();
-    return [&] -> ExceptionOr<Ref<CSSPerspective>> {
-        if (RefPtr keywordValue = dynamicDowncast<CSSOMKeywordValue>(keywordOrNumericValue))
-            return CSSPerspective::create(keywordValue.releaseNonNull());
-        if (RefPtr numericValue = dynamicDowncast<CSSNumericValue>(keywordOrNumericValue))
-            return CSSPerspective::create(numericValue.releaseNonNull());
-        return Exception { ExceptionCode::TypeError, "Expected a CSSNumericValue."_s };
-    }();
+    Ref parameterValue = *cssFunctionValue->item(0);
+    if (RefPtr numericParameterValue = dynamicDowncast<CSSPrimitiveValue>(parameterValue.get())) {
+        auto numericValue = CSSNumericValue::reifyValue(document, *numericParameterValue);
+        if (numericValue.hasException())
+            return numericValue.releaseException();
+        return CSSPerspective::create(CSSPerspectiveValue { numericValue.releaseReturnValue() });
+    } else if (RefPtr keywordParameterValue = dynamicDowncast<CSSKeywordValue>(parameterValue.get()))
+        return CSSPerspective::create(CSSPerspectiveValue { CSSOMKeywordValue::reifyValue(document, *keywordParameterValue) });
+
+    return Exception { ExceptionCode::TypeError, "Expected a CSSNumericValue or CSSKeywordValue."_s };
 }
 
 CSSPerspective::CSSPerspective(CSSPerspectiveValue length)
@@ -151,7 +153,7 @@ ExceptionOr<Ref<DOMMatrix>> CSSPerspective::toMatrix()
     if (!length)
         return Exception { ExceptionCode::TypeError };
 
-    auto valuePx = length->convertTo(CSSUnitType::CSS_PX);
+    auto valuePx = length->convertTo(CSSUnitType::Px);
     if (!valuePx)
         return Exception { ExceptionCode::TypeError, "Length unit is not compatible with 'px'"_s };
 
@@ -178,7 +180,7 @@ RefPtr<CSSValue> CSSPerspective::toCSSValue() const
     if (!length)
         return nullptr;
 
-    return CSSFunctionValue::create(CSSValuePerspective, length.releaseNonNull());
+    return CSSFunctionValue::create(CSSValueID::Perspective, length.releaseNonNull());
 }
 
 } // namespace WebCore

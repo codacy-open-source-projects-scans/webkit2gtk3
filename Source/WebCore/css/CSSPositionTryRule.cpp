@@ -26,6 +26,7 @@
 #include "config.h"
 #include "CSSPositionTryRule.h"
 
+#include "CSSMarkup.h"
 #include "CSSPositionTryDescriptors.h"
 #include "CSSSerializationContext.h"
 
@@ -95,12 +96,14 @@ void CSSPositionTryRule::reattach(StyleRuleBase& rule)
 {
     m_positionTryRule = downcast<StyleRulePositionTry>(rule);
     if (RefPtr propertiesCSSOMWrapper = m_propertiesCSSOMWrapper)
-        propertiesCSSOMWrapper->reattach(protect(positionTryRule())->mutableProperties());
+        propertiesCSSOMWrapper->reattach(protect(protect(positionTryRule())->mutableProperties()));
 }
 
-AtomString CSSPositionTryRule::name() const
+String CSSPositionTryRule::name() const
 {
-    return m_positionTryRule->name();
+    StringBuilder builder;
+    serializeIdentifier(builder, m_positionTryRule->name());
+    return builder.toString();
 }
 
 CSSPositionTryDescriptors& CSSPositionTryRule::style()
@@ -108,7 +111,7 @@ CSSPositionTryDescriptors& CSSPositionTryRule::style()
     Ref mutableProperties = protect(positionTryRule())->mutableProperties();
 
     if (!m_propertiesCSSOMWrapper)
-        m_propertiesCSSOMWrapper = CSSPositionTryDescriptors::create(mutableProperties.get(), *this);
+        lazyInitialize(m_propertiesCSSOMWrapper, CSSPositionTryDescriptors::create(mutableProperties.get(), *this));
 
     return *m_propertiesCSSOMWrapper;
 }

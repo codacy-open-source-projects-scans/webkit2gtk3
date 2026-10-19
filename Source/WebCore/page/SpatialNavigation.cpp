@@ -41,14 +41,14 @@
 #include "IntRect.h"
 #include "LocalFrameInlines.h"
 #include "LocalFrameView.h"
-#include "NodeInlines.h"
 #include "Page.h"
-#include "RenderInline.h"
+#include "RenderBoxInlines.h"
+#include "RenderElementInlines.h"
 #include "RenderLayer.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle+GettersInlines.h"
 #include "Settings.h"
+#include "StyleComputedStyle+GettersInlines.h"
 
 namespace WebCore {
 
@@ -58,7 +58,7 @@ static bool areRectsMoreThanFullScreenApart(FocusDirection, const LayoutRect& cu
 static bool isRectInDirection(FocusDirection, const LayoutRect&, const LayoutRect&);
 static void deflateIfOverlapped(LayoutRect&, LayoutRect&);
 static LayoutRect rectToAbsoluteCoordinates(LocalFrame* initialFrame, const LayoutRect&);
-static void entryAndExitPointsForDirection(FocusDirection, const LayoutRect& startingRect, const LayoutRect& potentialRect, LayoutPoint& exitPoint, LayoutPoint& entryPoint);
+static void LEGACY_NODELETE entryAndExitPointsForDirection(FocusDirection, const LayoutRect& startingRect, const LayoutRect& potentialRect, LayoutPoint& exitPoint, LayoutPoint& entryPoint);
 static bool isScrollableNode(const ContainerNode&);
 
 FocusCandidate::FocusCandidate(Element* element, FocusDirection direction)
@@ -88,7 +88,7 @@ FocusCandidate::FocusCandidate(Element* element, FocusDirection direction)
     isOffscreenAfterScrolling = hasOffscreenRect(*protectedVisibleNode, direction);
 }
 
-static RectsAlignment NODELETE alignmentForRects(FocusDirection direction, const LayoutRect& curRect, const LayoutRect& targetRect, const LayoutSize& viewSize)
+static RectsAlignment LEGACY_NODELETE alignmentForRects(FocusDirection direction, const LayoutRect& curRect, const LayoutRect& targetRect, const LayoutSize& viewSize)
 {
     // If we found a node in full alignment, but it is too far away, ignore it.
     if (areRectsMoreThanFullScreenApart(direction, curRect, targetRect, viewSize))
@@ -103,23 +103,23 @@ static RectsAlignment NODELETE alignmentForRects(FocusDirection direction, const
     return RectsAlignment::None;
 }
 
-static inline bool NODELETE isHorizontalMove(FocusDirection direction)
+static inline bool LEGACY_NODELETE isHorizontalMove(FocusDirection direction)
 {
     return direction == FocusDirection::Left || direction == FocusDirection::Right;
 }
 
-static inline LayoutUnit NODELETE start(FocusDirection direction, const LayoutRect& rect)
+static inline LayoutUnit LEGACY_NODELETE start(FocusDirection direction, const LayoutRect& rect)
 {
     return isHorizontalMove(direction) ? rect.y() : rect.x();
 }
 
-static inline LayoutUnit NODELETE middle(FocusDirection direction, const LayoutRect& rect)
+static inline LayoutUnit LEGACY_NODELETE middle(FocusDirection direction, const LayoutRect& rect)
 {
     LayoutPoint center(rect.center());
     return isHorizontalMove(direction) ? center.y(): center.x();
 }
 
-static inline LayoutUnit NODELETE end(FocusDirection direction, const LayoutRect& rect)
+static inline LayoutUnit LEGACY_NODELETE end(FocusDirection direction, const LayoutRect& rect)
 {
     return isHorizontalMove(direction) ? rect.maxY() : rect.maxX();
 }
@@ -131,7 +131,7 @@ static inline LayoutUnit NODELETE end(FocusDirection direction, const LayoutRect
 // operations.
 // * a = Current focused node's rect.
 // * b = Focus candidate node's rect.
-static bool NODELETE areRectsFullyAligned(FocusDirection direction, const LayoutRect& a, const LayoutRect& b)
+static bool LEGACY_NODELETE areRectsFullyAligned(FocusDirection direction, const LayoutRect& a, const LayoutRect& b)
 {
     LayoutUnit aStart, bStart, aEnd, bEnd;
 
@@ -203,7 +203,7 @@ static bool NODELETE areRectsFullyAligned(FocusDirection direction, const Layout
 // horizontally or vertically.
 // * a = Current focused node's rect.
 // * b = Focus candidate node's rect.
-static bool NODELETE areRectsPartiallyAligned(FocusDirection direction, const LayoutRect& a, const LayoutRect& b)
+static bool LEGACY_NODELETE areRectsPartiallyAligned(FocusDirection direction, const LayoutRect& a, const LayoutRect& b)
 {
     LayoutUnit aStart  = start(direction, a);
     LayoutUnit bStart  = start(direction, b);
@@ -231,7 +231,7 @@ static bool NODELETE areRectsPartiallyAligned(FocusDirection direction, const La
             || (bEnd >= aStart && bEnd <= aEnd));
 }
 
-static bool NODELETE areRectsMoreThanFullScreenApart(FocusDirection direction, const LayoutRect& curRect, const LayoutRect& targetRect, const LayoutSize& viewSize)
+static bool LEGACY_NODELETE areRectsMoreThanFullScreenApart(FocusDirection direction, const LayoutRect& curRect, const LayoutRect& targetRect, const LayoutSize& viewSize)
 {
     ASSERT(isRectInDirection(direction, curRect, targetRect));
 
@@ -251,18 +251,18 @@ static bool NODELETE areRectsMoreThanFullScreenApart(FocusDirection direction, c
 }
 
 // Return true if rect |a| is below |b|. False otherwise.
-static inline bool NODELETE below(const LayoutRect& a, const LayoutRect& b)
+static inline bool LEGACY_NODELETE below(const LayoutRect& a, const LayoutRect& b)
 {
     return a.y() > b.maxY();
 }
 
 // Return true if rect |a| is on the right of |b|. False otherwise.
-static inline bool NODELETE rightOf(const LayoutRect& a, const LayoutRect& b)
+static inline bool LEGACY_NODELETE rightOf(const LayoutRect& a, const LayoutRect& b)
 {
     return a.x() > b.maxX();
 }
 
-static bool NODELETE isRectInDirection(FocusDirection direction, const LayoutRect& curRect, const LayoutRect& targetRect)
+static bool LEGACY_NODELETE isRectInDirection(FocusDirection direction, const LayoutRect& curRect, const LayoutRect& targetRect)
 {
     switch (direction) {
     case FocusDirection::Left:
@@ -353,7 +353,7 @@ bool scrollInDirection(LocalFrame* frame, FocusDirection direction)
             return false;
         }
 
-        frame->view()->scrollBy(IntSize(dx, dy));
+        protect(frame->view())->scrollBy(IntSize(dx, dy));
         return true;
     }
     return false;
@@ -375,15 +375,15 @@ bool scrollInDirection(const ContainerNode& container, FocusDirection direction)
             dx = - std::min<LayoutUnit>(Scrollbar::pixelsPerLineStep(), renderBox->scrollLeft());
             break;
         case FocusDirection::Right:
-            ASSERT(renderBox->scrollWidth() > (renderBox->scrollLeft() + renderBox->clientWidth()));
-            dx = std::min<LayoutUnit>(Scrollbar::pixelsPerLineStep(), renderBox->scrollWidth() - (renderBox->scrollLeft() + renderBox->clientWidth()));
+            ASSERT(renderBox->scrollWidth() > (renderBox->scrollLeft() + renderBox->paddingBoxWidth()));
+            dx = std::min<LayoutUnit>(Scrollbar::pixelsPerLineStep(), renderBox->scrollWidth() - (renderBox->scrollLeft() + renderBox->paddingBoxWidth()));
             break;
         case FocusDirection::Up:
             dy = - std::min<LayoutUnit>(Scrollbar::pixelsPerLineStep(), renderBox->scrollTop());
             break;
         case FocusDirection::Down:
-            ASSERT(renderBox->scrollHeight() - (renderBox->scrollTop() + renderBox->clientHeight()));
-            dy = std::min<LayoutUnit>(Scrollbar::pixelsPerLineStep(), renderBox->scrollHeight() - (renderBox->scrollTop() + renderBox->clientHeight()));
+            ASSERT(renderBox->scrollHeight() - (renderBox->scrollTop() + renderBox->paddingBoxHeight()));
+            dy = std::min<LayoutUnit>(Scrollbar::pixelsPerLineStep(), renderBox->scrollHeight() - (renderBox->scrollTop() + renderBox->paddingBoxHeight()));
             break;
         default:
             ASSERT_NOT_REACHED();
@@ -398,7 +398,7 @@ bool scrollInDirection(const ContainerNode& container, FocusDirection direction)
     return false;
 }
 
-static void deflateIfOverlapped(LayoutRect& a, LayoutRect& b)
+static void LEGACY_NODELETE deflateIfOverlapped(LayoutRect& a, LayoutRect& b)
 {
     if (!a.intersects(b) || a.contains(b) || b.contains(a))
         return;
@@ -454,9 +454,9 @@ bool canScrollInDirection(const ContainerNode& container, FocusDirection directi
         case FocusDirection::Up:
             return renderBox->style().overflowY() != Overflow::Hidden && renderBox->scrollTop() > 0;
         case FocusDirection::Right:
-            return renderBox->style().overflowX() != Overflow::Hidden && renderBox->scrollLeft() + renderBox->clientWidth() < renderBox->scrollWidth();
+            return renderBox->style().overflowX() != Overflow::Hidden && renderBox->scrollLeft() + renderBox->paddingBoxWidth() < renderBox->scrollWidth();
         case FocusDirection::Down:
-            return renderBox->style().overflowY() != Overflow::Hidden && renderBox->scrollTop() + renderBox->clientHeight() < renderBox->scrollHeight();
+            return renderBox->style().overflowY() != Overflow::Hidden && renderBox->scrollTop() + renderBox->paddingBoxHeight() < renderBox->scrollHeight();
         default:
             ASSERT_NOT_REACHED();
             return false;
@@ -468,18 +468,19 @@ bool canScrollInDirection(const ContainerNode& container, FocusDirection directi
 
 bool canScrollInDirection(const LocalFrame* frame, FocusDirection direction)
 {
-    if (!frame->view())
+    RefPtr view = frame->view();
+    if (!view)
         return false;
     ScrollbarMode verticalMode;
     ScrollbarMode horizontalMode;
-    frame->view()->calculateScrollbarModesForLayout(horizontalMode, verticalMode);
+    view->calculateScrollbarModesForLayout(horizontalMode, verticalMode);
     if ((direction == FocusDirection::Left || direction == FocusDirection::Right) && ScrollbarMode::AlwaysOff == horizontalMode)
         return false;
     if ((direction == FocusDirection::Up || direction == FocusDirection::Down) &&  ScrollbarMode::AlwaysOff == verticalMode)
         return false;
-    LayoutSize size = frame->view()->totalContentsSize();
-    LayoutPoint scrollPosition = frame->view()->scrollPosition();
-    LayoutRect rect = frame->view()->unobscuredContentRectIncludingScrollbars();
+    LayoutSize size = view->totalContentsSize();
+    LayoutPoint scrollPosition = view->scrollPosition();
+    LayoutRect rect = view->unobscuredContentRectIncludingScrollbars();
 
     // FIXME: wrong in RTL documents.
     switch (direction) {
@@ -501,12 +502,12 @@ bool canScrollInDirection(const LocalFrame* frame, FocusDirection direction)
 static LayoutRect rectToAbsoluteCoordinates(LocalFrame* initialFrame, const LayoutRect& initialRect)
 {
     LayoutRect rect = initialRect;
-    for (RefPtr<Frame> frame = initialFrame; frame; frame = frame->tree().parent()) {
+    for (Ref frame : inclusiveAncestorFrames(initialFrame)) {
         if (RefPtr<Element> element = frame->ownerElement()) {
             do {
                 rect.move(LayoutUnit(element->offsetLeft()), LayoutUnit(element->offsetTop()));
             } while ((element = element->offsetParent()));
-            rect.moveBy((-frame->virtualView()->scrollPosition()));
+            rect.moveBy((-protect(frame->virtualView())->scrollPosition()));
         }
     }
     return rect;
@@ -524,10 +525,10 @@ LayoutRect nodeRectInAbsoluteCoordinates(const ContainerNode& containerNode, boo
         // For authors that use border instead of outline in their CSS, we compensate by ignoring the border when calculating
         // the rect of the focused element.
         if (ignoreBorder) {
-            CheckedRef style = renderer->style();
-            rect.move(Style::evaluate<LayoutUnit>(style->usedBorderLeftWidth(), Style::ZoomNeeded { }), Style::evaluate<LayoutUnit>(style->usedBorderTopWidth(), Style::ZoomNeeded { }));
-            rect.setWidth(rect.width() - Style::evaluate<LayoutUnit>(style->usedBorderLeftWidth(), Style::ZoomNeeded { }) - Style::evaluate<LayoutUnit>(style->usedBorderRightWidth(), Style::ZoomNeeded { }));
-            rect.setHeight(rect.height() - Style::evaluate<LayoutUnit>(style->usedBorderTopWidth(), Style::ZoomNeeded { }) - Style::evaluate<LayoutUnit>(style->usedBorderBottomWidth(), Style::ZoomNeeded { }));
+            auto borderWidths = renderer->usedStyle().borderWidths();
+            rect.move(borderWidths.left(), borderWidths.top());
+            rect.setWidth(rect.width() - borderWidths.left() - borderWidths.right());
+            rect.setHeight(rect.height() - borderWidths.top() - borderWidths.bottom());
         }
         return rect;
     }
@@ -537,7 +538,7 @@ LayoutRect nodeRectInAbsoluteCoordinates(const ContainerNode& containerNode, boo
 
 LayoutRect frameRectInAbsoluteCoordinates(LocalFrame* frame)
 {
-    return rectToAbsoluteCoordinates(frame, frame->view()->visibleContentRect());
+    return rectToAbsoluteCoordinates(frame, protect(frame->view())->visibleContentRect());
 }
 
 // This method calculates the exitPoint from the startingRect and the entryPoint into the candidate rect.
@@ -611,10 +612,10 @@ bool areElementsOnSameLine(const FocusCandidate& firstCandidate, const FocusCand
     if (is<HTMLAreaElement>(*firstCandidate.focusableNode) || is<HTMLAreaElement>(*secondCandidate.focusableNode))
         return false;
 
-    if (!firstCandidate.visibleNode->renderer()->isRenderInline() || !secondCandidate.visibleNode->renderer()->isRenderInline())
+    if (!firstCandidate.visibleNode->renderer()->isInlineBox() || !secondCandidate.visibleNode->renderer()->isInlineBox())
         return false;
 
-    if (firstCandidate.visibleNode->renderer()->containingBlock() != secondCandidate.visibleNode->renderer()->containingBlock())
+    if (protect(firstCandidate.visibleNode->renderer())->containingBlock() != protect(secondCandidate.visibleNode->renderer())->containingBlock())
         return false;
 
     return true;
@@ -700,7 +701,7 @@ void distanceDataForNode(FocusDirection direction, const FocusCandidate& current
     RefPtr localMainFrame = dynamicDowncast<LocalFrame>(candidate.visibleNode->document().page()->mainFrame());
     if (!localMainFrame)
         return;
-    LayoutSize viewSize = localMainFrame->view()->visibleContentRect().size();
+    LayoutSize viewSize = protect(localMainFrame->view())->visibleContentRect().size();
     candidate.alignment = alignmentForRects(direction, currentRect, nodeRect, viewSize);
 }
 

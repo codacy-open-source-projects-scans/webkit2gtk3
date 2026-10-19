@@ -264,10 +264,6 @@ ABSL_FLAG(bool,
           false,
           "Avoid producing information about the progress.");
 ABSL_FLAG(bool,
-          bitexactness_report,
-          false,
-          "Report bitexactness for aec dump result reproduction");
-ABSL_FLAG(bool,
           discard_settings_in_aecdump,
           false,
           "Discard any config settings specified in the aec dump");
@@ -338,8 +334,8 @@ ABSL_FLAG(std::string,
           force_fieldtrials,
           "",
           "Field trials control experimental feature code which can be forced. "
-          "E.g. running with --force_fieldtrials=WebRTC-FooFeature/Enable/"
-          " will assign the group Enable to field trial WebRTC-FooFeature.");
+          "E.g. running with --force_fieldtrials=WebRTC-FooFeature/Enabled/"
+          " will assign the group Enabled to field trial WebRTC-FooFeature.");
 
 ABSL_FLAG(std::string,
           ree_model,
@@ -505,7 +501,6 @@ SimulationSettings CreateSettings() {
       &settings.use_adaptive_stereo_downmixing_for_aec);
   settings.use_verbose_logging = absl::GetFlag(FLAGS_verbose);
   settings.use_quiet_output = absl::GetFlag(FLAGS_quiet);
-  settings.report_bitexactness = absl::GetFlag(FLAGS_bitexactness_report);
   settings.discard_all_settings_in_aecdump =
       absl::GetFlag(FLAGS_discard_settings_in_aecdump);
   settings.fixed_interface = absl::GetFlag(FLAGS_fixed_interface);
@@ -565,11 +560,6 @@ void PerformBasicParameterSanityChecks(const SimulationSettings& settings) {
         "Error: The aec dump file cannot be specified "
         "together with input wav files!\n");
 
-    ReportConditionalErrorAndExit(
-        !!settings.aec_dump_input_string,
-        "Error: The aec dump input string cannot be specified "
-        "together with input wav files!\n");
-
     ReportConditionalErrorAndExit(!!settings.artificial_nearend_filename,
                                   "Error: The artificial nearend cannot be "
                                   "specified together with input wav files!\n");
@@ -585,13 +575,8 @@ void PerformBasicParameterSanityChecks(const SimulationSettings& settings) {
         "must be specified if the reverse output wav filename is specified!\n");
   } else {
     ReportConditionalErrorAndExit(
-        !settings.aec_dump_input_filename && !settings.aec_dump_input_string,
-        "Error: Either the aec dump input file, the wav "
-        "input file or the aec dump input string must be specified!\n");
-    ReportConditionalErrorAndExit(
-        settings.aec_dump_input_filename && settings.aec_dump_input_string,
-        "Error: The aec dump input file cannot be specified together with the "
-        "aec dump input string!\n");
+        !settings.aec_dump_input_filename,
+        "Error: The aec dump input file must be specified!\n");
   }
 
   ReportConditionalErrorAndExit(settings.use_aec && !(*settings.use_aec) &&
@@ -638,10 +623,6 @@ void PerformBasicParameterSanityChecks(const SimulationSettings& settings) {
           ((*settings.ns_level) < 0 || (*settings.ns_level) > 3),
       "Error: --ns_level must be specified between 0 and 3.\n");
 
-  ReportConditionalErrorAndExit(
-      settings.report_bitexactness && !settings.aec_dump_input_filename,
-      "Error: --bitexactness_report can only be used when operating on an "
-      "aecdump\n");
 
   ReportConditionalErrorAndExit(
       settings.call_order_input_filename && settings.aec_dump_input_filename,
@@ -789,8 +770,11 @@ EchoCanceller3Config ReadAec3ConfigFromJsonFile(absl::string_view filename) {
 void SetDependencies(const SimulationSettings& settings,
                      BuiltinAudioProcessingBuilder& builder,
                      AudioProcessingBuilderState& builder_state) {
-  EchoCanceller3Config aec3_config;
-  std::optional<EchoCanceller3Config> aec3_multichannel_config;
+  EchoCanceller3Config aec3_config =
+      builder.echo_canceller_config().value_or(EchoCanceller3Config());
+  std::optional<EchoCanceller3Config> aec3_multichannel_config =
+      builder.echo_canceller_multichannel_config();
+  bool modify_aec_config = false;
   if (settings.neural_echo_residual_estimator_model) {
     tflite::ops::builtin::BuiltinOpResolver op_resolver;
     builder_state.model = tflite::FlatBufferModel::BuildFromFile(
@@ -799,9 +783,6 @@ void SetDependencies(const SimulationSettings& settings,
     std::unique_ptr<NeuralResidualEchoEstimator> estimator =
         CreateNeuralResidualEchoEstimator(builder_state.model.get(),
                                           &op_resolver);
-    aec3_config = estimator->GetConfiguration(/*multi_channel=*/false);
-    aec3_multichannel_config =
-        estimator->GetConfiguration(/*multi_channel=*/true);
     RTC_CHECK(estimator);
     builder.SetNeuralResidualEchoEstimator(std::move(estimator));
   }
@@ -811,10 +792,15 @@ void SetDependencies(const SimulationSettings& settings,
       std::cout << "Reading AEC Parameters from JSON input." << std::endl;
     }
     aec3_config = ReadAec3ConfigFromJsonFile(*settings.aec_settings_filename);
+    modify_aec_config = true;
   }
 
   if (settings.linear_aec_output_filename) {
     aec3_config.filter.export_linear_aec_output = true;
+    if (aec3_multichannel_config) {
+      aec3_multichannel_config->filter.export_linear_aec_output = true;
+    }
+    modify_aec_config = true;
   }
 
   if (settings.print_aec_parameter_values) {
@@ -823,7 +809,10 @@ void SetDependencies(const SimulationSettings& settings,
     }
     std::cout << Aec3ConfigToJsonString(aec3_config) << std::endl;
   }
-  builder.SetEchoCancellerConfig(aec3_config, aec3_multichannel_config);
+
+  if (modify_aec_config) {
+    builder.SetEchoCancellerConfig(aec3_config, aec3_multichannel_config);
+  }
 
   if (settings.use_ed && *settings.use_ed) {
     builder.SetEchoDetector(CreateEchoDetector());
@@ -857,7 +846,7 @@ int RunSimulation(
   RTC_CHECK(audio_processing);
 
   std::unique_ptr<AudioProcessingSimulator> processor;
-  if (settings.aec_dump_input_filename || settings.aec_dump_input_string) {
+  if (settings.aec_dump_input_filename) {
     processor = std::make_unique<AecDumpBasedSimulator>(
         settings, std::move(audio_processing));
   } else {
@@ -879,13 +868,6 @@ int RunSimulation(
         *settings.performance_report_output_filename);
   }
 
-  if (settings.report_bitexactness && settings.aec_dump_input_filename) {
-    if (processor->OutputWasBitexact()) {
-      std::cout << "The processing was bitexact.";
-    } else {
-      std::cout << "The processing was not bitexact.";
-    }
-  }
   return 0;
 }
 

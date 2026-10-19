@@ -43,13 +43,13 @@ class XRCompositionLayer;
 class XRWebGLSubImage : public XRSubImage {
     WTF_MAKE_TZONE_ALLOCATED(XRWebGLSubImage);
 public:
-    static ExceptionOr<Ref<XRWebGLSubImage>> create(Ref<WebXRViewport>&&, XRCompositionLayer&);
+    static ExceptionOr<Ref<XRWebGLSubImage>> create(Ref<WebXRViewport>&&, XRCompositionLayer&, uint32_t colorTextureIndex = 0);
     virtual ~XRWebGLSubImage();
 
     const WebXRViewport& viewport() const final { return m_viewport.get(); }
     const WebGLTexture& colorTexture() const;
     RefPtr<WebGLTexture> depthStencilTexture() const;
-    RefPtr<WebGLTexture> motionVectorTexture() const { return nullptr; }
+    RefPtr<WebGLTexture> motionVectorTexture() const;
 
     std::optional<uint32_t> imageIndex() const { return m_imageIndex; }
     void setImageIndex(uint32_t imageIndex) { m_imageIndex = imageIndex; }
@@ -66,12 +66,12 @@ private:
 
     bool isXRWebGLSubImage() const final { return true; }
 
-    Ref<WebXRViewport> m_viewport;
+    const Ref<WebXRViewport> m_viewport;
 
-    Ref<WebGLTexture> m_colorTexture;
+    const Ref<WebGLTexture> m_colorTexture;
     IntSize m_colorTextureSize;
 
-    RefPtr<WebGLTexture> m_depthStencilTexture;
+    const RefPtr<WebGLTexture> m_depthStencilTexture;
     std::optional<IntSize> m_depthStencilTextureSize;
 
     std::optional<uint32_t> m_imageIndex;

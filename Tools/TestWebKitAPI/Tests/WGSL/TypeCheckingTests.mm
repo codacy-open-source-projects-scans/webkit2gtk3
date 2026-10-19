@@ -643,6 +643,9 @@ TEST(WGSLTypeCheckingTests, PointerAsConstant)
 TEST(WGSLTypeCheckingTests, PointerAccessMode)
 {
     expectTypeError("fn f1(x: ptr<function, i32, read>) { }"_s, "only pointers in <storage> address space may specify an access mode"_s);
+    expectTypeError("alias T = ptr<storage, u32, write>;"_s, "access mode 'write' is not valid for the <storage> address space"_s);
+    expectNoError("alias T = ptr<storage, u32, read>;"_s);
+    expectNoError("alias T = ptr<storage, u32, read_write>;"_s);
 }
 
 TEST(WGSLTypeCheckingTests, Redeclaration)
@@ -849,6 +852,16 @@ TEST(WGSLTypeCheckingTests, Visibility)
         "fn f() { storageBarrier(); }"
         "@fragment fn main() { f(); }"_s,
         "built-in cannot be used by fragment pipeline stage"_s);
+
+    expectTypeError(
+        "fn f() { discard; }"
+        "@compute @workgroup_size(1) fn main() { f(); }"_s,
+        "discard statement cannot be used by compute pipeline stage"_s);
+
+    expectTypeError(
+        "fn f() { discard; }"
+        "@vertex fn main() -> @builtin(position) vec4f { f(); return vec4f(1); }"_s,
+        "discard statement cannot be used by vertex pipeline stage"_s);
 }
 
 TEST(WGSLTypeCheckingTests, While)

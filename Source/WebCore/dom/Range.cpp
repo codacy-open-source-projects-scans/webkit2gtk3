@@ -94,7 +94,7 @@ Range::~Range()
 
 Node* Range::commonAncestorContainer() const
 {
-    return commonInclusiveAncestor(startContainer(), endContainer());
+    return commonInclusiveAncestor(protect(startContainer()), protect(endContainer()));
 }
 
 void Range::updateAssociatedSelection()
@@ -128,9 +128,16 @@ ExceptionOr<void> Range::setStart(Ref<Node>&& container, unsigned offset)
     if (childNode.hasException())
         return childNode.releaseException();
 
-    m_start.set(WTF::move(container), offset, childNode.releaseReturnValue());
-    if (!is_lteq(treeOrder(makeBoundaryPoint(m_start), makeBoundaryPoint(m_end))))
-        m_end = m_start;
+    assertIsOwnerThread();
+    bool shouldAlsoSetEnd = !is_lteq(treeOrder(BoundaryPoint(container.copyRef(), offset), makeBoundaryPoint(m_end)));
+    releaseOwnerThreadAssertion();
+    {
+        Locker locker { m_boundaryPointLock };
+        m_start.set(WTF::move(container), offset, childNode.releaseReturnValue());
+        if (shouldAlsoSetEnd)
+            m_end = m_start;
+    }
+
     updateAssociatedSelection();
     updateDocument();
     updateAssociatedHighlight();
@@ -143,9 +150,16 @@ ExceptionOr<void> Range::setEnd(Ref<Node>&& container, unsigned offset)
     if (childNode.hasException())
         return childNode.releaseException();
 
-    m_end.set(WTF::move(container), offset, childNode.releaseReturnValue());
-    if (!is_lteq(treeOrder(makeBoundaryPoint(m_start), makeBoundaryPoint(m_end))))
-        m_start = m_end;
+    assertIsOwnerThread();
+    bool shouldAlsoSetStart = !is_lteq(treeOrder(makeBoundaryPoint(m_start), BoundaryPoint(container.copyRef(), offset)));
+    releaseOwnerThreadAssertion();
+    {
+        Locker locker { m_boundaryPointLock };
+        m_end.set(WTF::move(container), offset, childNode.releaseReturnValue());
+        if (shouldAlsoSetStart)
+            m_start = m_end;
+    }
+
     updateAssociatedSelection();
     updateDocument();
     updateAssociatedHighlight();
@@ -154,10 +168,13 @@ ExceptionOr<void> Range::setEnd(Ref<Node>&& container, unsigned offset)
 
 void Range::collapse(bool toStart)
 {
-    if (toStart)
-        m_end = m_start;
-    else
-        m_start = m_end;
+    {
+        Locker locker { m_boundaryPointLock };
+        if (toStart)
+            m_end = m_start;
+        else
+            m_start = m_end;
+    }
     updateAssociatedSelection();
 }
 
@@ -213,6 +230,7 @@ ExceptionOr<Range::CompareResults> Range::compareNode(Node& node) const
         return Exception { ExceptionCode::NotFoundError };
     }
 
+    assertIsOwnerThread();
     auto startOrdering = treeOrder(nodeRange->start, makeBoundaryPoint(m_start));
     auto endOrdering = treeOrder(nodeRange->end, makeBoundaryPoint(m_end));
     if (is_gteq(startOrdering) && is_lteq(endOrdering))
@@ -228,6 +246,8 @@ ExceptionOr<Range::CompareResults> Range::compareNode(Node& node) const
 
 ExceptionOr<short> Range::compareBoundaryPoints(unsigned short how, const Range& sourceRange) const
 {
+    assertIsOwnerThread();
+    sourceRange.assertIsOwnerThread();
     const RangeBoundaryPoint* thisPoint;
     const RangeBoundaryPoint* otherPoint;
     switch (how) {
@@ -273,7 +293,7 @@ bool Range::intersectsNode(Node& node) const
     return intersects(makeSimpleRange(*this), node);
 }
 
-static inline Node* NODELETE highestAncestorUnderCommonRoot(Node* node, Node* commonRoot)
+static inline Node* LEGACY_NODELETE highestAncestorUnderCommonRoot(Node* node, Node* commonRoot)
 {
     if (node == commonRoot)
         return 0;
@@ -286,7 +306,7 @@ static inline Node* NODELETE highestAncestorUnderCommonRoot(Node* node, Node* co
     return node;
 }
 
-static inline Node* NODELETE childOfCommonRootBeforeOffset(Node* container, unsigned offset, Node* commonRoot)
+static inline Node* LEGACY_NODELETE childOfCommonRootBeforeOffset(Node* container, unsigned offset, Node* commonRoot)
 {
     ASSERT(container);
     ASSERT(commonRoot);
@@ -308,6 +328,7 @@ static inline Node* NODELETE childOfCommonRootBeforeOffset(Node* container, unsi
 
 ExceptionOr<RefPtr<DocumentFragment>> Range::processContents(ActionType action)
 {
+    assertIsOwnerThread();
     RefPtr<DocumentFragment> fragment;
     if (action == Extract || action == Clone)
         fragment = DocumentFragment::create(protect(m_ownerDocument));
@@ -334,7 +355,7 @@ ExceptionOr<RefPtr<DocumentFragment>> Range::processContents(ActionType action)
 
     Vector<Ref<Element>> elementsToUpgrade;
     {
-        CustomElementReactionStack customElementsReactionHoldingTank(commonRoot->document().globalObject());
+        CustomElementReactionStack customElementsReactionHoldingTank(protect(commonRoot->document())->globalObject());
 
         // Since mutation events can modify the range during the process, the boundary points need to be saved.
         RangeBoundaryPoint originalStart(m_start);
@@ -374,7 +395,7 @@ ExceptionOr<RefPtr<DocumentFragment>> Range::processContents(ActionType action)
         }
 
         RefPtr<Node> rightContents;
-        if (&endContainer() != commonRoot && commonRoot->contains(originalEnd.container())) {
+        if (&originalEnd.container() != commonRoot && commonRoot->contains(originalEnd.container())) {
             auto firstResult = processContentsBetweenOffsets(action, nullptr, protect(originalEnd.container()).ptr(), 0, originalEnd.offset());
             auto secondResult = processAncestorsAndTheirSiblings(action, protect(originalEnd.container()).ptr(), ProcessContentsBackward, WTF::move(firstResult), commonRoot.get());
             // FIXME: A bit peculiar that we silently ignore the exception here, but we do have at least some regression tests that rely on this behavior.
@@ -470,11 +491,11 @@ static ExceptionOr<RefPtr<Node>> processContentsBetweenOffsets(Range::ActionType
     case NodeType::Text:
     case NodeType::CDATASection:
     case NodeType::Comment: {
-        auto& dataNode = uncheckedDowncast<CharacterData>(*container);
-        endOffset = std::min(endOffset, dataNode.length());
+        Ref dataNode = uncheckedDowncast<CharacterData>(*container);
+        endOffset = std::min(endOffset, dataNode->length());
         startOffset = std::min(startOffset, endOffset);
         if (action == Range::Extract || action == Range::Clone) {
-            Ref characters = uncheckedDowncast<CharacterData>(dataNode.cloneNode(true));
+            Ref characters = uncheckedDowncast<CharacterData>(dataNode->cloneNode(CloneSubtree::Yes));
             auto deleteResult = deleteCharacterData(characters, startOffset, endOffset);
             if (deleteResult.hasException())
                 return deleteResult.releaseException();
@@ -487,18 +508,18 @@ static ExceptionOr<RefPtr<Node>> processContentsBetweenOffsets(Range::ActionType
                 result = WTF::move(characters);
         }
         if (action == Range::Extract || action == Range::Delete) {
-            auto deleteResult = dataNode.deleteData(startOffset, endOffset - startOffset);
+            auto deleteResult = dataNode->deleteData(startOffset, endOffset - startOffset);
             if (deleteResult.hasException())
                 return deleteResult.releaseException();
         }
         break;
     }
     case NodeType::ProcessingInstruction: {
-        auto& instruction = uncheckedDowncast<ProcessingInstruction>(*container);
-        endOffset = std::min(endOffset, instruction.data().length());
+        Ref instruction = uncheckedDowncast<ProcessingInstruction>(*container);
+        endOffset = std::min(endOffset, instruction->data().length());
         startOffset = std::min(startOffset, endOffset);
         if (action == Range::Extract || action == Range::Clone) {
-            Ref processingInstruction = uncheckedDowncast<ProcessingInstruction>(instruction.cloneNode(true));
+            Ref processingInstruction = uncheckedDowncast<ProcessingInstruction>(instruction->cloneNode(CloneSubtree::Yes));
             processingInstruction->setData(processingInstruction->data().substring(startOffset, endOffset - startOffset));
             if (fragment) {
                 result = fragment;
@@ -509,8 +530,8 @@ static ExceptionOr<RefPtr<Node>> processContentsBetweenOffsets(Range::ActionType
                 result = WTF::move(processingInstruction);
         }
         if (action == Range::Extract || action == Range::Delete) {
-            auto data = makeStringByRemoving(instruction.data(), startOffset, endOffset - startOffset);
-            instruction.setData(WTF::move(data));
+            auto data = makeStringByRemoving(instruction->data(), startOffset, endOffset - startOffset);
+            instruction->setData(WTF::move(data));
         }
         break;
     }
@@ -524,7 +545,7 @@ static ExceptionOr<RefPtr<Node>> processContentsBetweenOffsets(Range::ActionType
             if (fragment)
                 result = fragment;
             else
-                result = container->cloneNode(false);
+                result = container->cloneNode(CloneSubtree::No);
         }
         Vector<Ref<Node>> nodes;
         {
@@ -563,7 +584,7 @@ static ExceptionOr<void> processNodes(Range::ActionType action, Vector<Ref<Node>
             break;
         }
         case Range::Clone: {
-            auto result = newContainer->appendChild(node->cloneNode(true));
+            auto result = newContainer->appendChild(node->cloneNode(CloneSubtree::Yes));
             if (result.hasException())
                 return result.releaseException();
             break;
@@ -591,7 +612,7 @@ ExceptionOr<RefPtr<Node>> processAncestorsAndTheirSiblings(Range::ActionType act
                 if (!shadowRoot->isClonable())
                     continue;
             }
-            Ref clonedAncestor = ancestor->cloneNode(false); // Might have been removed already during mutation event.
+            Ref clonedAncestor = ancestor->cloneNode(CloneSubtree::No); // Might have been removed already during mutation event.
             if (clonedContainer) {
                 auto result = clonedAncestor->appendChild(*clonedContainer);
                 if (result.hasException())
@@ -631,11 +652,11 @@ ExceptionOr<RefPtr<Node>> processAncestorsAndTheirSiblings(Range::ActionType act
                 break;
             case Range::Clone:
                 if (direction == ProcessContentsForward) {
-                    auto result = clonedContainer->appendChild(child->cloneNode(true));
+                    auto result = clonedContainer->appendChild(child->cloneNode(CloneSubtree::Yes));
                     if (result.hasException())
                         return result.releaseException();
                 } else {
-                    auto result = clonedContainer->insertBefore(child->cloneNode(true), protect(clonedContainer->firstChild()));
+                    auto result = clonedContainer->insertBefore(child->cloneNode(CloneSubtree::Yes), protect(clonedContainer->firstChild()));
                     if (result.hasException())
                         return result.releaseException();
                 }
@@ -733,7 +754,7 @@ String Range::toString() const
 ExceptionOr<Ref<DocumentFragment>> Range::createContextualFragment(Variant<Ref<TrustedHTML>, String>&& markup)
 {
     Ref node = startContainer();
-    auto stringValueHolder = trustedTypeCompliantString(node->document().contextDocument(), WTF::move(markup), "Range createContextualFragment"_s);
+    auto stringValueHolder = trustedTypeCompliantString(protect(node->document().contextDocument()), WTF::move(markup), "Range createContextualFragment"_s);
 
     if (stringValueHolder.hasException())
         return stringValueHolder.releaseException();
@@ -741,7 +762,7 @@ ExceptionOr<Ref<DocumentFragment>> Range::createContextualFragment(Variant<Ref<T
     RefPtr<Element> element;
     if (isAnyOf<Document, DocumentFragment>(node))
         element = nullptr;
-    else if (auto* maybeElement = dynamicDowncast<Element>(node.ptr()))
+    else if (RefPtr maybeElement = dynamicDowncast<Element>(node.ptr()))
         element = maybeElement;
     else
         element = node->parentElement();
@@ -779,6 +800,7 @@ ExceptionOr<RefPtr<Node>> Range::checkNodeOffsetPair(Node& node, unsigned offset
 
 Ref<Range> Range::cloneRange() const
 {
+    assertIsOwnerThread();
     auto result = create(m_ownerDocument);
     result->setStart(protect(startContainer()), m_start.offset());
     result->setEnd(protect(endContainer()), m_end.offset());
@@ -825,8 +847,11 @@ ExceptionOr<void> Range::selectNodeContents(Node& node)
 {
     if (node.isDocumentTypeNode())
         return Exception { ExceptionCode::InvalidNodeTypeError };
-    m_start.setToBeforeContents(node);
-    m_end.setToAfterContents(node);
+    {
+        Locker locker { m_boundaryPointLock };
+        m_start.setToBeforeContents(node);
+        m_end.setToAfterContents(node);
+    }
     updateAssociatedSelection();
     updateDocument();
     return { };
@@ -896,11 +921,12 @@ ExceptionOr<void> Range::setStartBefore(Node& node)
 #if ENABLE(TREE_DEBUGGING)
 String Range::debugDescription() const
 {
+    assertIsOwnerThread();
     return makeString("from offset "_s, m_start.offset(), " of "_s, startContainer().debugDescription(), " to offset "_s, m_end.offset(), " of "_s, endContainer().debugDescription());
 }
 #endif
 
-static inline void NODELETE boundaryNodeChildrenChanged(RangeBoundaryPoint& boundary, ContainerNode& container)
+static inline void LEGACY_NODELETE boundaryNodeChildrenChanged(Locker<Lock>&, RangeBoundaryPoint& boundary, ContainerNode& container)
 {
     if (boundary.childBefore() && &boundary.container() == &container)
         boundary.invalidateOffset();
@@ -909,12 +935,13 @@ static inline void NODELETE boundaryNodeChildrenChanged(RangeBoundaryPoint& boun
 void Range::nodeChildrenChanged(ContainerNode& container)
 {
     ASSERT(&container.document() == m_ownerDocument.ptr());
-    boundaryNodeChildrenChanged(m_start, container);
-    boundaryNodeChildrenChanged(m_end, container);
+    Locker locker { m_boundaryPointLock };
+    boundaryNodeChildrenChanged(locker, m_start, container);
+    boundaryNodeChildrenChanged(locker, m_end, container);
     m_didChangeForHighlight = true;
 }
 
-static inline void boundaryNodeChildrenWillBeRemoved(RangeBoundaryPoint& boundary, ContainerNode& containerOfNodesToBeRemoved)
+static inline void boundaryNodeChildrenWillBeRemoved(Locker<Lock>&, RangeBoundaryPoint& boundary, ContainerNode& containerOfNodesToBeRemoved)
 {
     if (containerOfNodesToBeRemoved.contains(&boundary.container()))
         boundary.setToBeforeContents(containerOfNodesToBeRemoved);
@@ -923,12 +950,13 @@ static inline void boundaryNodeChildrenWillBeRemoved(RangeBoundaryPoint& boundar
 void Range::nodeChildrenWillBeRemoved(ContainerNode& container)
 {
     ASSERT(&container.document() == m_ownerDocument.ptr());
-    boundaryNodeChildrenWillBeRemoved(m_start, container);
-    boundaryNodeChildrenWillBeRemoved(m_end, container);
+    Locker locker { m_boundaryPointLock };
+    boundaryNodeChildrenWillBeRemoved(locker, m_start, container);
+    boundaryNodeChildrenWillBeRemoved(locker, m_end, container);
     m_didChangeForHighlight = true;
 }
 
-static inline void boundaryNodeWillBeRemoved(RangeBoundaryPoint& boundary, Node& nodeToBeRemoved)
+static inline void boundaryNodeWillBeRemoved(Locker<Lock>&, RangeBoundaryPoint& boundary, Node& nodeToBeRemoved)
 {
     if (boundary.childBefore() == &nodeToBeRemoved)
         boundary.childBeforeWillBeRemoved();
@@ -941,13 +969,16 @@ void Range::nodeWillBeRemoved(Node& node)
     ASSERT(&node.document() == m_ownerDocument.ptr());
     ASSERT(&node != m_ownerDocument.ptr());
     ASSERT(node.parentNode());
-    boundaryNodeWillBeRemoved(m_start, node);
-    boundaryNodeWillBeRemoved(m_end, node);
+
+    Locker locker { m_boundaryPointLock };
+    boundaryNodeWillBeRemoved(locker, m_start, node);
+    boundaryNodeWillBeRemoved(locker, m_end, node);
     m_didChangeForHighlight = true;
 }
 
 bool Range::parentlessNodeMovedToNewDocumentAffectsRange(Node& node)
 {
+    assertIsOwnerThread();
     return node.isShadowIncludingInclusiveAncestorOf(&m_start.container());
 }
 
@@ -958,7 +989,7 @@ void Range::updateRangeForParentlessNodeMovedToNewDocument(Node& node)
     protect(m_ownerDocument)->attachRange(*this);
 }
 
-static inline void NODELETE boundaryTextInserted(RangeBoundaryPoint& boundary, Node& text, unsigned offset, unsigned length)
+static inline void LEGACY_NODELETE boundaryTextInserted(Locker<Lock>&, RangeBoundaryPoint& boundary, Node& text, unsigned offset, unsigned length)
 {
     if (&boundary.container() != &text)
         return;
@@ -971,12 +1002,13 @@ static inline void NODELETE boundaryTextInserted(RangeBoundaryPoint& boundary, N
 void Range::textInserted(Node& text, unsigned offset, unsigned length)
 {
     ASSERT(&text.document() == m_ownerDocument.ptr());
-    boundaryTextInserted(m_start, text, offset, length);
-    boundaryTextInserted(m_end, text, offset, length);
+    Locker locker { m_boundaryPointLock };
+    boundaryTextInserted(locker, m_start, text, offset, length);
+    boundaryTextInserted(locker, m_end, text, offset, length);
     m_didChangeForHighlight = true;
 }
 
-static inline void NODELETE boundaryTextRemoved(RangeBoundaryPoint& boundary, Node& text, unsigned offset, unsigned length)
+static inline void LEGACY_NODELETE boundaryTextRemoved(Locker<Lock>&, RangeBoundaryPoint& boundary, Node& text, unsigned offset, unsigned length)
 {
     if (&boundary.container() != &text)
         return;
@@ -992,12 +1024,13 @@ static inline void NODELETE boundaryTextRemoved(RangeBoundaryPoint& boundary, No
 void Range::textRemoved(Node& text, unsigned offset, unsigned length)
 {
     ASSERT(&text.document() == m_ownerDocument.ptr());
-    boundaryTextRemoved(m_start, text, offset, length);
-    boundaryTextRemoved(m_end, text, offset, length);
+    Locker locker { m_boundaryPointLock };
+    boundaryTextRemoved(locker, m_start, text, offset, length);
+    boundaryTextRemoved(locker, m_end, text, offset, length);
     m_didChangeForHighlight = true;
 }
 
-static inline void boundaryTextNodesMerged(RangeBoundaryPoint& boundary, NodeWithIndex& oldNode, unsigned offset)
+static inline void boundaryTextNodesMerged(Locker<Lock>&, RangeBoundaryPoint& boundary, NodeWithIndex& oldNode, unsigned offset)
 {
     if (&boundary.container() == oldNode.node())
         boundary.set(protect(oldNode.node()->previousSibling()).releaseNonNull(), boundary.offset() + offset, nullptr);
@@ -1013,12 +1046,13 @@ void Range::textNodesMerged(NodeWithIndex& oldNode, unsigned offset)
     ASSERT(oldNode.node()->isTextNode());
     ASSERT(oldNode.node()->previousSibling());
     ASSERT(oldNode.node()->previousSibling()->isTextNode());
-    boundaryTextNodesMerged(m_start, oldNode, offset);
-    boundaryTextNodesMerged(m_end, oldNode, offset);
+    Locker locker { m_boundaryPointLock };
+    boundaryTextNodesMerged(locker, m_start, oldNode, offset);
+    boundaryTextNodesMerged(locker, m_end, oldNode, offset);
     m_didChangeForHighlight = true;
 }
 
-static inline void boundaryTextNodesSplit(RangeBoundaryPoint& boundary, Text& oldNode)
+static inline void boundaryTextNodesSplit(Locker<Lock>&, RangeBoundaryPoint& boundary, Text& oldNode)
 {
     RefPtr parent = oldNode.parentNode();
     if (&boundary.container() == &oldNode) {
@@ -1046,8 +1080,9 @@ void Range::textNodeSplit(Text& oldNode)
     ASSERT(&oldNode.document() == m_ownerDocument.ptr());
     ASSERT(!oldNode.parentNode() || oldNode.nextSibling());
     ASSERT(!oldNode.parentNode() || oldNode.nextSibling()->isTextNode());
-    boundaryTextNodesSplit(m_start, oldNode);
-    boundaryTextNodesSplit(m_end, oldNode);
+    Locker locker { m_boundaryPointLock };
+    boundaryTextNodesSplit(locker, m_start, oldNode);
+    boundaryTextNodesSplit(locker, m_end, oldNode);
     m_didChangeForHighlight = true;
 }
 
@@ -1082,10 +1117,25 @@ ExceptionOr<void> Range::expand(const String& unit)
     return setEnd(endContainer.releaseNonNull(), end.deepEquivalent().computeOffsetInContainerNode());
 }
 
+static void updateLayoutForRangeBoundingRect(const SimpleRange& simpleRange)
+{
+    OptionSet<LayoutOptions> layoutOptions;
+    RefPtr<const Element> context;
+    if (RefPtr commonAncestor = commonInclusiveAncestor<ComposedTree>(simpleRange)) {
+        context = dynamicDowncast<Element>(commonAncestor.get());
+        if (!context)
+            context = commonAncestor->parentElementInComposedTree();
+        if (context)
+            layoutOptions = { LayoutOptions::TreatContentVisibilityHiddenAsVisible, LayoutOptions::TreatContentVisibilityAutoAsVisible };
+    }
+    protect(simpleRange.start.document())->updateLayoutIgnorePendingStylesheets(layoutOptions, context.get());
+}
+
 Ref<DOMRectList> Range::getClientRects() const
 {
-    protect(startContainer().document())->updateLayout();
-    return DOMRectList::create(RenderObject::clientBorderAndTextRects(makeSimpleRange(*this)));
+    auto simpleRange = makeSimpleRange(*this);
+    updateLayoutForRangeBoundingRect(simpleRange);
+    return DOMRectList::create(RenderObject::clientBorderAndTextRects(simpleRange));
 }
 
 Ref<DOMRect> Range::getBoundingClientRect() const
@@ -1095,7 +1145,7 @@ Ref<DOMRect> Range::getBoundingClientRect() const
 
 Ref<DOMRect> Range::boundingClientRect(const SimpleRange& simpleRange)
 {
-    protect(simpleRange.startContainer().document())->updateLayout();
+    updateLayoutForRangeBoundingRect(simpleRange);
     return DOMRect::create(unionRectIgnoringZeroRects(RenderObject::clientBorderAndTextRects(simpleRange)));
 }
 
@@ -1144,7 +1194,7 @@ std::optional<SimpleRange> makeSimpleRange(const RefPtr<Range>& range)
 
 Ref<Range> createLiveRange(const SimpleRange& range)
 {
-    Ref result = Range::create(range.start.document());
+    Ref result = Range::create(protect(range.start.document()));
     setBothEndpoints(result, range);
     return result;
 }
@@ -1158,8 +1208,10 @@ RefPtr<Range> createLiveRange(const std::optional<SimpleRange>& range)
 
 void Range::visitNodesInGCThread(JSC::AbstractSlotVisitor& visitor) const
 {
-    addWebCoreOpaqueRoot(visitor, m_start.container());
-    addWebCoreOpaqueRoot(visitor, m_end.container());
+    Locker locker { m_boundaryPointLock };
+    // Cannot ref on the GC thread.
+    SUPPRESS_UNCOUNTED_ARG addWebCoreOpaqueRoot(visitor, m_start.container());
+    SUPPRESS_UNCOUNTED_ARG addWebCoreOpaqueRoot(visitor, m_end.container());
 }
 
 } // namespace WebCore

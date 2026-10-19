@@ -53,7 +53,6 @@ namespace JSC {
     macro(callFunction) \
     macro(charCodeAt) \
     macro(executor) \
-    macro(isView) \
     macro(iteratedObject) \
     macro(iteratedString) \
     macro(promise) \
@@ -61,7 +60,6 @@ namespace JSC {
     macro(Number) \
     macro(Array) \
     macro(ArrayBuffer) \
-    macro(ShadowRealm) \
     macro(RegExp) \
     macro(Iterator) \
     macro(min) \
@@ -78,17 +76,19 @@ namespace JSC {
     macro(resolvePromise) \
     macro(rejectPromise) \
     macro(fulfillPromise) \
+    macro(markPromiseAsHandled) \
+    macro(isPromiseStatePending) \
     macro(resolvePromiseWithFirstResolvingFunctionCallCheck) \
     macro(rejectPromiseWithFirstResolvingFunctionCallCheck) \
     macro(fulfillPromiseWithFirstResolvingFunctionCallCheck) \
     macro(newResolvedPromise) \
     macro(newRejectedPromise) \
     macro(resolveWithInternalMicrotaskForAsyncAwait) \
-    macro(asyncGeneratorQueueEnqueue) \
-    macro(asyncGeneratorQueueDequeueResolve) \
-    macro(asyncGeneratorQueueDequeueReject) \
-    macro(driveAsyncFunction) \
+    macro(asyncGeneratorPrototypeNext) \
+    macro(asyncIteratorPrototypeSymbolAsyncIterator) \
+    macro(asyncFunctionDrive) \
     macro(newHandledRejectedPromise) \
+    macro(promiseReturnUndefinedOnFulfilled) \
     macro(promiseResolve) \
     macro(promiseReject) \
     macro(performPromiseThen) \
@@ -129,16 +129,14 @@ namespace JSC {
     macro(this) \
     macro(toIntegerOrInfinity) \
     macro(toLength) \
-    macro(importInRealm) \
     macro(evalFunction) \
-    macro(evalInRealm) \
-    macro(moveFunctionToRealm) \
     macro(newTargetLocal) \
     macro(derivedConstructor) \
     macro(isTypedArrayView) \
     macro(isSharedTypedArrayView) \
     macro(isResizableOrGrowableSharedTypedArrayView) \
     macro(isDetached) \
+    macro(isTypedArrayOutOfBounds) \
     macro(typedArrayFromFast) \
     macro(instanceOf) \
     macro(isArray) \
@@ -153,19 +151,13 @@ namespace JSC {
     macro(mapIterationEntry) \
     macro(mapIterationEntryKey) \
     macro(mapIterationEntryValue) \
-    macro(mapIteratorNext) \
-    macro(mapIteratorKey) \
-    macro(mapIteratorValue) \
     macro(setStorage) \
     macro(setIterationNext) \
     macro(setIterationEntry) \
     macro(setIterationEntryKey) \
-    macro(setIteratorNext) \
-    macro(setIteratorKey) \
     macro(setPrototypeDirect) \
     macro(setPrototypeDirectOrThrow) \
     macro(regExpBuiltinExec) \
-    macro(regExpMatchFast) \
     macro(regExpProtoFlagsGetter) \
     macro(regExpProtoHasIndicesGetter) \
     macro(regExpProtoGlobalGetter) \
@@ -177,12 +169,11 @@ namespace JSC {
     macro(regExpProtoUnicodeGetter) \
     macro(regExpProtoUnicodeSetsGetter) \
     macro(regExpPrototypeSymbolMatch) \
+    macro(regExpPrototypeSymbolMatchAll) \
     macro(regExpPrototypeSymbolReplace) \
     macro(regExpSearchFast) \
-    macro(regExpSplitFast) \
     macro(stringIncludesInternal) \
     macro(stringIndexOfInternal) \
-    macro(stringSplitFast) \
     macro(stringSubstring) \
     macro(handleNegativeProxyHasTrapResult) \
     macro(handlePositiveProxySetTrapResult) \
@@ -196,18 +187,15 @@ namespace JSC {
     macro(copyDataProperties) \
     macro(cloneObject) \
     macro(meta) \
-    macro(webAssemblyCompileStreamingInternal) \
-    macro(webAssemblyInstantiateStreamingInternal) \
     macro(instanceFieldInitializer) \
     macro(privateBrand) \
     macro(privateClassBrand) \
     macro(hasOwnPropertyFunction) \
+    macro(reflectConstructFunction) \
     macro(createPrivateSymbol) \
     macro(entries) \
     macro(emptyPropertyNameEnumerator) \
     macro(sentinelString) \
-    macro(createRemoteFunction) \
-    macro(isRemoteFunction) \
     macro(arrayFromFastWithoutMapFn) \
     macro(jsonParse) \
     macro(jsonStringify) \
@@ -224,7 +212,7 @@ namespace JSC {
     macro(asyncFromSyncIteratorCreate) \
     macro(regExpStringIteratorCreate) \
     macro(iteratorHelperCreate) \
-    macro(syncIterator) \
+    macro(ownKeys) \
     macro(includes) \
     macro(ReferenceError) \
     macro(SuppressedError) \
@@ -245,6 +233,7 @@ JSC_COMMON_PRIVATE_IDENTIFIERS_EACH_PROPERTY_NAME(DECLARE_BUILTIN_PRIVATE_NAMES)
 
 extern JS_EXPORT_PRIVATE SymbolImpl::StaticSymbolImpl dollarVMPrivateName;
 extern JS_EXPORT_PRIVATE SymbolImpl::StaticSymbolImpl polyProtoPrivateName;
+extern JS_EXPORT_PRIVATE SymbolImpl::StaticSymbolImpl stackPrivateName;
 }
 
 class BuiltinNames {
@@ -276,7 +265,7 @@ public:
     const JSC::Identifier& dollarVMPublicName() const { return m_dollarVMName; }
     const JSC::Identifier& dollarVMPrivateName() const { return m_dollarVMPrivateName; }
     const JSC::Identifier& polyProtoName() const { return m_polyProtoPrivateName; }
-    const JSC::Identifier& intlLegacyConstructedSymbol() const { return m_intlLegacyConstructedSymbol; }
+    const JSC::Identifier& stackPrivateName() const { return m_stackPrivateName; }
 
 private:
     void checkPublicToPrivateMapConsistency(UniquedStringImpl* privateName);
@@ -286,10 +275,10 @@ private:
     JSC_COMMON_PRIVATE_IDENTIFIERS_EACH_PROPERTY_NAME(DECLARE_BUILTIN_NAMES_IN_JSC)
     JSC_COMMON_PRIVATE_IDENTIFIERS_EACH_WELL_KNOWN_SYMBOL(DECLARE_BUILTIN_SYMBOLS_IN_JSC)
     JSC_COMMON_PRIVATE_IDENTIFIERS_EACH_EXPLICIT_RESOURCE_MANAGEMENT_WELL_KNOWN_SYMBOL(DECLARE_BUILTIN_SYMBOLS_IN_JSC)
-    const JSC::Identifier m_intlLegacyConstructedSymbol;
     const JSC::Identifier m_dollarVMName;
     const JSC::Identifier m_dollarVMPrivateName;
     const JSC::Identifier m_polyProtoPrivateName;
+    const JSC::Identifier m_stackPrivateName;
     PrivateNameSet m_privateNameSet;
     WellKnownSymbolMap m_wellKnownSymbolsMap;
 };

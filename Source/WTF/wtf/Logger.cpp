@@ -53,6 +53,14 @@ Vector<std::reference_wrapper<Logger::Observer>>& Logger::observers()
     return observers;
 }
 
+void Logger::Observer::assertIsNotRegistered() const
+{
+    Locker locker { observerLock() };
+    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!observers().containsIf([this](auto& observer) {
+        return &observer.get() == this;
+    }));
+}
+
 Vector<std::reference_wrapper<Logger::MessageHandlerObserver>>& Logger::messageHandlerObservers()
 {
     static NeverDestroyed<Vector<std::reference_wrapper<MessageHandlerObserver>>> observers;
@@ -70,5 +78,12 @@ const Logger& emptyLogger()
     }();
     return emptyLogger->get();
 }
+
+#if USE(OS_LOG)
+void Logger::osLog(WTFLogChannel& channel, const UTF8CString& message)
+{
+    SUPPRESS_UNRETAINED_LOCAL SAFE_OS_LOG(channel.osLogChannel, "%{public}s", message);
+}
+#endif // USE(OS_LOG)
 
 } // namespace WTF

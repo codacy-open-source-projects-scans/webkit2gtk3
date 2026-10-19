@@ -154,7 +154,7 @@ void RenderSelection::repaint() const
     CheckedPtr<RenderObject> end;
     if (CheckedPtr rangeEnd = m_renderRange.end())
         end = rendererAfterOffset(*rangeEnd, m_renderRange.endOffset());
-    RenderRangeIterator highlightIterator(m_renderRange.start());
+    RenderRangeIterator highlightIterator(protect(m_renderRange.start()));
     for (CheckedPtr renderer = highlightIterator.current(); renderer && renderer != end; renderer = highlightIterator.next()) {
         if (!isValidRendererForSelection(*renderer, m_renderRange))
             continue;
@@ -201,8 +201,8 @@ IntRect RenderSelection::collectBounds(ClipToVisibleContent clipToVisibleContent
 
     // Now create a single bounding box rect that encloses the whole selection.
     LayoutRect selectionRect;
-    for (auto slectionEntry : renderers) {
-        auto* selectionGeometry = slectionEntry.value.get();
+    for (auto selectionEntry : renderers) {
+        auto* selectionGeometry = selectionEntry.value.get();
         // RenderSelectionGeometry::rect() is in the coordinates of the repaintContainer, so map to page coordinates.
         LayoutRect currentRect = selectionGeometry->rect();
         if (currentRect.isEmpty())

@@ -32,7 +32,7 @@ bool RefCountDebuggerBase::areThreadingChecksEnabledGlobally { false };
 // This is a convenience that makes IPC serialization easier.
 static_assert(sizeof(RefCountedBase) == sizeof(ThreadSafeRefCountedBase));
 
-#if defined(NDEBUG) && !ASSERT_ENABLED && !ENABLE(SECURITY_ASSERTIONS) && COMPILER(CLANG) && !OS(WINDOWS)
+#if defined(NDEBUG) && !ASSERT_ENABLED && !ENABLE(SECURITY_ASSERTIONS) && COMPILER(CLANG)
 static_assert(sizeof(RefCountedBase) == sizeof(unsigned), "RefCountedBase should stay small");
 #endif
 
@@ -46,7 +46,7 @@ public:
     {
     }
 
-    const void* NODELETE ptr() { return m_ptr; }
+    const void* LEGACY_NODELETE ptr() { return m_ptr; }
 
     void print()
     {
@@ -76,7 +76,7 @@ public:
     }
 
     template<typename Callback>
-    static void forEachLIFO(const Callback& callback)
+    static void forEachLIFO(NOESCAPE const Callback& callback)
     {
         size_t last = s_end.load(std::memory_order_acquire) - 1;
         for (size_t i = 0; i < s_size; ++i) {

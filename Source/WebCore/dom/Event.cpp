@@ -28,7 +28,6 @@
 #include "EventNames.h"
 #include "EventPath.h"
 #include "EventTarget.h"
-#include "EventTargetInlines.h"
 #include "InspectorInstrumentation.h"
 #include "JSDOMGlobalObject.h"
 #include "JSNodeCustomInlines.h"
@@ -125,7 +124,10 @@ void Event::initEvent(const AtomString& eventTypeArg, bool canBubbleArg, bool ca
     m_immediatePropagationStopped = false;
     m_wasCanceled = false;
     m_isTrusted = false;
-    m_target = nullptr;
+    {
+        Locker targetLocker { m_targetLock };
+        m_target = nullptr;
+    }
     m_type = eventTypeArg;
     m_canBubble = canBubbleArg;
     m_cancelable = cancelableArg;
@@ -166,7 +168,7 @@ Vector<Ref<EventTarget>> Event::composedPath(JSC::JSGlobalObject& lexicalGlobalO
 {
     if (!m_eventPath)
         return Vector<Ref<EventTarget>>();
-    if (uncheckedDowncast<JSDOMGlobalObject>(&lexicalGlobalObject)->world().shadowRootIsAlwaysOpen())
+    if (downcast<JSDOMGlobalObject>(&lexicalGlobalObject)->world().shadowRootIsAlwaysOpen())
         return m_eventPath->computePathTreatingAllShadowRootsAsOpen();
     return m_eventPath->computePathUnclosedToTarget(*protect(currentTarget()));
 }

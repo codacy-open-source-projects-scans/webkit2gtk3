@@ -25,7 +25,7 @@
 
 #pragma once
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(__swift__)
 
 #import "Helpers/PlatformUtilities.h"
 #import "Helpers/Test.h"
@@ -66,9 +66,11 @@ bool operator==(const CGSize&, const CGSize&);
 std::ostream& operator<<(std::ostream&, const CGRect&);
 bool operator==(const CGRect&, const CGRect&);
 
+constexpr CGFloat blackColorComponents[4] = { 0, 0, 0, 1 };
 constexpr CGFloat redColorComponents[4] = { 1, 0, 0, 1 };
 constexpr CGFloat blueColorComponents[4] = { 0, 0, 1, 1 };
+constexpr CGFloat whiteColorComponents[4] = { 1, 1, 1, 1 };
 
 #endif
 
-#endif // __cplusplus
+#endif // defined(__cplusplus) && !defined(__swift__)

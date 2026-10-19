@@ -57,6 +57,8 @@ public:
 
     DECLARE_INFO;
 
+    DECLARE_VISIT_CHILDREN;
+
     void initializeDurationFormat(JSGlobalObject*, JSValue localesValue, JSValue optionsValue);
 
     JSValue format(JSGlobalObject*, ISO8601::Duration) const;
@@ -91,7 +93,9 @@ public:
     const UnitData* units() const { return m_units; }
     unsigned fractionalDigits() const { return m_fractionalDigits; }
     const String& numberingSystem() const LIFETIME_BOUND;
-    const CString& dataLocaleWithExtensions() const LIFETIME_BOUND { return m_dataLocaleWithExtensions; }
+    const ASCIICString& dataLocaleWithExtensions() const LIFETIME_BOUND { return m_dataLocaleWithExtensions; }
+
+    UNumberFormatter* createNumberFormatterIfNecessary(JSGlobalObject*, TemporalUnit, const String& skeleton) const;
 
 private:
     IntlDurationFormat(VM&, Structure*);
@@ -101,11 +105,18 @@ private:
     static ASCIILiteral unitStyleString(UnitStyle);
     static ASCIILiteral displayString(Display);
 
+    struct FormatterCache {
+        WTF_MAKE_TZONE_ALLOCATED(FormatterCache);
+    public:
+        std::array<std::unique_ptr<UNumberFormatter, UNumberFormatterDeleter>, numberOfTemporalUnits> m_formatters { };
+    };
+
     std::unique_ptr<UListFormatter, UListFormatterDeleter> m_listFormat;
+    mutable std::unique_ptr<FormatterCache> m_formatterCache;
     String m_locale;
     String m_dataLocale;
     mutable String m_numberingSystem;
-    CString m_dataLocaleWithExtensions;
+    ASCIICString m_dataLocaleWithExtensions;
     unsigned m_fractionalDigits { 0 };
     Style m_style { Style::Long };
     UnitData m_units[numberOfTemporalUnits] { };

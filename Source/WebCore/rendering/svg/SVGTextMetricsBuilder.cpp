@@ -27,7 +27,8 @@
 #include "RenderSVGInline.h"
 #include "RenderSVGInlineText.h"
 #include "RenderSVGText.h"
-#include "RenderStyle+GettersInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
+#include "TextUtil.h"
 #include "WidthIterator.h"
 #include <wtf/WeakPtr.h>
 
@@ -102,7 +103,7 @@ void SVGTextMetricsBuilder::advanceIterator(ComplexTextController& complexTextCo
     m_totalWidth = m_complexStartToCurrentMetrics.width();
 }
 
-static inline bool NODELETE shouldUseComplexTextController(FontCascade::CodePath codePathToUse, const FontCascade& scaledFont)
+static inline bool LEGACY_NODELETE shouldUseComplexTextController(FontCascade::CodePath codePathToUse, const FontCascade& scaledFont)
 {
 #if PLATFORM(GTK) || PLATFORM(WPE)
     if (codePathToUse != FontCascade::CodePath::Complex && scaledFont.shouldUseComplexTextControllerForSimpleText())
@@ -193,7 +194,7 @@ std::tuple<unsigned, char16_t> SVGTextMetricsBuilder::measureTextRenderer(Render
                 ASSERT(!U16_IS_LEAD(currentCharacter));
                 if (currentCharacter == space && !preserveWhiteSpace && (!lastCharacter || lastCharacter == space)) {
                     if (data.processRenderer)
-                        textMetricsValues.append(SVGTextMetrics(SVGTextMetrics::SkippedSpaceMetrics));
+                        textMetricsValues.append(SVGTextMetrics(SVGTextMetrics::MetricsType::SkippedSpaceMetrics));
                     ++skippedCharacters;
                     continue;
                 }
@@ -233,7 +234,7 @@ std::tuple<unsigned, char16_t> SVGTextMetricsBuilder::measureTextRendererWithIte
         char16_t currentCharacter = m_run[m_textPosition];
         if (currentCharacter == space && !preserveWhiteSpace && (!lastCharacter || lastCharacter == space)) {
             if (data.processRenderer)
-                textMetricsValues.append(SVGTextMetrics(SVGTextMetrics::SkippedSpaceMetrics));
+                textMetricsValues.append(SVGTextMetrics(SVGTextMetrics::MetricsType::SkippedSpaceMetrics));
             skippedCharacters += m_currentMetrics.length();
             continue;
         }
@@ -253,7 +254,12 @@ std::tuple<unsigned, char16_t> SVGTextMetricsBuilder::measureTextRendererWithIte
         lastCharacter = currentCharacter;
     }
 
-    return std::tuple { valueListPosition + m_textPosition - skippedCharacters, lastCharacter };
+    // m_textPosition counts UTF-16 code units, but the value list position advances once per
+    // character. Subtract the surrogate pairs seen in this renderer so the position handed to the
+    // next renderer stays character-based (otherwise a non-BMP character before a tspan boundary
+    // shifts the following value list lookups by one). See lookup above which applies the same
+    // correction within a single renderer.
+    return std::tuple { valueListPosition + m_textPosition - skippedCharacters - surrogatePairCharacters, lastCharacter };
 }
 
 void SVGTextMetricsBuilder::walkTree(RenderElement& start, RenderSVGInlineText* stopAtLeaf, MeasureTextData& data)

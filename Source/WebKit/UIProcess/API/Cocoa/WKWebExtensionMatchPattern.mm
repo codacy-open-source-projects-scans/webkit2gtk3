@@ -33,6 +33,7 @@
 #import "APIError.h"
 #import "WebExtensionMatchPattern.h"
 #import <wtf/URLParser.h>
+#import <wtf/cocoa/TypeCastsCocoa.h>
 
 #if ENABLE(WK_WEB_EXTENSIONS)
 static NSString * const stringCodingKey = @"string";
@@ -133,7 +134,7 @@ WK_OBJECT_DEALLOC_IMPL_ON_MAIN_THREAD(WKWebExtensionMatchPattern, WebExtensionMa
 {
     NSParameterAssert([coder isKindOfClass:NSCoder.class]);
 
-    return [self initWithString:[coder decodeObjectOfClass:[NSString class] forKey:stringCodingKey] error:nullptr];
+    return [self initWithString:checked_objc_cast<NSString>([coder decodeObjectOfClass:[NSString class] forKey:stringCodingKey]) error:nullptr];
 }
 
 - (void)encodeWithCoder:(NSCoder *)coder
@@ -222,7 +223,7 @@ WK_OBJECT_DEALLOC_IMPL_ON_MAIN_THREAD(WKWebExtensionMatchPattern, WebExtensionMa
     return [self matchesURL:urlToMatch options:0];
 }
 
-static OptionSet<WebKit::WebExtensionMatchPattern::Options> NODELETE toImpl(WKWebExtensionMatchPatternOptions options)
+static OptionSet<WebKit::WebExtensionMatchPattern::Options> LEGACY_NODELETE matchPatternOptionsToImpl(WKWebExtensionMatchPatternOptions options)
 {
     OptionSet<WebKit::WebExtensionMatchPattern::Options> result;
 
@@ -234,6 +235,9 @@ static OptionSet<WebKit::WebExtensionMatchPattern::Options> NODELETE toImpl(WKWe
 
     if (options & WKWebExtensionMatchPatternOptionsMatchBidirectionally)
         result.add(WebKit::WebExtensionMatchPattern::Options::MatchBidirectionally);
+
+    if (options & WKWebExtensionMatchPatternOptionsAllowFileScheme)
+        result.add(WebKit::WebExtensionMatchPattern::Options::AllowFileScheme);
 
     return result;
 }
@@ -247,7 +251,7 @@ static OptionSet<WebKit::WebExtensionMatchPattern::Options> NODELETE toImpl(WKWe
 
     NSParameterAssert([urlToMatch isKindOfClass:NSURL.class]);
 
-    return protect(*_webExtensionMatchPattern)->matchesURL(urlToMatch, toImpl(options));
+    return protect(*_webExtensionMatchPattern)->matchesURL(urlToMatch, matchPatternOptionsToImpl(options));
 }
 
 - (BOOL)matchesPattern:(WKWebExtensionMatchPattern *)patternToMatch
@@ -262,7 +266,7 @@ static OptionSet<WebKit::WebExtensionMatchPattern::Options> NODELETE toImpl(WKWe
 
     NSParameterAssert([patternToMatch isKindOfClass:WKWebExtensionMatchPattern.class]);
 
-    return protect(*_webExtensionMatchPattern)->matchesPattern(protect(*patternToMatch->_webExtensionMatchPattern), toImpl(options));
+    return protect(*_webExtensionMatchPattern)->matchesPattern(protect(*patternToMatch->_webExtensionMatchPattern), matchPatternOptionsToImpl(options));
 }
 
 #pragma mark WKObject protocol implementation

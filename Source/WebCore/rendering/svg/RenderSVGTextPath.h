@@ -33,14 +33,17 @@ class RenderSVGTextPath final : public RenderSVGInline {
     WTF_MAKE_TZONE_ALLOCATED(RenderSVGTextPath);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderSVGTextPath);
 public:
-    RenderSVGTextPath(SVGTextPathElement&, RenderStyle&&);
+    RenderSVGTextPath(SVGTextPathElement&, Style::ComputedStyle&&);
     virtual ~RenderSVGTextPath();
 
-    SVGTextPathElement& NODELETE textPathElement() const;
+    SVGTextPathElement& LEGACY_NODELETE textPathElement() const;
     RefPtr<SVGGeometryElement> targetElement() const;
 
+    bool usesPathAttribute() const;
     Path layoutPath() const;
-    const SVGLengthValue& NODELETE startOffset() const LIFETIME_BOUND;
+    const SVGLengthValue& LEGACY_NODELETE startOffset() const LIFETIME_BOUND;
+
+    bool isLayoutPathReversed() const;
 
 private:
     void graphicsElement() const = delete;

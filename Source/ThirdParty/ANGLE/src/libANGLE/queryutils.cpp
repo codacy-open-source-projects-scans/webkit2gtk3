@@ -341,9 +341,6 @@ void QueryTexParameterBase(const Context *context,
         case GL_TEXTURE_BORDER_COLOR:
             ConvertFromColor<isPureInteger>(texture->getBorderColor(), params);
             break;
-        case GL_TEXTURE_NATIVE_ID_ANGLE:
-            *params = CastFromSpecialValue<isGLfixed, ParamType>(pname, texture->getNativeID());
-            break;
         case GL_IMPLEMENTATION_COLOR_READ_FORMAT:
             *params = CastFromGLintStateValue<ParamType>(
                 pname, texture->getImplementationColorReadFormat(context));
@@ -1783,28 +1780,30 @@ void QueryInternalFormativ(const Context *context,
     }
 }
 
-void QueryFramebufferParameteriv(const Framebuffer *framebuffer, GLenum pname, GLint *params)
+void QueryFramebufferParameteriv(const Framebuffer *framebuffer,
+                                 FramebufferParameter pnamePacked,
+                                 GLint *params)
 {
-    ASSERT(framebuffer);
+    ASSERT(framebuffer != nullptr);
 
-    switch (pname)
+    switch (pnamePacked)
     {
-        case GL_FRAMEBUFFER_DEFAULT_WIDTH:
+        case FramebufferParameter::DefaultWidth:
             *params = framebuffer->getDefaultWidth();
             break;
-        case GL_FRAMEBUFFER_DEFAULT_HEIGHT:
+        case FramebufferParameter::DefaultHeight:
             *params = framebuffer->getDefaultHeight();
             break;
-        case GL_FRAMEBUFFER_DEFAULT_SAMPLES:
-            *params = framebuffer->getDefaultSamples();
-            break;
-        case GL_FRAMEBUFFER_DEFAULT_FIXED_SAMPLE_LOCATIONS:
-            *params = ConvertToGLBoolean(framebuffer->getDefaultFixedSampleLocations());
-            break;
-        case GL_FRAMEBUFFER_DEFAULT_LAYERS_EXT:
+        case FramebufferParameter::DefaultLayers:
             *params = framebuffer->getDefaultLayers();
             break;
-        case GL_FRAMEBUFFER_FLIP_Y_MESA:
+        case FramebufferParameter::DefaultSamples:
+            *params = framebuffer->getDefaultSamples();
+            break;
+        case FramebufferParameter::DefaultFixedSampleLocations:
+            *params = ConvertToGLBoolean(framebuffer->getDefaultFixedSampleLocations());
+            break;
+        case FramebufferParameter::FlipY:
             *params = ConvertToGLBoolean(framebuffer->getFlipY());
             break;
         default:
@@ -2046,29 +2045,29 @@ void SetSamplerParameterIuiv(Context *context,
 
 void SetFramebufferParameteri(const Context *context,
                               Framebuffer *framebuffer,
-                              GLenum pname,
+                              FramebufferParameter pnamePacked,
                               GLint param)
 {
-    ASSERT(framebuffer);
+    ASSERT(framebuffer != nullptr);
 
-    switch (pname)
+    switch (pnamePacked)
     {
-        case GL_FRAMEBUFFER_DEFAULT_WIDTH:
+        case FramebufferParameter::DefaultWidth:
             framebuffer->setDefaultWidth(context, param);
             break;
-        case GL_FRAMEBUFFER_DEFAULT_HEIGHT:
+        case FramebufferParameter::DefaultHeight:
             framebuffer->setDefaultHeight(context, param);
             break;
-        case GL_FRAMEBUFFER_DEFAULT_SAMPLES:
-            framebuffer->setDefaultSamples(context, param);
-            break;
-        case GL_FRAMEBUFFER_DEFAULT_FIXED_SAMPLE_LOCATIONS:
-            framebuffer->setDefaultFixedSampleLocations(context, ConvertToBool(param));
-            break;
-        case GL_FRAMEBUFFER_DEFAULT_LAYERS_EXT:
+        case FramebufferParameter::DefaultLayers:
             framebuffer->setDefaultLayers(param);
             break;
-        case GL_FRAMEBUFFER_FLIP_Y_MESA:
+        case FramebufferParameter::DefaultSamples:
+            framebuffer->setDefaultSamples(context, param);
+            break;
+        case FramebufferParameter::DefaultFixedSampleLocations:
+            framebuffer->setDefaultFixedSampleLocations(context, ConvertToBool(param));
+            break;
+        case FramebufferParameter::FlipY:
             framebuffer->setFlipY(ConvertToBool(param));
             break;
         default:
@@ -2893,6 +2892,7 @@ unsigned int GetTextureEnvParameterCount(TextureEnvParameter pname)
         case TextureEnvParameter::RgbScale:
         case TextureEnvParameter::AlphaScale:
         case TextureEnvParameter::PointCoordReplace:
+        case TextureEnvParameter::LodBias:
             return 1;
         case TextureEnvParameter::Color:
             return 4;
@@ -2913,6 +2913,7 @@ void ConvertTextureEnvFromInt(TextureEnvParameter pname, const GLint *input, GLf
     {
         case TextureEnvParameter::RgbScale:
         case TextureEnvParameter::AlphaScale:
+        case TextureEnvParameter::LodBias:
             output[0] = static_cast<GLfloat>(input[0]);
             break;
         case TextureEnvParameter::Color:
@@ -2939,6 +2940,7 @@ void ConvertTextureEnvFromFixed(TextureEnvParameter pname, const GLfixed *input,
     {
         case TextureEnvParameter::RgbScale:
         case TextureEnvParameter::AlphaScale:
+        case TextureEnvParameter::LodBias:
             output[0] = ConvertFixedToFloat(input[0]);
             break;
         case TextureEnvParameter::Color:
@@ -2965,6 +2967,7 @@ void ConvertTextureEnvToInt(TextureEnvParameter pname, const GLfloat *input, GLi
     {
         case TextureEnvParameter::RgbScale:
         case TextureEnvParameter::AlphaScale:
+        case TextureEnvParameter::LodBias:
             output[0] = static_cast<GLint>(input[0]);
             break;
         case TextureEnvParameter::Color:
@@ -2991,6 +2994,7 @@ void ConvertTextureEnvToFixed(TextureEnvParameter pname, const GLfloat *input, G
     {
         case TextureEnvParameter::RgbScale:
         case TextureEnvParameter::AlphaScale:
+        case TextureEnvParameter::LodBias:
             output[0] = ConvertFloatToFixed(input[0]);
             break;
         case TextureEnvParameter::Color:
@@ -3089,6 +3093,17 @@ void SetTextureEnv(unsigned int unit,
                     break;
             }
             break;
+        case TextureEnvTarget::TextureFilterControl:
+            switch (pname)
+            {
+                case TextureEnvParameter::LodBias:
+                    env.lodBias = params[0];
+                    break;
+                default:
+                    UNREACHABLE();
+                    break;
+            }
+            break;
         default:
             UNREACHABLE();
             break;
@@ -3172,6 +3187,17 @@ void GetTextureEnv(unsigned int unit,
             {
                 case TextureEnvParameter::PointCoordReplace:
                     *params = static_cast<GLfloat>(env.pointSpriteCoordReplace);
+                    break;
+                default:
+                    UNREACHABLE();
+                    break;
+            }
+            break;
+        case TextureEnvTarget::TextureFilterControl:
+            switch (pname)
+            {
+                case TextureEnvParameter::LodBias:
+                    *params = env.lodBias;
                     break;
                 default:
                     UNREACHABLE();
@@ -3535,19 +3561,11 @@ bool GetQueryParameterInfo(const State &glState,
             {
                 return false;
             }
-            *type      = GL_INT_64_ANGLEX;
+            *type      = GL_INT64;
             *numParams = 1;
             return true;
         case GL_GPU_DISJOINT_EXT:
             if (!extensions.disjointTimerQueryEXT)
-            {
-                return false;
-            }
-            *type      = GL_INT;
-            *numParams = 1;
-            return true;
-        case GL_COVERAGE_MODULATION_CHROMIUM:
-            if (!extensions.framebufferMixedSamplesCHROMIUM)
             {
                 return false;
             }
@@ -3902,6 +3920,13 @@ bool GetQueryParameterInfo(const State &glState,
         return true;
     }
 
+    if (extensions.textureLodBiasEXT && pname == GL_MAX_TEXTURE_LOD_BIAS_EXT)
+    {
+        *type      = GL_FLOAT;
+        *numParams = 1;
+        return true;
+    }
+
     if (glState.getClientVersion() < Version(2, 0))
     {
         switch (pname)
@@ -4072,7 +4097,7 @@ bool GetQueryParameterInfo(const State &glState,
         case GL_MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS:
         case GL_MAX_SERVER_WAIT_TIMEOUT:
         {
-            *type      = GL_INT_64_ANGLEX;
+            *type      = GL_INT64;
             *numParams = 1;
             return true;
         }
@@ -4256,7 +4281,7 @@ bool GetQueryParameterInfo(const State &glState,
             *numParams = 1;
             return true;
         case GL_MAX_SHADER_STORAGE_BLOCK_SIZE:
-            *type      = GL_INT_64_ANGLEX;
+            *type      = GL_INT64;
             *numParams = 1;
             return true;
         case GL_SAMPLE_SHADING:
@@ -4360,7 +4385,7 @@ bool GetIndexedQueryParameterInfo(const State &glState,
         case GL_UNIFORM_BUFFER_START:
         case GL_UNIFORM_BUFFER_SIZE:
         {
-            *type      = GL_INT_64_ANGLEX;
+            *type      = GL_INT64;
             *numParams = 1;
             return true;
         }
@@ -4440,7 +4465,7 @@ bool GetIndexedQueryParameterInfo(const State &glState,
         case GL_SHADER_STORAGE_BUFFER_START:
         case GL_SHADER_STORAGE_BUFFER_SIZE:
         {
-            *type      = GL_INT_64_ANGLEX;
+            *type      = GL_INT64;
             *numParams = 1;
             return true;
         }
@@ -4962,20 +4987,22 @@ egl::Error SetSurfaceAttrib(Surface *surface, EGLint attribute, EGLint value)
     return NoError();
 }
 
-Error GetSyncAttrib(Display *display, SyncID sync, EGLint attribute, EGLint *value)
+Error GetSyncAttrib(const ThreadSafeDisplay *display,
+                    const Sync *syncObject,
+                    EGLint attribute,
+                    EGLint *value)
 {
-    const egl::Sync *syncObj = display->getSync(sync);
     switch (attribute)
     {
         case EGL_SYNC_TYPE_KHR:
-            *value = syncObj->getType();
+            *value = syncObject->getType();
             return NoError();
 
         case EGL_SYNC_STATUS_KHR:
-            return syncObj->getStatus(display, value);
+            return syncObject->getStatus(display, value);
 
         case EGL_SYNC_CONDITION_KHR:
-            *value = syncObj->getCondition();
+            *value = syncObject->getCondition();
             return NoError();
 
         default:

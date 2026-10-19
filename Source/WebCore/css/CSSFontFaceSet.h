@@ -67,14 +67,14 @@ public:
     // Calling updateStyleIfNeeded() might delete |this|.
     void updateStyleIfNeeded();
 
-    bool NODELETE hasFace(const CSSFontFace&) const;
+    bool LEGACY_NODELETE hasFace(const CSSFontFace&) const;
     size_t faceCount() const { return m_faces.size(); }
     void add(CSSFontFace&);
     void remove(const CSSFontFace&);
     void purge();
     void emptyCaches();
     void clear();
-    CSSFontFace& NODELETE operator[](size_t i);
+    CSSFontFace& LEGACY_NODELETE operator[](size_t i);
 
     CSSFontFace* lookUpByCSSConnection(StyleRuleFontFace&);
 
@@ -89,7 +89,7 @@ public:
 
     size_t facesPartitionIndex() const { return m_facesPartitionIndex; }
 
-    ExceptionOr<Vector<std::reference_wrapper<CSSFontFace>>> matchingFacesExcludingPreinstalledFonts(ScriptExecutionContext&, const String& font, const String& text);
+    ExceptionOr<Vector<Ref<CSSFontFace>>> matchingFacesExcludingPreinstalledFonts(ScriptExecutionContext&, const String& font, const String& text);
 
     // FIXME: Should this be implemented?
     void updateStyleIfNeeded(CSSFontFace&) final { }
@@ -108,7 +108,7 @@ private:
 
     void ensureLocalFontFacesForFamilyRegistered(const AtomString&);
 
-    static AtomString familyName(const CSSValue&);
+    static AtomString LEGACY_NODELETE familyName(const CSSValue&);
 
     using FontSelectionKey = std::optional<FontSelectionRequest>;
     struct FontSelectionKeyHash : WTF::HasherBasedHash<FontSelectionKey> {

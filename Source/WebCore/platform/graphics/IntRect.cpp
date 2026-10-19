@@ -39,8 +39,8 @@ namespace WebCore {
 WTF_MAKE_TZONE_ALLOCATED_IMPL(IntRect);
 
 IntRect::IntRect(const FloatRect& r)
-    : m_location(clampToInteger(r.x()), clampToInteger(r.y()))
-    , m_size(clampToInteger(r.width()), clampToInteger(r.height()))
+    : m_location(clampTo<int>(r.x()), clampTo<int>(r.y()))
+    , m_size(clampTo<int>(r.width()), clampTo<int>(r.height()))
 {
 }
 
@@ -135,7 +135,7 @@ void IntRect::scale(float s)
     m_size.setHeight(truncateFloatToInt32(height() * s));
 }
 
-static inline int NODELETE distanceToInterval(int pos, int start, int end)
+static inline int LEGACY_NODELETE distanceToInterval(int pos, int start, int end)
 {
     if (pos < start)
         return start - pos;

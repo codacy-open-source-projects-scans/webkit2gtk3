@@ -28,6 +28,7 @@
 #if ENABLE(IPC_TESTING_API) && !ENABLE(IPC_TESTING_SWIFT)
 
 #include "MessageReceiver.h"
+#include <wtf/CompletionHandler.h>
 
 namespace IPC {
 class Connection;
@@ -50,21 +51,13 @@ private:
 
     // Messages
     void asyncMessage(uint32_t, CompletionHandler<void(uint32_t)>&&);
+    void deferredReplyMessage(uint32_t, CompletionHandler<void(uint64_t)>&&);
+    void completeDeferredReply(uint32_t);
+
+    CompletionHandler<void(uint64_t)> m_deferredReply;
+    uint32_t m_deferredReplyArgument { 0 };
 };
 
-}
-
-#endif
-
-#if ENABLE(IPC_TESTING_API) && ENABLE(IPC_TESTING_SWIFT)
-
-#include "IPCTesterReceiverMessages.h"
-
-// Workaround for rdar://170233903
-// The Swift call can be replaced with fn.pointee(args) when this is fixed
-inline void callFunction(CompletionHandlers::IPCTesterReceiver::AsyncMessageCompletionHandler& fn, uint32_t value)
-{
-    (*fn)(value);
 }
 
 #endif

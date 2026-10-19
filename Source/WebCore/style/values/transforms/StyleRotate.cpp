@@ -36,10 +36,10 @@ namespace Style {
 
 using namespace CSS::Literals;
 
-void Rotate::apply(TransformationMatrix& transform, const FloatSize& size) const
+void Rotate::apply(TransformationMatrix& transform, const FloatSize& size, ZoomFactor zoom) const
 {
     if (RefPtr protectedValue = value)
-        protectedValue->apply(transform, size);
+        protectedValue->apply(transform, size, zoom);
 }
 
 // MARK: - Conversion
@@ -51,7 +51,7 @@ auto CSSValueConversion<Rotate>::operator()(BuilderState& state, const CSSValue&
 
     if (auto* keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (keywordValue->valueID()) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return CSS::Keyword::None { };
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -65,7 +65,7 @@ auto CSSValueConversion<Rotate>::operator()(BuilderState& state, const CSSValue&
 
     // Only an angle was specified.
     if (list->size() == 1)
-        return RotateTransformFunction::create(toStyleFromCSSValue<Angle<>>(state, list->item(0)), TransformFunctionBase::Type::Rotate);
+        return RotateTransformFunction::create(toStyleFromCSSValue<Angle<>>(state, protect(list->item(0))), TransformFunctionBase::Type::Rotate);
 
     // An axis identifier and angle were specified.
     if (list->size() == 2) {
@@ -73,14 +73,14 @@ auto CSSValueConversion<Rotate>::operator()(BuilderState& state, const CSSValue&
         if (!keywordValue)
             return CSS::Keyword::None { };
 
-        auto angle = toStyleFromCSSValue<Angle<>>(state, list->item(1));
+        auto angle = toStyleFromCSSValue<Angle<>>(state, protect(list->item(1)));
 
         switch (keywordValue->valueID()) {
-        case CSSValueX:
+        case CSSValueID::X:
             return RotateTransformFunction::create(1_css_number, 0_css_number, 0_css_number, angle, TransformFunctionBase::Type::RotateX);
-        case CSSValueY:
+        case CSSValueID::Y:
             return RotateTransformFunction::create(0_css_number, 1_css_number, 0_css_number, angle, TransformFunctionBase::Type::RotateY);
-        case CSSValueZ:
+        case CSSValueID::Z:
             return RotateTransformFunction::create(0_css_number, 0_css_number, 1_css_number, angle, TransformFunctionBase::Type::RotateZ);
         default:
             state.setCurrentPropertyInvalidAtComputedValueTime();
@@ -91,10 +91,10 @@ auto CSSValueConversion<Rotate>::operator()(BuilderState& state, const CSSValue&
     ASSERT(list->size() == 4);
 
     // An axis vector and angle were specified.
-    auto x = toStyleFromCSSValue<Number<>>(state, list->item(0));
-    auto y = toStyleFromCSSValue<Number<>>(state, list->item(1));
-    auto z = toStyleFromCSSValue<Number<>>(state, list->item(2));
-    auto angle = toStyleFromCSSValue<Angle<>>(state, list->item(3));
+    auto x = toStyleFromCSSValue<Number<>>(state, protect(list->item(0)));
+    auto y = toStyleFromCSSValue<Number<>>(state, protect(list->item(1)));
+    auto z = toStyleFromCSSValue<Number<>>(state, protect(list->item(2)));
+    auto angle = toStyleFromCSSValue<Angle<>>(state, protect(list->item(3)));
 
     return RotateTransformFunction::create(x, y, z, angle, TransformFunctionType::Rotate3D);
 }
@@ -138,10 +138,10 @@ auto Blending<Rotate>::blend(const Rotate& from, const Rotate& to, const Blendin
 
 // MARK: - Platform
 
-auto ToPlatform<Rotate>::operator()(const Rotate& value, const FloatSize& size) -> RefPtr<TransformOperation>
+auto ToPlatform<Rotate>::operator()(const Rotate& value, const FloatSize& size, ZoomFactor zoom) -> RefPtr<TransformOperation>
 {
     if (RefPtr function = value.value)
-        return function->toPlatform(size);
+        return function->toPlatform(size, zoom);
     return nullptr;
 }
 

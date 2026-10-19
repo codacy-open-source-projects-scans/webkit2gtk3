@@ -55,6 +55,7 @@ public:
     std::optional<AVAudioSessionCaptureDevice> audioSessionDeviceWithUID(const String&);
     
     void scheduleUpdateCaptureDevices();
+    void scheduleMediaServicesWereReset();
 
     void enableAllDevicesQuery();
     void disableAllDevicesQuery();
@@ -88,7 +89,6 @@ private:
     String m_preferredMicrophoneID;
     String m_preferredSpeakerID;
     bool m_isReceiverPreferredSpeaker { false };
-    bool m_recomputeDevices { true };
     mutable RetainPtr<AVAudioSessionPortDescription> m_lastDefaultMicrophone;
 };
 

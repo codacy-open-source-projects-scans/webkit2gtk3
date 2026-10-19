@@ -33,7 +33,6 @@
 #include "DOMPointReadOnly.h"
 #include "DocumentPage.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "JSDOMConvertInterface.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSWebXRHitTestSource.h"
@@ -47,7 +46,6 @@
 #include "WebXRFrame.h"
 #include "WebXRHitTestSource.h"
 #include "WebXRTransientInputHitTestSource.h"
-#include "WebXRView.h"
 #include "XRFrameRequestCallback.h"
 #include "XRGPUProjectionLayerInit.h"
 #include "XRHitTestOptionsInit.h"
@@ -78,7 +76,9 @@ WebXRSession::WebXRSession(Document& document, XRSessionMode mode, PlatformXR::D
     , m_activeRenderState(WebXRRenderState::create(mode))
     , m_viewerReferenceSpace(WebXRReferenceSpace::create(document, *this, XRReferenceSpaceType::Viewer))
     , m_timeOrigin(MonotonicTime::now())
-    , m_views(device.views(mode))
+    , m_views(device.views(mode).map([](auto& viewData) {
+        return View { viewData, UnderlyingView::create() };
+    }))
 {
     device.setTrackingAndRenderingClient(*this);
     if (!m_requestedFeatures.contains(PlatformXR::SessionFeature::WebGPU))
@@ -100,7 +100,7 @@ WebXRSession::WebXRSession(Document& document, XRSessionMode mode, PlatformXR::D
 
 WebXRSession::~WebXRSession()
 {
-    RefPtr device = m_device.get();
+    RefPtr device { m_device };
     if (!m_ended && device)
         device->shutDownTrackingAndRendering();
 }
@@ -242,7 +242,7 @@ bool WebXRSession::referenceSpaceIsSupported(XRReferenceSpaceType type) const
             return true;
 
         // 4. If type is local or local-floor, and the XR device supports reporting orientation data, return true.
-        RefPtr device = m_device.get();
+        RefPtr device { m_device };
         if (device && device->supportsOrientationTracking())
             return true;
     }
@@ -286,7 +286,7 @@ void WebXRSession::requestReferenceSpace(XRReferenceSpaceType type, RequestRefer
             return;
         }
         // 2.2. Set up any platform resources required to track reference spaces of type type.
-        if (RefPtr device = m_device.get())
+        if (RefPtr device = m_device)
             device->initializeReferenceSpace(type);
 
         // 2.3. Queue a task to run the following steps:
@@ -367,7 +367,7 @@ IntSize WebXRSession::nativeWebGLFramebufferResolution() const
 // https://immersive-web.github.io/webxr/#recommended-webgl-framebuffer-resolution
 IntSize WebXRSession::recommendedWebGLFramebufferResolution() const
 {
-    RefPtr device = m_device.get();
+    RefPtr device { m_device };
     ASSERT(device);
     return device ? device->recommendedResolution(m_mode) : IntSize { };
 }
@@ -375,10 +375,13 @@ IntSize WebXRSession::recommendedWebGLFramebufferResolution() const
 // https://immersive-web.github.io/webxr/#view-viewport-modifiable
 bool WebXRSession::supportsViewportScaling() const
 {
-    RefPtr device = m_device.get();
-    ASSERT(device);
-    // Only immersive sessions support viewport scaling.
-    return isImmersive(m_mode) && device && device->supportsViewportScaling();
+    if (!m_activeRenderState)
+        return false;
+    if (RefPtr baseLayer = m_activeRenderState->baseLayer())
+        return baseLayer->supportsViewportScaling();
+    return m_activeRenderState->layers().containsIf([](auto& layer) {
+        return layer->supportsViewportScaling();
+    });
 }
 
 bool WebXRSession::isPositionEmulated() const
@@ -408,14 +411,14 @@ void WebXRSession::shutdown(InitiatedBySystem initiatedBySystem)
     // 3. If the active immersive session is equal to session, set the active immersive session to null.
     // 4. Remove session from the list of inline sessions.
     for (WeakPtr listener : m_sessionListeners) {
-        if (RefPtr protectedListener = listener.get())
+        if (RefPtr protectedListener = listener)
             protectedListener->onSessionEnded(*this);
     }
     m_sessionListeners.clear();
 
     m_inputSources->clear();
 
-    RefPtr device = m_device.get();
+    RefPtr device { m_device };
     if (initiatedBySystem == InitiatedBySystem::Yes) {
         // If we get here, the session termination was triggered by the system rather than
         // via XRSession.end(). Since the system has completed the session shutdown, we can
@@ -446,7 +449,7 @@ void WebXRSession::didCompleteShutdown()
     if (isImmersive(m_mode) && m_activeRenderState && m_activeRenderState->baseLayer())
         m_activeRenderState->baseLayer()->sessionEnded();
 
-    if (RefPtr device = m_device.get())
+    if (RefPtr device = m_device)
         device->setTrackingAndRenderingClient(nullptr);
 
     // Resolve end promise from XRSession::end()
@@ -537,6 +540,11 @@ void WebXRSession::updateSessionVisibilityState(PlatformXR::VisibilityState visi
     queueTaskToDispatchEvent(*this, TaskSource::WebXR, WTF::move(event));
 }
 
+void WebXRSession::sessionDidInitializeRendering(uint32_t width, uint32_t height, uint32_t arrayLength)
+{
+    m_initialRenderingDimensions = InitialRenderingDimensions { width, height, arrayLength };
+}
+
 void WebXRSession::applyPendingRenderState()
 {
     // https: //immersive-web.github.io/webxr/#apply-the-pending-render-state
@@ -585,9 +593,19 @@ void WebXRSession::applyPendingRenderState()
         m_activeRenderState->setOutputCanvas(nullptr);
     }
 
-    m_requestData = { {
+    m_requestData = {
         .isPassthroughFullyObscured = m_activeRenderState->passthroughFullyObscured().value_or(false),
-        .depthRange = PlatformXR::DepthRange { static_cast<float>(m_activeRenderState->depthNear()), static_cast<float>(m_activeRenderState->depthFar()) } }}; // NOLINT
+        .depthRange = PlatformXR::DepthRange { static_cast<float>(m_activeRenderState->depthNear()), static_cast<float>(m_activeRenderState->depthFar()) },
+        .activeLayerHandles = { }
+    };
+
+    if (RefPtr baseLayer = m_activeRenderState->baseLayer()) {
+        if (baseLayer->isCompositionEnabled())
+            m_requestData->activeLayerHandles.append(baseLayer->layerHandle());
+    } else {
+        for (Ref layer : m_activeRenderState->layers())
+            m_requestData->activeLayerHandles.append(layer->layerHandle());
+    }
 }
 
 void WebXRSession::minimalUpdateRendering()
@@ -635,7 +653,7 @@ void WebXRSession::requestFrameIfNeeded()
     if (m_callbacks.isEmpty() || m_isDeviceFrameRequestPending)
         return;
 
-    RefPtr device = m_device.get();
+    RefPtr device { m_device };
     if (!device)
         return;
     m_isDeviceFrameRequestPending = true;
@@ -774,7 +792,7 @@ void WebXRSession::onFrame(PlatformXR::FrameData&& frameData)
             }
 #endif
 
-            if (RefPtr device = session.m_device.get())
+            if (RefPtr device = session.m_device)
                 device->submitFrame(WTF::move(frameLayers));
         }
 
@@ -949,7 +967,7 @@ void WebXRSession::addSessionListener(const WebXRSessionListener& listener)
 #if ENABLE(WEBXR_LAYERS)
 unsigned WebXRSession::maxRenderLayers() const
 {
-    RefPtr device = m_device.get();
+    RefPtr device { m_device };
     return device ? device->maxRenderLayers() : 0;
 }
 #endif

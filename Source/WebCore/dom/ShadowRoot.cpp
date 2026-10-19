@@ -62,6 +62,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(ShadowRoot);
 struct SameSizeAsShadowRoot : public DocumentFragment, public TreeScope {
     uint8_t flagsAndModes[3];
     WeakPtr<Element, WeakPtrImplWithEventTargetData> host;
+    WeakPtr<Node, WeakPtrImplWithEventTargetData> shadowIncludingRoot;
     void* styleSheetList;
     void* styleScope;
     void* slotAssignment;
@@ -84,6 +85,7 @@ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMo
     , m_hasScopedCustomElementRegistry(scopedRegistry == ShadowRootScopedCustomElementRegistry::Yes)
     , m_mode(mode)
     , m_slotAssignmentMode(assignmentMode)
+    , m_shadowIncludingRoot(this)
     , m_styleScope(makeUnique<Style::Scope>(*this))
     , m_referenceTarget(referenceTarget)
 {
@@ -133,7 +135,7 @@ Node::NeedsPostConnectionSteps ShadowRoot::insertionSteps(InsertionType insertio
 {
     DocumentFragment::insertionSteps(insertionType, parentOfInsertedTree);
     if (!m_hasScopedCustomElementRegistry && usesNullCustomElementRegistry() && !parentOfInsertedTree.usesNullCustomElementRegistry()) {
-        if (RefPtr registry = CustomElementRegistry::registryForElement(*host())) {
+        if (RefPtr registry = CustomElementRegistry::registryForElement(protect(*host()))) {
             clearUsesNullCustomElementRegistry();
             setCustomElementRegistry(WTF::move(registry));
         }
@@ -169,14 +171,20 @@ void ShadowRoot::childrenChanged(const ChildChange& childChange)
     case ChildChange::Type::ElementInserted:
     case ChildChange::Type::ElementAndTextInserted:
     case ChildChange::Type::ElementRemoved:
-        m_host->invalidateStyleForSubtreeInternal();
+        protect(m_host)->invalidateStyleForSubtree();
         break;
+    case ChildChange::Type::ElementMovedFrom:
+    case ChildChange::Type::ElementMovedInto:
     case ChildChange::Type::TextInserted:
     case ChildChange::Type::TextRemoved:
     case ChildChange::Type::TextChanged:
+    case ChildChange::Type::TextMovedFrom:
+    case ChildChange::Type::TextMovedInto:
     case ChildChange::Type::AllChildrenRemoved:
     case ChildChange::Type::NonContentsChildRemoved:
     case ChildChange::Type::NonContentsChildInserted:
+    case ChildChange::Type::NonContentsChildMovedFrom:
+    case ChildChange::Type::NonContentsChildMovedInto:
     case ChildChange::Type::AllChildrenReplaced:
         break;
     }
@@ -208,7 +216,7 @@ void ShadowRoot::moveShadowRootToNewDocument(Document& oldDocument, Document& ne
 StyleSheetList& ShadowRoot::styleSheets()
 {
     if (!m_styleSheetList)
-        m_styleSheetList = StyleSheetList::create(*this);
+        lazyInitialize(m_styleSheetList, StyleSheetList::create(*this));
     return *m_styleSheetList;
 }
 
@@ -232,19 +240,19 @@ ExceptionOr<void> ShadowRoot::replaceChildrenWithMarkup(const String& markup, Op
         return { };
     }
 
-    auto fragment = createFragmentForInnerOuterHTML(*protect(host()), markup, policy, customElementRegistry());
+    auto fragment = createFragmentForInnerOuterHTML(*protect(host()), markup, policy, protect(customElementRegistry()), usesNullCustomElementRegistry() ? Element::CustomElementRegistryKind::Null : Element::CustomElementRegistryKind::Window);
     if (fragment.hasException())
         return fragment.releaseException();
     bool usedFastPath = fragment.returnValue()->hasWasParsedWithFastPath();
     auto result = replaceChildrenWithFragment(*this, fragment.releaseReturnValue());
     if (!result.hasException() && usedFastPath)
-        document().updateCachedSetInnerHTML(markup, *this, *protect(host()));
+        protect(document())->updateCachedSetInnerHTML(markup, *this, *protect(host()));
     return result;
 }
 
 ExceptionOr<void> ShadowRoot::setHTMLUnsafe(Variant<Ref<TrustedHTML>, String>&& html)
 {
-    auto stringValueHolder = trustedTypeCompliantString(document().contextDocument(), WTF::move(html), "ShadowRoot setHTMLUnsafe"_s);
+    auto stringValueHolder = trustedTypeCompliantString(protect(document().contextDocument()), WTF::move(html), "ShadowRoot setHTMLUnsafe"_s);
 
     if (stringValueHolder.hasException())
         return stringValueHolder.releaseException();
@@ -264,7 +272,7 @@ String ShadowRoot::innerHTML() const
 
 ExceptionOr<void> ShadowRoot::setInnerHTML(Variant<Ref<TrustedHTML>, String>&& html)
 {
-    auto stringValueHolder = trustedTypeCompliantString(document().contextDocument(), WTF::move(html), "ShadowRoot innerHTML"_s);
+    auto stringValueHolder = trustedTypeCompliantString(protect(document().contextDocument()), WTF::move(html), "ShadowRoot innerHTML"_s);
 
     if (stringValueHolder.hasException())
         return stringValueHolder.releaseException();
@@ -333,9 +341,9 @@ void ShadowRoot::addSlotElementByName(const AtomString& name, HTMLSlotElement& s
     ASSERT(&slot.rootNode() == this);
     if (!m_slotAssignment) {
         if (m_slotAssignmentMode == SlotAssignmentMode::Named)
-            m_slotAssignment = makeUnique<NamedSlotAssignment>();
+            lazyInitialize(m_slotAssignment, makeUnique<NamedSlotAssignment>());
         else
-            m_slotAssignment = makeUnique<ManualSlotAssignment>();
+            lazyInitialize(m_slotAssignment, makeUnique<ManualSlotAssignment>());
     }
 
     return m_slotAssignment->addSlotElementByName(name, slot, *this);
@@ -462,14 +470,14 @@ Vector<Ref<ShadowRoot>> assignedShadowRootsIfSlotted(const Node& node)
     Vector<Ref<ShadowRoot>> result;
     for (CheckedPtr slot = node.assignedSlot(); slot; slot = slot->assignedSlot()) {
         ASSERT(slot->containingShadowRoot());
-        result.append(*slot->containingShadowRoot());
+        result.append(protect(*slot->containingShadowRoot()));
     }
     return result;
 }
 
 Vector<Ref<WebAnimation>> ShadowRoot::getAnimations()
 {
-    return document().matchingAnimations([&](Element& target) {
+    return protect(document())->matchingAnimations([&](Element& target) {
         return target.containingShadowRoot() == this;
     });
 }
@@ -484,7 +492,7 @@ void ShadowRoot::setReferenceTarget(const AtomString& referenceTarget)
 
     m_referenceTarget = referenceTarget;
 
-    if (CheckedPtr cache = document().existingAXObjectCache())
+    if (CheckedPtr cache = protect(document())->existingAXObjectCache())
         cache->handleReferenceTargetChanged();
 }
 

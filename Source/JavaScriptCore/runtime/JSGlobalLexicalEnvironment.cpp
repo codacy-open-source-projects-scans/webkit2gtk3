@@ -27,6 +27,7 @@
 #include "JSGlobalLexicalEnvironment.h"
 
 #include "JSCInlines.h"
+#include "SymbolTableInlines.h"
 
 namespace JSC {
 
@@ -56,7 +57,7 @@ bool JSGlobalLexicalEnvironment::put(JSCell* cell, JSGlobalObject* globalObject,
 
 bool JSGlobalLexicalEnvironment::isConstVariable(UniquedStringImpl* impl)
 {
-    SymbolTableEntry entry = symbolTable()->get(impl);
+    SymbolTableEntry::Fast entry = symbolTable()->get(impl);
     ASSERT(!entry.isNull());
     return entry.isReadOnly();
 }

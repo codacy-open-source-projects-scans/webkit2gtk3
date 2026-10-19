@@ -32,6 +32,7 @@
 #include "BoundsCheck.h"
 #include "CallGraph.h"
 #include "EntryPointRewriter.h"
+#include "EvaluationOrderRewriter.h"
 #include "GlobalSorting.h"
 #include "GlobalVariableRewriter.h"
 #include "IOValidator.h"
@@ -83,6 +84,10 @@ static ASCIILiteral wgslExtensionToWebGPUFeatureName(Extension extension)
         return "clip-distances"_s;
     case Extension::F16:
         return "shader-f16"_s;
+    case Extension::PrimitiveIndex:
+        return "primitive-index"_s;
+    case Extension::Subgroups:
+        return "subgroups"_s;
     }
 }
 
@@ -100,6 +105,9 @@ Variant<SuccessfulCheck, FailedCheck> staticCheck(const String& wgsl, const std:
     CHECK_PASS(validateIO, shaderModule);
     CHECK_PASS(validateVisibility, shaderModule);
     RUN_PASS(mangleNames, shaderModule);
+    // Must run before the pointer rewriter, which inlines a pointer's initializer into each of its
+    // uses and would carry any side effect in that initializer along with it.
+    RUN_PASS(rewriteEvaluationOrder, shaderModule);
     RUN_PASS(rewritePointers, shaderModule);
     CHECK_PASS(aliasAnalysis, shaderModule);
     CHECK_PASS(uniformityAnalysis, shaderModule);
@@ -224,8 +232,28 @@ std::optional<ConstantValue> evaluate(const ShaderModule& module, const AST::Exp
     switch (expression.kind()) {
     case AST::NodeKind::BinaryExpression: {
         auto& binary = uncheckedDowncast<AST::BinaryExpression>(expression);
-        auto operation = toASCIILiteral(binary.operation());
-        result = call(operation, ReferenceWrapperVector<const AST::Expression, 2> { binary.leftExpression(), binary.rightExpression() });
+        if (binary.operation() == AST::BinaryOperation::ShortCircuitAnd) {
+            auto lhsValue = evaluate(module, binary.leftExpression(), overrideValues);
+            if (lhsValue && !std::get<bool>(*lhsValue))
+                result = false;
+            else {
+                auto rhsValue = evaluate(module, binary.rightExpression(), overrideValues);
+                if (lhsValue && rhsValue)
+                    result = std::get<bool>(*lhsValue) && std::get<bool>(*rhsValue);
+            }
+        } else if (binary.operation() == AST::BinaryOperation::ShortCircuitOr) {
+            auto lhsValue = evaluate(module, binary.leftExpression(), overrideValues);
+            if (lhsValue && std::get<bool>(*lhsValue))
+                result = true;
+            else {
+                auto rhsValue = evaluate(module, binary.rightExpression(), overrideValues);
+                if (lhsValue && rhsValue)
+                    result = std::get<bool>(*lhsValue) || std::get<bool>(*rhsValue);
+            }
+        } else {
+            auto operation = toASCIILiteral(binary.operation());
+            result = call(operation, ReferenceWrapperVector<const AST::Expression, 2> { binary.leftExpression(), binary.rightExpression() });
+        }
         break;
     }
 
@@ -336,3 +364,7 @@ std::optional<ConstantValue> evaluate(const ShaderModule& module, const AST::Exp
 }
 
 }
+
+#undef CHECK_PASS
+#undef RUN_PASS
+#undef RUN_PASS_WITH_RESULT

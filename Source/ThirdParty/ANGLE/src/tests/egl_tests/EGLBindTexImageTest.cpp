@@ -7,18 +7,16 @@
 //   Tests for eglBindTexImage
 //
 
-#ifdef UNSAFE_BUFFERS_BUILD
-#    pragma allow_unsafe_buffers
-#endif
-
 #include <gtest/gtest.h>
+
+#include <array>
+
+#include "common/unsafe_buffers.h"
 
 #include <iostream>
 #include "test_utils/ANGLETest.h"
 #include "test_utils/angle_test_configs.h"
 #include "test_utils/gl_raii.h"
-#include "util/EGLWindow.h"
-#include "util/OSWindow.h"
 #include "util/test_utils.h"
 
 using namespace angle;
@@ -104,7 +102,10 @@ class EGLBindTexImageTest : public ANGLETest<EGLBindTexImageTestParams>
         {
             GTEST_SKIP() << "Test skipped because EGL_ANGLE_feature_control is not available.";
         }
-        EGLAttrib dispattrs[] = {EGL_PLATFORM_ANGLE_TYPE_ANGLE, platformParams.getRenderer(),
+        EGLAttrib dispattrs[] = {EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+                                 platformParams.getRenderer(),
+                                 EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE,
+                                 static_cast<EGLAttrib>(GetPbufferOnlyDefaultPlatformType()),
                                  EGL_FEATURE_OVERRIDES_ENABLED_ANGLE,
                                  reinterpret_cast<EGLAttrib>(enabledFeatureOverrides.data()),
                                  EGL_NONE};
@@ -203,8 +204,8 @@ class EGLBindTexImageTest : public ANGLETest<EGLBindTexImageTestParams>
     }
 
     EGLDisplay mDisplay     = EGL_NO_DISPLAY;
-    EGLContext mContexts[2] = {EGL_NO_CONTEXT, EGL_NO_CONTEXT};
-    EGLContext mSurfaces[2] = {EGL_NO_SURFACE, EGL_NO_SURFACE};
+    std::array<EGLContext, 2> mContexts = {EGL_NO_CONTEXT, EGL_NO_CONTEXT};
+    std::array<EGLContext, 2> mSurfaces = {EGL_NO_SURFACE, EGL_NO_SURFACE};
     EGLConfig mConfig       = EGL_NO_CONFIG_KHR;
     FlushMode mFlushMode;
     ContextMode mContextMode;

@@ -35,8 +35,8 @@
 #include "RenderElement.h"
 #include "RenderImage.h"
 #include "RenderQuote.h"
-#include "RenderStyle+GettersInlines.h"
 #include "StyleableInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleResolver.h"
 #include <wtf/TZoneMallocInlines.h>
 
@@ -51,7 +51,7 @@ const QualifiedName& pseudoElementTagName()
 }
 
 PseudoElement::PseudoElement(Element& host, PseudoElementType pseudoElementType)
-    : Element(pseudoElementTagName(), host.document(), { TypeFlag::IsPseudoElementOrSpecialInternalNode })
+    : Element(pseudoElementTagName(), protect(host.document()), { TypeFlag::IsPseudoElementOrSpecialInternalNode })
     , m_hostElement(host)
     , m_pseudoElementType(pseudoElementType)
 {
@@ -82,7 +82,7 @@ void PseudoElement::clearHostElement()
     m_hostElement = nullptr;
 }
 
-bool PseudoElement::rendererIsNeeded(const RenderStyle& style)
+bool PseudoElement::rendererIsNeeded(const Style::ComputedStyle& style)
 {
     if (Style::pseudoElementRendererIsNeeded(style))
         return true;

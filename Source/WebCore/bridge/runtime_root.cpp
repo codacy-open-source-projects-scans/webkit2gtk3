@@ -47,7 +47,7 @@ namespace JSC::Bindings {
 
 using RootObjectSet = HashSet<RootObject*>;
 
-static RootObjectSet& NODELETE rootObjectSet()
+static RootObjectSet& LEGACY_NODELETE rootObjectSet()
 {
     static NeverDestroyed<RootObjectSet> staticRootObjectSet;
     return staticRootObjectSet;
@@ -60,7 +60,7 @@ RootObject* findProtectingRootObject(JSObject* jsObject)
 {
     RootObjectSet::const_iterator end = rootObjectSet().end();
     for (RootObjectSet::const_iterator it = rootObjectSet().begin(); it != end; ++it) {
-        if ((*it)->gcIsProtected(jsObject))
+        if (protect((*it))->gcIsProtected(jsObject))
             return *it;
     }
     return 0;

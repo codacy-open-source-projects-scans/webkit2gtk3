@@ -31,8 +31,7 @@
 #include "config.h"
 #include "InspectorLayerTreeAgent.h"
 
-#include "DestinationColorSpace.h"
-#include "EventTargetInlines.h"
+#include "ColorSpace.h"
 #include "GraphicsContext.h"
 #include "GraphicsLayer.h"
 #include "ImageBuffer.h"
@@ -60,7 +59,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(InspectorLayerTreeAgent);
 InspectorLayerTreeAgent::InspectorLayerTreeAgent(WebAgentContext& context)
     : InspectorAgentBase("LayerTree"_s, context)
     , m_frontendDispatcher(makeUniqueRef<Inspector::LayerTreeFrontendDispatcher>(context.frontendRouter))
-    , m_backendDispatcher(Inspector::LayerTreeBackendDispatcher::create(context.backendDispatcher, this))
+    , m_backendDispatcher(Inspector::LayerTreeBackendDispatcher::create(protect(context.backendDispatcher), this))
 {
 }
 
@@ -257,7 +256,7 @@ Inspector::Protocol::ErrorStringOr<Ref<Inspector::Protocol::LayerTree::Compositi
     if (!renderLayer)
         return makeUnexpected("Missing render layer for given layerId"_s);
 
-    OptionSet<CompositingReason> reasons = renderLayer->compositor().reasonsForCompositing(*renderLayer);
+    OptionSet<CompositingReason> reasons = protect(renderLayer->compositor())->reasonsForCompositing(*renderLayer);
     auto compositingReasons = Inspector::Protocol::LayerTree::CompositingReasons::create().release();
 
     if (reasons.contains(CompositingReason::Transform3D))
@@ -361,7 +360,7 @@ Inspector::CommandResult<String> InspectorLayerTreeAgent::requestContent(const I
 
     FloatSize layerSize = graphicsLayer->size();
     if (layerSize.isEmpty())
-        return makeUnexpected("Layer has zero size"_s);
+        return emptyString();
 
     // Limit scale factor for large layers to prevent excessive memory usage.
     constexpr float maxScaleFactor = 2;
@@ -372,7 +371,7 @@ Inspector::CommandResult<String> InspectorLayerTreeAgent::requestContent(const I
         maxScaleFactor,
     });
 
-    auto imageBuffer = ImageBuffer::create(layerSize, RenderingMode::Unaccelerated, RenderingPurpose::Snapshot, scaleFactor, DestinationColorSpace::SRGB(), PixelFormat::BGRA8);
+    auto imageBuffer = ImageBuffer::create(layerSize, RenderingMode::Unaccelerated, RenderingPurpose::Snapshot, scaleFactor, ColorSpace::SRGB(), PixelFormat::BGRA8);
     if (!imageBuffer)
         return makeUnexpected("Failed to create image buffer"_s);
 

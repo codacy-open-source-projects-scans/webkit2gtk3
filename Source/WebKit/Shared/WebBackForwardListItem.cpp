@@ -79,7 +79,7 @@ WebBackForwardListItem* WebBackForwardListItem::itemForID(BackForwardItemIdentif
     return allItems().get(identifier);
 }
 
-static const FrameState* NODELETE childItemWithTarget(const FrameState& frameState, const String& target)
+static const FrameState* LEGACY_NODELETE childItemWithTarget(const FrameState& frameState, const String& target)
 {
     for (auto& child : frameState.children) {
         if (child->target == target)
@@ -89,7 +89,7 @@ static const FrameState* NODELETE childItemWithTarget(const FrameState& frameSta
     return nullptr;
 }
 
-static bool NODELETE hasSameFrames(const FrameState& a, const FrameState& b)
+static bool LEGACY_NODELETE hasSameFrames(const FrameState& a, const FrameState& b)
 {
     if (a.target != b.target)
         return false;
@@ -121,6 +121,14 @@ bool WebBackForwardListItem::itemIsClone(const WebBackForwardListItem& other)
     return hasSameFrames(mainFrameState, otherMainFrameState);
 }
 
+bool WebBackForwardListItem::hasSameMainFrameHistoryEntry(const WebBackForwardListItem& other) const
+{
+    auto& mainFrameState = this->mainFrameState();
+    auto& otherMainFrameState = other.mainFrameState();
+    return mainFrameState.itemSequenceNumber == otherMainFrameState.itemSequenceNumber
+        && mainFrameState.documentSequenceNumber == otherMainFrameState.documentSequenceNumber;
+}
+
 void WebBackForwardListItem::wasRemovedFromBackForwardList()
 {
     removeFromBackForwardCache();
@@ -138,6 +146,13 @@ void WebBackForwardListItem::removeFromBackForwardCache()
 void WebBackForwardListItem::setBackForwardCacheEntry(RefPtr<WebBackForwardCacheEntry>&& backForwardCacheEntry)
 {
     m_backForwardCacheEntry = WTF::move(backForwardCacheEntry);
+}
+
+WebBackForwardCacheEntry* WebBackForwardListItem::backForwardCacheEntryForProcess(WebCore::ProcessIdentifier processIdentifier) const
+{
+    if (m_backForwardCacheEntry && m_backForwardCacheEntry->processIdentifier() == processIdentifier)
+        return m_backForwardCacheEntry.get();
+    return nullptr;
 }
 
 SuspendedPageProxy* WebBackForwardListItem::suspendedPage() const

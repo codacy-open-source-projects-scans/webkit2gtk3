@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2011 Nokia Inc. All rights reserved.
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2025 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2025-2026 Samuel Weinig <sam@webkit.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,10 +26,16 @@
 #include <WebCore/StyleValueTypes.h>
 
 namespace WebCore {
+
+namespace CSS {
+struct Quotes;
+}
+
 namespace Style {
 
-// <'quote'> = auto | none | [ <string> <string> ]+
-// https://www.w3.org/TR/css-content-3/#propdef-quotes
+// <'quote'> = auto | none | match-parent | [ <string> <string> ]+
+// FIXME: Add support for `match-parent`.
+// https://drafts.csswg.org/css-content-3/#propdef-quotes
 struct Quotes {
     using Data = SpaceSeparatedRefCountedFixedVector<String>;
 
@@ -55,7 +61,7 @@ struct Quotes {
     const WTF::String& openQuote(unsigned index) const;
     const WTF::String& closeQuote(unsigned index) const;
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         return WTF::switchOn(m_value, std::forward<F>(f)...);
     }
@@ -68,7 +74,11 @@ private:
 
 // MARK: - Conversion
 
+template<> struct ToCSS<Quotes> { auto operator()(const Quotes&, const Style::ComputedStyle&) -> CSS::Quotes; };
+template<> struct ToStyle<CSS::Quotes> { auto operator()(const CSS::Quotes&, const BuilderState&) -> Quotes; };
+
 template<> struct CSSValueConversion<Quotes> { auto operator()(BuilderState&, const CSSValue&) -> Quotes; };
+template<> struct CSSValueCreation<Quotes> { Ref<CSSValue> operator()(CSSValuePool&, const Style::ComputedStyle&, const Quotes&); };
 
 } // namespace Style
 } // namespace WebCore

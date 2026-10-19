@@ -25,6 +25,8 @@
 import unittest
 
 from webkitpy.api_tests.manager import Manager
+from webkitpy.api_tests.test_expectations import PASS, FAIL, CRASH, TIMEOUT
+from webkitexpectationspy.expectations import Expectation
 
 
 class ManagerTest(unittest.TestCase):
@@ -117,3 +119,33 @@ TestWebKitAPI.WKWebViewSwiftOverlayTests/evaluateJavaScriptYieldsExpectedRespons
     def test_find_test_subset_no_match(self):
         superset = ["TestWebKitAPI.WebKit.SomeTest"]
         self.assertEqual([], Manager._find_test_subset(superset, ["NonExistent"]))
+
+    def test_args_specify_individual_tests(self):
+        self.assertTrue(Manager._args_specify_individual_tests(["WebKit.SomeTest"]))
+        self.assertTrue(Manager._args_specify_individual_tests(["TestWebKitAPI.WebKit.SomeTest"]))
+        self.assertTrue(Manager._args_specify_individual_tests([
+            "TestWebKitAPI.WebKit.SomeTest",
+            "TestWebKitAPI.WKWebViewSwiftOverlayTests/evaluateJavaScriptWithNilResponse()",
+        ]))
+        self.assertFalse(Manager._args_specify_individual_tests([]))
+        self.assertFalse(Manager._args_specify_individual_tests(["WebKit"]))
+        self.assertFalse(Manager._args_specify_individual_tests(["WebKit.SomeTest", "WebKit"]))
+
+    def test_expected_results_for_upload_no_expectation(self):
+        self.assertIsNone(Manager._expected_results_for_upload(None))
+
+    def test_expected_results_for_upload_pass(self):
+        self.assertIsNone(Manager._expected_results_for_upload(Expectation('TestWebKitAPI.WebKit.SomeTest', expected={PASS})))
+
+    def test_expected_results_for_upload_fail(self):
+        self.assertEqual('FAIL', Manager._expected_results_for_upload(Expectation('TestWebKitAPI.WebKit.SomeTest', expected={FAIL})))
+
+    def test_expected_results_for_upload_crash(self):
+        self.assertEqual('CRASH', Manager._expected_results_for_upload(Expectation('TestWebKitAPI.WebKit.SomeTest', expected={CRASH})))
+
+    def test_expected_results_for_upload_timeout(self):
+        self.assertEqual('TIMEOUT', Manager._expected_results_for_upload(Expectation('TestWebKitAPI.WebKit.SomeTest', expected={TIMEOUT})))
+
+    def test_expected_results_for_upload_flaky(self):
+        result = Manager._expected_results_for_upload(Expectation('TestWebKitAPI.WebKit.SomeTest', expected={PASS, FAIL}))
+        self.assertEqual({'PASS', 'FAIL'}, set(result.split()))

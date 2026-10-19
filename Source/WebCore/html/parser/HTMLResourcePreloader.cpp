@@ -45,7 +45,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(HTMLResourcePreloader);
 
 URL PreloadRequest::completeURL(Document& document)
 {
-    return document.completeURL(m_resourceURL, m_baseURL.isEmpty() ? document.baseURL() : m_baseURL);
+    return document.encodingParseURL(m_resourceURL, m_baseURL.isEmpty() ? document.baseURL() : m_baseURL);
 }
 
 CachedResourceRequest PreloadRequest::resourceRequest(Document& document)
@@ -54,7 +54,7 @@ CachedResourceRequest PreloadRequest::resourceRequest(Document& document)
 
     bool skipContentSecurityPolicyCheck = false;
     if (!m_nonceAttribute.isEmpty()) {
-        if (m_resourceType == CachedResource::Type::Script || m_resourceType == CachedResource::Type::JSON)
+        if (m_resourceType == CachedResource::Type::Script || m_resourceType == CachedResource::Type::JSON || m_resourceType == CachedResource::Type::Text)
             skipContentSecurityPolicyCheck = protect(document.contentSecurityPolicy())->allowScriptWithNonce(m_nonceAttribute);
         else if (m_resourceType == CachedResource::Type::CSSStyleSheet)
             skipContentSecurityPolicyCheck = protect(document.contentSecurityPolicy())->allowStyleWithNonce(m_nonceAttribute);
@@ -67,9 +67,9 @@ CachedResourceRequest PreloadRequest::resourceRequest(Document& document)
     String crossOriginMode = m_crossOriginMode;
     if (m_scriptType == ScriptType::Module) {
         if (crossOriginMode.isNull())
-            crossOriginMode = ScriptElementCachedScriptFetcher::defaultCrossOriginModeForModule;
+            crossOriginMode = CachedScriptFetcher::defaultCrossOriginModeForModule;
     }
-    if (m_resourceType == CachedResource::Type::Script || m_resourceType == CachedResource::Type::JSON || m_resourceType == CachedResource::Type::ImageResource)
+    if (m_resourceType == CachedResource::Type::Script || m_resourceType == CachedResource::Type::JSON || m_resourceType == CachedResource::Type::Text || m_resourceType == CachedResource::Type::ImageResource)
         options.referrerPolicy = m_referrerPolicy;
     options.fetchPriority = m_fetchPriority;
     options.nonce = m_nonceAttribute;
@@ -110,7 +110,7 @@ void HTMLResourcePreloader::preload(std::unique_ptr<PreloadRequest> preload)
     ASSERT(document->renderView());
 
     auto queries = MQ::MediaQueryParser::parse(preload->media(), document->cssParserContext());
-    if (!MQ::MediaQueryEvaluator { screenAtom(), *document, document->renderStyle() }.evaluate(queries))
+    if (!MQ::MediaQueryEvaluator { screenAtom(), *document }.evaluate(queries))
         return;
 
     std::ignore = protect(document->cachedResourceLoader())->preload(preload->resourceType(), preload->resourceRequest(*document));

@@ -2994,8 +2994,6 @@ void GL_APIENTRY glLogicOpANGLE(GLenum opcode)
     return GL_LogicOpANGLE(opcode);
 }
 
-// GL_ANGLE_lossy_etc_decode
-
 // GL_ANGLE_memory_object_flags
 void GL_APIENTRY glTexStorageMemFlags2DANGLE(GLenum target,
                                              GLsizei levels,
@@ -3140,7 +3138,6 @@ void GL_APIENTRY glRequestExtensionANGLE(const GLchar *name)
 {
     return GL_RequestExtensionANGLE(name);
 }
-
 
 // GL_ANGLE_rgbx_internal_format
 
@@ -3708,25 +3705,6 @@ void GL_APIENTRY glGetFramebufferPixelLocalStorageParameteruivANGLE(GLint plane,
 
 // GL_ANGLE_texture_compression_dxt5
 
-// GL_ANGLE_texture_external_update
-void GL_APIENTRY glTexImage2DExternalANGLE(GLenum target,
-                                           GLint level,
-                                           GLint internalformat,
-                                           GLsizei width,
-                                           GLsizei height,
-                                           GLint border,
-                                           GLenum format,
-                                           GLenum type)
-{
-    return GL_TexImage2DExternalANGLE(target, level, internalformat, width, height, border, format,
-                                      type);
-}
-
-void GL_APIENTRY glInvalidateTextureANGLE(GLenum target)
-{
-    return GL_InvalidateTextureANGLE(target);
-}
-
 // GL_ANGLE_texture_multisample
 void GL_APIENTRY glTexStorage2DMultisampleANGLE(GLenum target,
                                                 GLsizei samples,
@@ -3758,6 +3736,12 @@ void GL_APIENTRY glGetTranslatedShaderSourceANGLE(GLuint shader,
                                                   GLchar *source)
 {
     return GL_GetTranslatedShaderSourceANGLE(shader, bufSize, length, source);
+}
+
+// GL_ANGLE_trim_memory
+void GL_APIENTRY glTrimMemoryANGLE(GLenum trimLevel)
+{
+    return GL_TrimMemoryANGLE(trimLevel);
 }
 
 // GL_ANGLE_variable_rasterization_rate_metal
@@ -3841,12 +3825,6 @@ void GL_APIENTRY glCopySubTextureCHROMIUM(GLuint sourceId,
                                      unpackPremultiplyAlpha, unpackUnmultiplyAlpha);
 }
 
-// GL_CHROMIUM_framebuffer_mixed_samples
-void GL_APIENTRY glCoverageModulationCHROMIUM(GLenum components)
-{
-    return GL_CoverageModulationCHROMIUM(components);
-}
-
 // GL_CHROMIUM_lose_context
 void GL_APIENTRY glLoseContextCHROMIUM(GLenum current, GLenum other)
 {
@@ -3862,7 +3840,6 @@ void GL_APIENTRY glEGLImageTargetTexStorageEXT(GLenum target,
 {
     return GL_EGLImageTargetTexStorageEXT(target, image, attrib_list);
 }
-
 
 // GL_EXT_EGL_image_storage_compression
 
@@ -4213,7 +4190,6 @@ void GL_APIENTRY glBufferStorageExternalEXT(GLenum target,
 {
     return GL_BufferStorageExternalEXT(target, offset, size, clientBuffer, flags);
 }
-
 
 // GL_EXT_float_blend
 
@@ -5649,6 +5625,8 @@ void GL_APIENTRY glMinSampleShadingOES(GLfloat value)
 // GL_OES_shader_multisample_interpolation
 
 // GL_OES_standard_derivatives
+
+// GL_OES_stencil8
 
 // GL_OES_surfaceless_context
 

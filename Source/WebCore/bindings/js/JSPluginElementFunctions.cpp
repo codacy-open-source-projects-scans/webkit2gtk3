@@ -27,6 +27,7 @@
 #include "HTMLPlugInElement.h"
 #include "JSHTMLElement.h"
 #include <JavaScriptCore/JSObjectInlines.h>
+#include <JavaScriptCore/PropertySlot.h>
 
 namespace WebCore {
 using namespace JSC;
@@ -45,10 +46,10 @@ Instance* pluginInstance(HTMLElement& element)
     auto* pluginElement = dynamicDowncast<HTMLPlugInElement>(element);
     if (!pluginElement)
         return nullptr;
-    auto* instance = pluginElement->bindingsInstance();
-    if (!instance || !instance->rootObject())
+    // Validate under a protector; bindingsInstance() then returns the pointer the element owns.
+    if (RefPtr instance = pluginElement->bindingsInstance(); !instance || !instance->rootObject())
         return nullptr;
-    return instance;
+    return pluginElement->bindingsInstance();
 }
 
 JSObject* pluginScriptObject(JSGlobalObject* lexicalGlobalObject, JSHTMLElement* jsHTMLElement)
@@ -61,7 +62,7 @@ JSObject* pluginScriptObject(JSGlobalObject* lexicalGlobalObject, JSHTMLElement*
     DOMTimer::scriptDidInteractWithPlugin();
 
     // The plugin element holds an owning reference, so we don't have to.
-    auto* instance = element->bindingsInstance();
+    RefPtr instance = element->bindingsInstance();
     if (!instance || !instance->rootObject())
         return nullptr;
 
@@ -126,7 +127,7 @@ bool pluginElementCustomPut(JSHTMLElement* element, JSGlobalObject* lexicalGloba
 
 JSC_DEFINE_HOST_FUNCTION(callPlugin, (JSGlobalObject* lexicalGlobalObject, CallFrame* callFrame))
 {
-    JSHTMLElement* element = uncheckedDowncast<JSHTMLElement>(callFrame->jsCallee());
+    JSHTMLElement* element = downcast<JSHTMLElement>(callFrame->jsCallee());
 
     // Get the plug-in script object.
     JSObject* scriptObject = pluginScriptObject(lexicalGlobalObject, element);
@@ -151,7 +152,7 @@ CallData pluginElementCustomGetCallData(JSHTMLElement* element)
 {
     CallData callData;
 
-    Instance* instance = pluginInstance(element->wrapped());
+    RefPtr instance = pluginInstance(protect(element->wrapped()));
     if (instance && instance->supportsInvokeDefaultMethod()) {
         callData.type = CallData::Type::Native;
         callData.native.function = callPlugin;

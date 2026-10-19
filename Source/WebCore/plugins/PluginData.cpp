@@ -69,7 +69,7 @@ const Vector<PluginInfo>& PluginData::webVisiblePlugins() const
 {
     Ref page = m_page.get();
     RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
-    auto documentURL = localMainFrame && localMainFrame->document() ? localMainFrame->document()->url() : URL { };
+    auto documentURL = localMainFrame && localMainFrame->document() ? protect(localMainFrame->document())->url() : URL { };
     if (!documentURL.isNull() && !protocolHostAndPortAreEqual(m_cachedVisiblePlugins.pageURL, documentURL)) {
         m_cachedVisiblePlugins.pageURL = WTF::move(documentURL);
         m_cachedVisiblePlugins.pluginList = std::nullopt;
@@ -89,7 +89,7 @@ Vector<MimeClassInfo> PluginData::webVisibleMimeTypes() const
     return result;
 }
 
-static bool NODELETE supportsMimeTypeForPlugins(const String& mimeType, const PluginData::AllowedPluginTypes allowedPluginTypes, const Vector<PluginInfo>& plugins)
+static bool LEGACY_NODELETE supportsMimeTypeForPlugins(const String& mimeType, const PluginData::AllowedPluginTypes allowedPluginTypes, const Vector<PluginInfo>& plugins)
 {
     for (auto& plugin : plugins) {
         for (auto& type : plugin.mimes) {

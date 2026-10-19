@@ -161,7 +161,7 @@ struct TextDecorationLine {
 
     void addOrReplaceIfNotNone(TextDecorationLine);
 
-    template<typename... F> constexpr decltype(auto) switchOn(F&&... f) const
+    template<typename... F> constexpr decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -259,13 +259,13 @@ template<> struct CSSValueConversion<TextDecorationLine> {
 };
 
 template<> struct CSSValueCreation<OptionSet<TextDecorationLine::Flag>> {
-    auto operator()(CSSValuePool&, const RenderStyle&, const  OptionSet<TextDecorationLine::Flag>&) -> Ref<CSSValue>;
+    auto operator()(CSSValuePool&, const Style::ComputedStyle&, const  OptionSet<TextDecorationLine::Flag>&) -> Ref<CSSValue>;
 };
 
 // MARK: Serialization
 
 template<> struct Serialize<OptionSet<TextDecorationLine::Flag>> {
-    void operator()(StringBuilder&, const CSS::SerializationContext&, const RenderStyle&, const OptionSet<TextDecorationLine::Flag>&);
+    void operator()(StringBuilder&, const CSS::SerializationContext&, const Style::ComputedStyle&, const OptionSet<TextDecorationLine::Flag>&);
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const TextDecorationLine&);

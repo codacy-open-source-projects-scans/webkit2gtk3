@@ -30,7 +30,6 @@
 #include "pas_page_malloc.h"
 
 #include <errno.h>
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #if !PAS_OS(WINDOWS)
@@ -38,7 +37,6 @@
 #include <unistd.h>
 #endif
 #if PAS_OS(DARWIN)
-#include <mach/vm_page_size.h>
 #include <mach/vm_statistics.h>
 #endif
 #if PAS_OS(LINUX)
@@ -65,6 +63,18 @@ size_t pas_page_malloc_cached_alignment_shift;
 #if PAS_OS(DARWIN)
 bool pas_page_malloc_decommit_zero_fill = false;
 #endif /* PAS_OS(DARWIN) */
+
+void pas_page_malloc_populate(void* base, size_t size)
+{
+    size_t page_size;
+    size_t offset;
+    volatile char* bytes;
+
+    page_size = pas_page_malloc_alignment();
+    bytes = (volatile char*)base;
+    for (offset = 0; offset < size; offset += page_size)
+        bytes[offset] = 0;
+}
 
 #if PAS_USE_MADV_ZERO
 /* It is possible that MADV_ZERO is defined but still not supported by the
@@ -163,14 +173,44 @@ PAS_NEVER_INLINE size_t pas_page_malloc_alignment_shift_slow(void)
     return result;
 }
 
-static void*
-pas_page_malloc_try_map_pages(size_t size, bool may_contain_small_or_medium)
+#if PAS_ENABLE_MTE && PAS_OS(DARWIN)
+/* The logging is unreachable in builds where PAS_MTE_FEATURE_LOG_PAGE_ALLOC can't be enabled. */
+PAS_IGNORE_WARNINGS_BEGIN("unreachable-code")
+static void* try_map_pages_with_mte_tag_storage(size_t size)
 {
+    const vm_inherit_t child_process_inheritance = VM_INHERIT_DEFAULT;
+    const bool copy = false;
+    const vm_prot_t protections = VM_PROT_WRITE | VM_PROT_READ;
+    mach_vm_address_t result = 0;
+    kern_return_t vm_map_result;
+
+    vm_map_result = mach_vm_map(
+        mach_task_self(), &result, size, pas_page_malloc_alignment() - 1,
+        VM_FLAGS_ANYWHERE | PAS_VM_MTE | PAS_VM_TAG, MEMORY_OBJECT_NULL, 0, copy,
+        protections, protections, child_process_inheritance);
+    if (vm_map_result != KERN_SUCCESS) {
+        errno = 0; /* See the comment in pas_page_malloc_try_map_pages. */
+        if (PAS_MTE_FEATURE_ENABLED(PAS_MTE_FEATURE_LOG_PAGE_ALLOC))
+            printf("[MTE]\tFailed to map %zu bytes with VM_FLAGS_MTE.\n", size);
+        return NULL;
+    }
+
+    PAS_RECORD_STAT(page_alloc_counts, size, true);
+    if (PAS_MTE_FEATURE_ENABLED(PAS_MTE_FEATURE_LOG_PAGE_ALLOC))
+        printf("[MTE]\tMapped %zu bytes from %p to %p with VM_FLAGS_MTE.\n", size, (void*)result, (void*)(result + size));
+    return (void*)result;
+}
+PAS_IGNORE_WARNINGS_END
+#endif /* PAS_ENABLE_MTE && PAS_OS(DARWIN) */
+
+static void*
+pas_page_malloc_try_map_pages(size_t size, pas_memory_flavor flavor)
+{
+    PAS_ASSERT(pas_memory_flavor_libpas_can_map(flavor), flavor);
+
+    PAS_PROFILE(PAGE_ALLOCATION, size, pas_memory_flavor_needs_mte_tag_storage(flavor), PAS_VM_TAG);
 
 #if PAS_OS(WINDOWS)
-    PAS_PROFILE(PAGE_ALLOCATION, size, may_contain_small_or_medium, PAS_VM_TAG);
-    PAS_MTE_HANDLE(PAGE_ALLOCATION, size, may_contain_small_or_medium, PAS_VM_TAG);
-
     /*
      * PAS_STATS is not currently supported on Windows, so we do not currently
      * increment pas_stats_page_alloc_counts counters here. If that ever
@@ -182,8 +222,10 @@ pas_page_malloc_try_map_pages(size_t size, bool may_contain_small_or_medium)
 #else
     void* mmap_result = NULL;
 
-    PAS_PROFILE(PAGE_ALLOCATION, size, may_contain_small_or_medium, PAS_VM_TAG);
-    PAS_MTE_HANDLE(PAGE_ALLOCATION, size, may_contain_small_or_medium, PAS_VM_TAG);
+#if PAS_ENABLE_MTE && PAS_OS(DARWIN)
+    if (pas_mte_is_mte_enabled() && pas_memory_flavor_needs_mte_tag_storage(flavor))
+        return try_map_pages_with_mte_tag_storage(size);
+#endif
 
     mmap_result = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | PAS_NORESERVE, PAS_VM_TAG, 0);
     if (mmap_result == MAP_FAILED) {
@@ -193,7 +235,7 @@ pas_page_malloc_try_map_pages(size_t size, bool may_contain_small_or_medium)
                       do that explicitly. */
         return NULL;
     } else
-        PAS_RECORD_STAT(page_alloc_counts, size, may_contain_small_or_medium, false);
+        PAS_RECORD_STAT(page_alloc_counts, size, false);
 
 #if PAS_OS(LINUX)
     prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, mmap_result, size, PAS_VM_TAG_NAME);
@@ -205,7 +247,7 @@ pas_page_malloc_try_map_pages(size_t size, bool may_contain_small_or_medium)
 
 pas_aligned_allocation_result
 pas_page_malloc_try_allocate_without_deallocating_padding(
-    size_t size, pas_alignment alignment, bool may_contain_small_or_medium)
+    size_t size, pas_alignment alignment, pas_memory_flavor flavor)
 {
     static const bool verbose = PAS_SHOULD_LOG(PAS_LOG_OTHER);
     
@@ -240,7 +282,7 @@ pas_page_malloc_try_allocate_without_deallocating_padding(
             return result;
     }
 
-    mmap_result = pas_page_malloc_try_map_pages(mapped_size, may_contain_small_or_medium);
+    mmap_result = pas_page_malloc_try_map_pages(mapped_size, flavor);
     if (!mmap_result)
         return result;
 
@@ -312,8 +354,32 @@ static void pas_page_malloc_zero_fill_latch_if_madv_zero_is_supported(void)
 }
 #endif
 
-void pas_page_malloc_zero_fill(void* base, size_t size)
+#if PAS_ENABLE_MTE && PAS_OS(DARWIN)
+/* Remapping memory with mmap or mach_vm_map clears its tagged status unless we ask for tag storage
+   again, so memory that has MTE tag storage must be remapped with PAS_VM_MTE.
+   FIXME: use mach_vm_behavior_set instead rdar://160813532 */
+static void zero_fill_pages_with_mte_tag_storage(void* base, size_t size)
 {
+    const vm_inherit_t child_process_inheritance = VM_INHERIT_DEFAULT;
+    const bool copy = false;
+    mach_vm_address_t address = (mach_vm_address_t)base;
+    kern_return_t vm_map_result;
+
+    vm_map_result = mach_vm_map(
+        mach_task_self(), &address, size, 0,
+        VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE | PAS_VM_MTE | PAS_VM_TAG, MEMORY_OBJECT_NULL, 0, copy,
+        VM_PROT_DEFAULT, VM_PROT_ALL, child_process_inheritance);
+    if (vm_map_result != KERN_SUCCESS)
+        errno = 0;
+    PAS_ASSERT(vm_map_result == KERN_SUCCESS, vm_map_result);
+    PAS_ASSERT(address == (mach_vm_address_t)base, (uintptr_t)address, (uintptr_t)base);
+}
+#endif /* PAS_ENABLE_MTE && PAS_OS(DARWIN) */
+
+void pas_page_malloc_zero_fill(void* base, size_t size, pas_memory_flavor flavor)
+{
+    PAS_ASSERT(!pas_memory_flavor_client_owns_permissions(flavor), flavor);
+
 #if PAS_OS(WINDOWS)
     size_t page_size;
 
@@ -349,7 +415,12 @@ void pas_page_malloc_zero_fill(void* base, size_t size)
     PAS_UNUSED_PARAM(result);
 
     PAS_PROFILE(ZERO_FILL_PAGE, base, size, flags, tag);
-    PAS_MTE_HANDLE(ZERO_FILL_PAGE, base, size, flags, tag);
+#if PAS_ENABLE_MTE && PAS_OS(DARWIN)
+    if (PAS_USE_MTE && pas_memory_flavor_needs_mte_tag_storage(flavor)) {
+        zero_fill_pages_with_mte_tag_storage(base, size);
+        return;
+    }
+#endif
 #if PAS_OS(LINUX)
     result = madvise(base, size, MADV_DONTNEED);
     PAS_ASSERT(!result);
@@ -360,7 +431,7 @@ void pas_page_malloc_zero_fill(void* base, size_t size)
 #endif /* PAS_OS(WINDOWS) */
 }
 
-static void commit_impl(void* ptr, size_t size, bool do_mprotect, bool is_symmetric, pas_mmap_capability mmap_capability)
+static void commit_impl(void* ptr, size_t size, bool do_mprotect, bool is_symmetric, pas_memory_flavor flavor)
 {
     uintptr_t base_as_int;
     uintptr_t end_as_int;
@@ -377,7 +448,7 @@ static void commit_impl(void* ptr, size_t size, bool do_mprotect, bool is_symmet
     if (end_as_int == base_as_int)
         return;
 
-    if (PAS_MPROTECT_DECOMMITTED && do_mprotect && mmap_capability) {
+    if (PAS_MPROTECT_DECOMMITTED && do_mprotect && !pas_memory_flavor_client_owns_permissions(flavor)) {
 #if PAS_OS(WINDOWS)
         PAS_ASSERT(virtual_alloc_with_retry(ptr, size, MEM_COMMIT, PAGE_READWRITE));
 #else
@@ -393,14 +464,20 @@ static void commit_impl(void* ptr, size_t size, bool do_mprotect, bool is_symmet
         /*
          * Symmetric: re-commit pages that the matching decommit released via
          * MEM_DECOMMIT. Loop because the range may span multiple reservations.
+         *
+         * Windows MEM_COMMIT always sets the page's protection, so if this range
+         * holds executable code we must explicitly request PAGE_EXECUTE_READWRITE
+         * here - otherwise previously-executable pages come back as data pages
+         * after each commit/decommit cycle.
          */
+        DWORD protection = pas_memory_flavor_is_executable(flavor) ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE;
         size_t totalSeen = 0;
         void *currentPtr = ptr;
         while (totalSeen < size) {
             MEMORY_BASIC_INFORMATION memInfo;
             virtual_query_checked(currentPtr, &memInfo);
             PAS_ASSERT(memInfo.State != 0x10000);
-            PAS_ASSERT(virtual_alloc_with_retry(currentPtr, PAS_MIN(memInfo.RegionSize, size - totalSeen), MEM_COMMIT, PAGE_READWRITE));
+            PAS_ASSERT(virtual_alloc_with_retry(currentPtr, PAS_MIN(memInfo.RegionSize, size - totalSeen), MEM_COMMIT, protection));
             currentPtr = (void*) ((uintptr_t) currentPtr + memInfo.RegionSize);
             totalSeen += memInfo.RegionSize;
         }
@@ -421,27 +498,28 @@ static void commit_impl(void* ptr, size_t size, bool do_mprotect, bool is_symmet
 #endif
 }
 
-void pas_page_malloc_commit(void* ptr, size_t size, pas_mmap_capability mmap_capability)
+void pas_page_malloc_commit(void* ptr, size_t size, pas_memory_flavor flavor)
 {
     static const bool do_mprotect = true;
     static const bool is_symmetric = !!PAS_USE_SYMMETRIC_PAGE_ALLOCATION;
-    commit_impl(ptr, size, do_mprotect, is_symmetric, mmap_capability);
+    commit_impl(ptr, size, do_mprotect, is_symmetric, flavor);
 }
 
-void pas_page_malloc_commit_without_mprotect(void* ptr, size_t size, bool is_symmetric, pas_mmap_capability mmap_capability)
+void pas_page_malloc_commit_without_mprotect(void* ptr, size_t size, bool is_symmetric, pas_memory_flavor flavor)
 {
     static const bool do_mprotect = false;
-    commit_impl(ptr, size, do_mprotect, is_symmetric, mmap_capability);
+    commit_impl(ptr, size, do_mprotect, is_symmetric, flavor);
 }
 
 static void decommit_impl(void* ptr, size_t size,
                           bool do_mprotect, bool is_symmetric,
-                          pas_mmap_capability mmap_capability)
+                          pas_memory_flavor flavor)
 {
     static const bool verbose = PAS_SHOULD_LOG(PAS_LOG_OTHER);
 
     uintptr_t base_as_int;
     uintptr_t end_as_int;
+    bool client_owns_permissions;
 
     if (verbose)
         pas_log("Decommitting %p...%p\n", ptr, (char*)ptr + size);
@@ -455,10 +533,12 @@ static void decommit_impl(void* ptr, size_t size,
     PAS_ASSERT(
         end_as_int == pas_round_down_to_power_of_2(end_as_int, pas_page_malloc_alignment()));
 
+    client_owns_permissions = pas_memory_flavor_client_owns_permissions(flavor);
+
 #if PAS_OS(DARWIN)
     PAS_ASSERT(!is_symmetric);
-    if (pas_page_malloc_decommit_zero_fill && mmap_capability)
-        pas_page_malloc_zero_fill(ptr, size);
+    if (pas_page_malloc_decommit_zero_fill && !client_owns_permissions)
+        pas_page_malloc_zero_fill(ptr, size, flavor);
     else
         PAS_SYSCALL(madvise(ptr, size, MADV_FREE_REUSABLE));
 #elif PAS_OS(FREEBSD)
@@ -521,7 +601,7 @@ static void decommit_impl(void* ptr, size_t size,
     PAS_SYSCALL(madvise(ptr, size, MADV_DONTNEED));
 #endif
 
-    if (PAS_MPROTECT_DECOMMITTED && do_mprotect && mmap_capability) {
+    if (PAS_MPROTECT_DECOMMITTED && do_mprotect && !client_owns_permissions) {
 #if PAS_OS(WINDOWS)
         PAS_ASSERT(virtual_alloc_with_retry(ptr, size, MEM_COMMIT, PAGE_NOACCESS));
 #else
@@ -530,17 +610,17 @@ static void decommit_impl(void* ptr, size_t size,
     }
 }
 
-void pas_page_malloc_decommit(void* ptr, size_t size, pas_mmap_capability mmap_capability)
+void pas_page_malloc_decommit(void* ptr, size_t size, pas_memory_flavor flavor)
 {
     static const bool do_mprotect = true;
     static const bool is_symmetric = !!PAS_USE_SYMMETRIC_PAGE_ALLOCATION;
-    decommit_impl(ptr, size, do_mprotect, is_symmetric, mmap_capability);
+    decommit_impl(ptr, size, do_mprotect, is_symmetric, flavor);
 }
 
-void pas_page_malloc_decommit_without_mprotect(void* ptr, size_t size, bool is_symmetric, pas_mmap_capability mmap_capability)
+void pas_page_malloc_decommit_without_mprotect(void* ptr, size_t size, bool is_symmetric, pas_memory_flavor flavor)
 {
     static const bool do_mprotect = false;
-    decommit_impl(ptr, size, do_mprotect, is_symmetric, mmap_capability);
+    decommit_impl(ptr, size, do_mprotect, is_symmetric, flavor);
 }
 
 void pas_page_malloc_deallocate(void* ptr, size_t size)

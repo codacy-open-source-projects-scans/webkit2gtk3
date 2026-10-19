@@ -26,9 +26,8 @@
 #include "StyleTextAlignLast.h"
 
 #include "CSSKeywordValue.h"
-#include "RenderStyle.h"
-#include "RenderStyle+GettersInlines.h"
 #include "StyleBuilderChecking.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleKeyword+CSSValueConversion.h"
 
 namespace WebCore {
@@ -40,7 +39,7 @@ auto CSSValueConversion<TextAlignLast>::operator()(BuilderState& state, const CS
     if (!keywordValue)
         return TextAlignLast::Auto;
 
-    if (keywordValue->valueID() == CSSValueMatchParent) {
+    if (keywordValue->valueID() == CSSValueID::MatchParent) {
         CheckedRef parentStyle = state.parentStyle();
 
         if (parentStyle->textAlignLast() == TextAlignLast::Start)

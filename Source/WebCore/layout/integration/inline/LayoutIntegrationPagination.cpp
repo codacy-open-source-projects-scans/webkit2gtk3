@@ -31,14 +31,14 @@
 #include "InlineIteratorLineBox.h"
 #include "PlacedFloats.h"
 #include "RenderBlockFlow.h"
-#include "RenderStyle+GettersInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleOrphans.h"
 #include "StyleWidows.h"
 
 namespace WebCore {
 namespace LayoutIntegration {
 
-static LayoutUnit NODELETE computeFirstLineSnapAdjustment(const InlineDisplay::Line& line, const Layout::BlockLayoutState::LineGrid& lineGrid)
+static LayoutUnit LEGACY_NODELETE computeFirstLineSnapAdjustment(const InlineDisplay::Line& line, const Layout::BlockLayoutState::LineGrid& lineGrid)
 {
     auto gridLineHeight = lineGrid.rowHeight;
 
@@ -65,11 +65,11 @@ std::pair<Vector<LineAdjustment>, std::optional<LayoutRestartLine>> computeAdjus
             continue;
 
         CheckedRef renderer = downcast<RenderBox>(*floatBox.layoutBox()->rendererForIntegration());
-        bool isUsplittable = renderer->isUnsplittableForPagination() || renderer->style().breakInside() == BreakInside::Avoid;
+        bool isUnsplittable = renderer->isUnsplittableForPagination() || renderer->style().breakInside() == BreakInside::Avoid;
 
         auto placedByLine = floatBox.placedByLine();
         if (!placedByLine) {
-            if (isUsplittable) {
+            if (isUnsplittable) {
                 auto rect = floatBox.absoluteRectWithMargin();
                 flow.updateMinimumPageHeight(rect.top(), rect.height());
             }
@@ -77,7 +77,7 @@ std::pair<Vector<LineAdjustment>, std::optional<LayoutRestartLine>> computeAdjus
         }
 
         auto floatMinimumBottom = [&] {
-            if (isUsplittable)
+            if (isUnsplittable)
                 return floatBox.absoluteRectWithMargin().bottom();
 
             if (CheckedPtr block = dynamicDowncast<RenderBlockFlow>(renderer)) {

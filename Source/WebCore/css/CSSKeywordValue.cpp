@@ -26,6 +26,9 @@
 #include "CSSKeywordValue.h"
 
 #include "CSSValueKeywords.h"
+#include "CSSValuePool.h"
+#include "CSSValueTypes+DeprecatedCSSOMValueCreation.h"
+#include <wtf/Hasher.h>
 
 namespace WebCore {
 
@@ -37,7 +40,7 @@ CSSKeywordValue::CSSKeywordValue(StaticCSSValueTag, CSS::Keyword keyword)
 }
 
 CSSKeywordValue::CSSKeywordValue(StaticCSSValueTag, ImplicitInitialValueTag)
-    : CSSKeywordValue(StaticCSSValue, CSS::Keyword { CSSValueInitial })
+    : CSSKeywordValue(StaticCSSValue, CSS::Keyword { CSSValueID::Initial })
 {
     m_isImplicitInitialValue = true;
 }
@@ -57,9 +60,15 @@ IterationStatus CSSKeywordValue::customVisitChildren(NOESCAPE const Function<Ite
     return CSS::visitCSSValueChildren(func, m_keyword);
 }
 
-String CSSKeywordValue::stringValue() const
+bool CSSKeywordValue::addDerivedHash(Hasher& hasher) const
 {
-    return nameStringForSerialization(m_keyword.value);
+    add(hasher, m_keyword);
+    return true;
+}
+
+Ref<DeprecatedCSSOMValue> CSSKeywordValue::customCreateDeprecatedCSSOMWrapper(CSSStyleDeclaration& owner) const
+{
+    return CSS::createDeprecatedCSSOMValue(CSSValuePool::singleton(), owner, m_keyword);
 }
 
 } // namespace WebCore

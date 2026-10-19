@@ -23,9 +23,11 @@
 #include "config.h"
 #include "InternalFunction.h"
 
+#include "Debugger.h"
 #include "JSBoundFunction.h"
 #include "JSCInlines.h"
 #include "ProxyObject.h"
+#include "VMInlines.h"
 
 namespace JSC {
 
@@ -63,6 +65,10 @@ void InternalFunction::finishCreation(VM& vm, unsigned length, const String& nam
         putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(length), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
         putDirectWithoutTransition(vm, vm.propertyNames->name, nameString, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
     }
+
+    vm.forEachDebugger([&] (Debugger& debugger) {
+        debugger.didCreateInternalFunction(*this);
+    });
 }
 
 template<typename Visitor>
@@ -161,6 +167,8 @@ Structure* InternalFunction::createSubclassStructure(JSGlobalObject* globalObjec
             // JSFunction as the new.target. Thus, we don't care about the cost of looking up the structure from our hash table every time.
             return baseGlobalObject->structureCache().emptyStructureForPrototypeFromBaseStructure(baseGlobalObject, prototype, baseClass);
         }
+        getFunctionRealm(globalObject, newTarget);
+        RETURN_IF_EXCEPTION(scope, nullptr);
         return baseClass;
     }
 
@@ -188,12 +196,8 @@ InternalFunction* InternalFunction::createFunctionThatMasqueradesAsUndefined(VM&
     return function;
 }
 
-// https://tc39.es/ecma262/#sec-getfunctionrealm
-JSGlobalObject* getFunctionRealm(JSGlobalObject* globalObject, JSObject* object)
+JSGlobalObject* tryGetFunctionRealm(JSObject* object)
 {
-    VM& vm = globalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     ASSERT(object->isCallable());
 
     while (true) {
@@ -201,23 +205,29 @@ JSGlobalObject* getFunctionRealm(JSGlobalObject* globalObject, JSObject* object)
             object = uncheckedDowncast<JSBoundFunction>(object)->targetFunction();
             continue;
         }
-        if (object->inherits<JSRemoteFunction>()) {
-            object = uncheckedDowncast<JSRemoteFunction>(object)->targetFunction();
-            continue;
-        }
 
         if (object->type() == ProxyObjectType) {
             auto* proxy = uncheckedDowncast<ProxyObject>(object);
-            if (proxy->isRevoked()) {
-                throwTypeError(globalObject, scope, "Cannot get function realm from revoked Proxy"_s);
+            if (proxy->isRevoked())
                 return nullptr;
-            }
             object = proxy->target();
             continue;
         }
 
         return object->realm();
     }
+}
+
+// https://tc39.es/ecma262/#sec-getfunctionrealm
+JSGlobalObject* getFunctionRealm(JSGlobalObject* globalObject, JSObject* object)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (auto* realm = tryGetFunctionRealm(object))
+        return realm;
+    throwTypeError(globalObject, scope, "Cannot get function realm from revoked Proxy"_s);
+    return nullptr;
 }
 
 

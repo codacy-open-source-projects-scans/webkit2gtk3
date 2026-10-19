@@ -31,7 +31,6 @@
 
 #include "BitmapImage.h"
 #include "ContextDestructionObserverInlines.h"
-#include "EventTargetInlines.h"
 #include "GraphicsContext.h"
 #include "NotificationResources.h"
 #include "ResourceRequest.h"
@@ -88,7 +87,7 @@ void NotificationResourcesLoader::start(CompletionHandler<void(RefPtr<Notificati
                 if (image && !image->size().isEmpty()) {
                     if (!m_resources)
                         m_resources = NotificationResources::create();
-                    m_resources->setIcon(WTF::move(image));
+                    protect(m_resources)->setIcon(WTF::move(image));
                 }
 
                 didFinishLoadingResource(loader);
@@ -140,8 +139,6 @@ auto NotificationResourcesLoader::ResourceLoader::create(ScriptExecutionContext&
 NotificationResourcesLoader::ResourceLoader::ResourceLoader(ScriptExecutionContext& context, const URL& url, CompletionHandler<void(ResourceLoader*, RefPtr<BitmapImage>&&)>&& completionHandler)
     : m_completionHandler(WTF::move(completionHandler))
 {
-    relaxAdoptionRequirement();
-
     ThreadableLoaderOptions options;
     options.mode = FetchOptions::Mode::Cors;
     options.sendLoadCallbacks = SendCallbackPolicy::SendCallbacks;

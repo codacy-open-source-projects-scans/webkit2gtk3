@@ -28,6 +28,7 @@
 
 #include "CSSCustomIdentValue.h"
 #include "CSSKeywordValue.h"
+#include "CSSMarkup.h"
 #include "CSSPropertyParser.h"
 #include "CSSStyleSheet.h"
 #include "CSSTokenizer.h"
@@ -40,13 +41,13 @@
 
 namespace WebCore {
 
-static std::optional<ViewTransitionNavigation> NODELETE toViewTransitionNavigationEnum(RefPtr<CSSValue> navigation)
+static std::optional<ViewTransitionNavigation> toViewTransitionNavigationEnum(RefPtr<CSSValue> navigation)
 {
     RefPtr keywordValue = dynamicDowncast<CSSKeywordValue>(navigation);
     if (!keywordValue)
         return std::nullopt;
 
-    if (keywordValue->valueID() == CSSValueAuto)
+    if (keywordValue->valueID() == CSSValueID::Auto)
         return ViewTransitionNavigation::Auto;
     return ViewTransitionNavigation::None;
 }
@@ -54,9 +55,11 @@ static std::optional<ViewTransitionNavigation> NODELETE toViewTransitionNavigati
 StyleRuleViewTransition::StyleRuleViewTransition(Ref<StyleProperties>&& properties)
     : StyleRuleBase(StyleRuleType::ViewTransition)
 {
-    m_navigation = toViewTransitionNavigationEnum(properties->getPropertyCSSValue(CSSPropertyNavigation));
+    m_navigation = toViewTransitionNavigationEnum(properties->getPropertyCSSValue(CSSPropertyID::Navigation));
 
-    if (auto value = properties->getPropertyCSSValue(CSSPropertyTypes)) {
+    if (auto value = properties->getPropertyCSSValue(CSSPropertyID::Types)) {
+        m_explicitlySetTypes = true;
+
         auto processSingleValue = [&](const CSSValue& currentValue) {
             if (RefPtr customIdentValue = dynamicDowncast<CSSCustomIdentValue>(currentValue))
                 m_types.append(customIdentValue->customIdent().value);
@@ -66,7 +69,8 @@ StyleRuleViewTransition::StyleRuleViewTransition(Ref<StyleProperties>&& properti
                 processSingleValue(currentValue);
         } else
             processSingleValue(*value);
-    }
+    } else
+        m_explicitlySetTypes = false;
 }
 
 Ref<StyleRuleViewTransition> StyleRuleViewTransition::create(Ref<StyleProperties>&& properties)
@@ -103,14 +107,21 @@ String CSSViewTransitionRule::cssText() const
         builder.append("; "_s);
     }
 
-    if (!types().isEmpty())
+    if (m_viewTransitionRule->explicitlySetTypes()) {
         builder.append("types:"_s);
-    for (auto& type : types()) {
-        builder.append(' ');
-        builder.append(type);
+
+        const auto& types = this->types();
+
+        if (!types.isEmpty()) {
+            for (auto& type : types) {
+                builder.append(' ');
+                serializeIdentifier(builder, type);
+            }
+        } else
+            builder.append(" none"_s);
+
+        builder.append("; "_s);
     }
-    if (!types().isEmpty())
-        builder.append('}');
 
     builder.append('}');
     return builder.toString();

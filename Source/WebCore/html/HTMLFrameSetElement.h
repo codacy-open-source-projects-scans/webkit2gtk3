@@ -53,7 +53,7 @@ public:
 
     static RefPtr<HTMLFrameSetElement> findContaining(Element* descendant);
 
-    Vector<AtomString> NODELETE supportedPropertyNames() const;
+    Vector<AtomString> LEGACY_NODELETE supportedPropertyNames() const;
     WindowProxy* namedItem(const AtomString&);
     bool isSupportedPropertyName(const AtomString&);
 
@@ -65,7 +65,7 @@ private:
     void collectPresentationalHintsForAttribute(const QualifiedName&, const AtomString&, MutableStyleProperties&) final;
 
     void willAttachRenderers() final;
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) final;
     
     void defaultEventHandler(Event&) final;
 

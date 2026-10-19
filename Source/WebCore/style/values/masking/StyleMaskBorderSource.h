@@ -29,6 +29,11 @@
 #include <wtf/PointerComparison.h>
 
 namespace WebCore {
+
+namespace CSS {
+struct MaskBorderSource;
+}
+
 namespace Style {
 
 // <'mask-border-source'> = none | <image>
@@ -49,7 +54,7 @@ struct MaskBorderSource {
     std::optional<ImageWrapper> tryImage() const { return m_image ? std::make_optional(ImageWrapper { *m_image }) : std::nullopt; }
     RefPtr<Image> tryStyleImage() const { return m_image; }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -69,13 +74,17 @@ private:
 
 // MARK: - Conversion
 
+template<> struct ToCSS<MaskBorderSource> { auto operator()(const MaskBorderSource&, const Style::ComputedStyle&) -> CSS::MaskBorderSource; };
+template<> struct ToStyle<CSS::MaskBorderSource> { auto operator()(const CSS::MaskBorderSource&, const BuilderState&) -> MaskBorderSource; };
+
 template<> struct CSSValueConversion<MaskBorderSource> { auto operator()(BuilderState&, const CSSValue&) -> MaskBorderSource; };
+template<> struct CSSValueCreation<MaskBorderSource> { auto operator()(CSSValuePool&, const Style::ComputedStyle&, const MaskBorderSource&) -> Ref<CSSValue>; };
 
 // MARK: - Blending
 
 template<> struct Blending<MaskBorderSource> {
-    bool NODELETE canBlend(const MaskBorderSource&, const MaskBorderSource&);
-    auto blend(const MaskBorderSource&, const MaskBorderSource&, const RenderStyle&, const RenderStyle&, const BlendingContext&) -> MaskBorderSource;
+    bool LEGACY_NODELETE canBlend(const MaskBorderSource&, const MaskBorderSource&);
+    auto blend(const MaskBorderSource&, const MaskBorderSource&, const Style::ComputedStyle&, const Style::ComputedStyle&, const BlendingContext&) -> MaskBorderSource;
 };
 
 } // namespace Style

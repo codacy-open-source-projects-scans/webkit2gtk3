@@ -46,7 +46,7 @@ class ValidatedFormListedElement : public FormListedElement {
     friend class DelayedUpdateValidityScope;
     friend class HTMLMaybeFormAssociatedCustomElement;
 public:
-    ValidatedFormListedElement(HTMLFormElement*);
+    ValidatedFormListedElement();
     virtual ~ValidatedFormListedElement();
 
     // "willValidate" means "is a candidate for constraint validation".
@@ -59,7 +59,7 @@ public:
     void reportNonFocusableControlError();
     WEBCORE_EXPORT void focusAndShowValidationMessage(Ref<HTMLElement> validationAnchor);
     bool isShowingValidationMessage() const;
-    WEBCORE_EXPORT bool NODELETE isFocusingWithValidationMessage() const;
+    WEBCORE_EXPORT bool LEGACY_NODELETE isFocusingWithValidationMessage() const;
     // This must be called when a validation constraint or control value is changed.
     void updateValidity();
     WEBCORE_EXPORT void setCustomValidity(const String&) override;
@@ -75,7 +75,7 @@ public:
     // This must be called any time the result of willValidate() has changed.
     bool isValidFormControlElement() const { return m_isValid; }
 
-    bool NODELETE isEnumeratable() const override { return false; }
+    bool LEGACY_NODELETE isEnumeratable() const override { return false; }
 
     bool wasInteractedWithSinceLastFormSubmitEvent() const { return m_wasInteractedWithSinceLastFormSubmitEvent; }
     void setInteractedWithSinceLastFormSubmitEvent(bool);
@@ -99,7 +99,7 @@ protected:
     void updateWillValidateAndValidity();
     bool disabledByAncestorFieldset() const { return m_disabledByAncestorFieldset; }
 
-    bool NODELETE validationMessageShadowTreeContains(const Node&) const;
+    bool LEGACY_NODELETE validationMessageShadowTreeContains(const Node&) const;
 
     void insertionSteps(Node::InsertionType, ContainerNode&);
     void postConnectionSteps();
@@ -116,13 +116,14 @@ protected:
     void formWillBeDestroyed() final;
     bool belongsToFormThatIsBeingDestroyed() const { return m_belongsToFormThatIsBeingDestroyed; }
 
-    void NODELETE setDataListAncestorState(TriState);
+    void LEGACY_NODELETE setDataListAncestorState(TriState);
     void syncWithFieldsetAncestors(ContainerNode* insertionNode);
     void restoreFormControlStateIfNecessary();
 
+    virtual void setDisabledInternal(bool disabled, bool disabledByAncestorFieldset);
+
 private:
     bool computeIsDisabledByFieldsetAncestor() const;
-    void setDisabledInternal(bool disabled, bool disabledByAncestorFieldset);
     virtual HTMLElement* validationAnchorElement() = 0;
 
     void startDelayingUpdateValidity() { ++m_delayedUpdateValidityCount; }

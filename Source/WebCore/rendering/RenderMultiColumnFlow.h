@@ -37,19 +37,19 @@ class RenderMultiColumnFlow final : public RenderFragmentedFlow {
     WTF_MAKE_TZONE_ALLOCATED(RenderMultiColumnFlow);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderMultiColumnFlow);
 public:
-    RenderMultiColumnFlow(Document&, RenderStyle&&);
+    RenderMultiColumnFlow(Document&, Style::ComputedStyle&&);
     virtual ~RenderMultiColumnFlow();
 
     RenderBlockFlow* multiColumnBlockFlow() const { return downcast<RenderBlockFlow>(parent()); }
 
-    RenderMultiColumnSet* firstMultiColumnSet() const;
-    RenderMultiColumnSet* lastMultiColumnSet() const;
-    RenderBox* firstColumnSetOrSpanner() const;
+    RenderMultiColumnSet* LEGACY_NODELETE firstMultiColumnSet() const;
+    RenderMultiColumnSet* LEGACY_NODELETE lastMultiColumnSet() const;
+    RenderBox* LEGACY_NODELETE firstColumnSetOrSpanner() const;
     bool hasColumnSpanner() const { return !m_spannerMap.isEmptyIgnoringNullReferences(); }
-    static RenderBox* nextColumnSetOrSpannerSiblingOf(const RenderBox*);
-    static RenderBox* previousColumnSetOrSpannerSiblingOf(const RenderBox*);
+    static RenderBox* LEGACY_NODELETE nextColumnSetOrSpannerSiblingOf(const RenderBox*);
+    static RenderBox* LEGACY_NODELETE previousColumnSetOrSpannerSiblingOf(const RenderBox*);
 
-    RenderMultiColumnSpannerPlaceholder* NODELETE findColumnSpannerPlaceholder(const RenderBox& spanner) const;
+    RenderMultiColumnSpannerPlaceholder* LEGACY_NODELETE findColumnSpannerPlaceholder(const RenderBox& spanner) const;
 
     void layout() override;
 

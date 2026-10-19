@@ -53,6 +53,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/Logger.h>
 #include <wtf/MediaTime.h>
+#include <wtf/NativePromise.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/URL.h>
@@ -83,7 +84,7 @@ class AudioSourceProvider;
 class AudioTrackPrivate;
 class CDMInstance;
 class CachedResourceLoader;
-class DestinationColorSpace;
+class ColorSpace;
 class GraphicsContextGL;
 class GraphicsContext;
 class InbandTextTrackPrivate;
@@ -99,6 +100,7 @@ class MediaSourcePrivateClient;
 class MediaStreamPrivate;
 class NativeImage;
 class PlatformMediaResourceLoader;
+class MediaResourceSniffer;
 class PlatformTimeRanges;
 class SecurityOriginData;
 class ShareableBitmap;
@@ -106,6 +108,10 @@ class SharedBuffer;
 class TextTrackRepresentation;
 class VideoFrame;
 class VideoTrackPrivate;
+
+#if USE(GSTREAMER) && USE(COORDINATED_GRAPHICS)
+class CoordinatedPlatformLayerBufferProxy;
+#endif
 
 struct GraphicsDeviceAdapter;
 struct HostingContext;
@@ -126,6 +132,12 @@ struct MediaEngineSupportParameters {
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     MediaPlaybackTargetType playbackTargetType { MediaPlaybackTargetType::None };
 #endif
+};
+
+struct MediaPlayerEngineSelection {
+    std::optional<MediaPlayerEnums::MediaEngineIdentifier> identifier { };
+    // When unset, resolves to Playback in the WebContent process and Supports in the GPU process.
+    std::optional<MediaPlayerScope> scope { };
 };
 
 struct SeekTarget {
@@ -179,6 +191,8 @@ struct MediaPlayerLoadOptions {
     ContentType contentType { };
     bool requiresRemotePlayback { false };
     bool supportsLimitedMatroska { false };
+    bool disableTeardownOnVisibilityChange { false };
+    std::optional<bool> supportsProgressMonitoringOverride { };
     VideoRendererPreferences videoRendererPreferences { };
 };
 
@@ -197,9 +211,6 @@ public:
 
     // the mute state has changed
     virtual void mediaPlayerMuteChanged() { }
-
-    // the last seek operation has completed
-    virtual void mediaPlayerSeeked(const MediaTime&) { }
 
     // time has jumped, eg. not as a result of normal playback
     virtual void mediaPlayerTimeChanged() { }
@@ -367,16 +378,16 @@ class WEBCORE_EXPORT MediaPlayer : public MediaPlayerEnums, public ThreadSafeRef
     WTF_MAKE_TZONE_ALLOCATED_EXPORT(MediaPlayer, WEBCORE_EXPORT);
     WTF_MAKE_NONCOPYABLE(MediaPlayer);
 public:
-    static Ref<MediaPlayer> create(MediaPlayerClient&);
-    static Ref<MediaPlayer> create(MediaPlayerClient&, MediaPlayerEnums::MediaEngineIdentifier);
+    static Ref<MediaPlayer> LEGACY_NODELETE create(MediaPlayerClient&);
+    static Ref<MediaPlayer> LEGACY_NODELETE create(MediaPlayerClient&, MediaPlayerEnums::MediaEngineIdentifier);
     ~MediaPlayer();
 
     void invalidate();
 
     // Media engine support.
     using MediaPlayerEnums::SupportsType;
-    static const MediaPlayerFactory* mediaEngine(MediaPlayerEnums::MediaEngineIdentifier);
-    static SupportsType supportsType(const MediaEngineSupportParameters&);
+    static const MediaPlayerFactory* mediaEngine(const MediaPlayerEngineSelection& = { });
+    static SupportsType supportsType(const MediaEngineSupportParameters&, const MediaPlayerEngineSelection& = { });
     static void getSupportedTypes(HashSet<String>&);
     static bool isAvailable();
     static HashSet<SecurityOriginData> originsInMediaCache(const String& path);
@@ -408,8 +419,8 @@ public:
     bool isVideoFullscreenStandby() const;
 #endif
 
-    using LayerHostingContextCallback = CompletionHandler<void(HostingContext)>;
-    void requestHostingContext(LayerHostingContextCallback&&);
+    using HostingContextPromise = NativePromise<HostingContext, void, WTF::PromiseOption::Default | WTF::PromiseOption::WithoutCrossThreadCopy>;
+    Ref<HostingContextPromise> requestHostingContext();
     HostingContext hostingContext() const;
     FloatSize videoLayerSize() const;
     void videoLayerSizeDidChange(const FloatSize&);
@@ -479,11 +490,8 @@ public:
 
     bool paused() const;
     void willSeekToTarget(const MediaTime&);
-    void seekToTime(const MediaTime&);
     void seekWhenPossible(const MediaTime&);
-    void seekToTarget(const SeekTarget&);
-    bool seeking() const;
-    void seeked(const MediaTime&);
+    Ref<MediaTimePromise> seekToTarget(const SeekTarget&);
 
     static double invalidTime() { return -1.0; }
     MediaTime duration() const;
@@ -509,7 +517,7 @@ public:
     bool playAtHostTime(const MonotonicTime&);
     bool pauseAtHostTime(const MonotonicTime&);
 
-    bool NODELETE preservesPitch() const;
+    bool LEGACY_NODELETE preservesPitch() const;
     void setPreservesPitch(bool);
 
     void setPitchCorrectionAlgorithm(PitchCorrectionAlgorithm);
@@ -530,11 +538,11 @@ public:
 
     void setVolumeLocked(bool);
 
-    double NODELETE volume() const;
+    double LEGACY_NODELETE volume() const;
     void setVolume(double);
     bool platformVolumeConfigurationRequired() const { return protect(client())->mediaPlayerPlatformVolumeConfigurationRequired(); }
 
-    bool NODELETE muted() const;
+    bool LEGACY_NODELETE muted() const;
     void setMuted(bool);
 
     bool hasClosedCaptions() const;
@@ -548,7 +556,7 @@ public:
     RefPtr<ShareableBitmap> bitmapImageForCurrentTimeSync();
     using BitmapImagePromise = NativePromise<Ref<ShareableBitmap>, void>;
     Ref<BitmapImagePromise> bitmapImageForCurrentTime();
-    DestinationColorSpace colorSpace();
+    ColorSpace colorSpace();
     bool shouldGetNativeImageForCanvasDrawing() const;
 
     using MediaPlayerEnums::NetworkState;
@@ -561,7 +569,7 @@ public:
     MovieLoadType movieLoadType() const;
 
     using MediaPlayerEnums::Preload;
-    Preload NODELETE preload() const;
+    Preload LEGACY_NODELETE preload() const;
     void setPreload(Preload);
 
     void networkStateChanged();
@@ -586,6 +594,7 @@ public:
     WirelessPlaybackTargetType wirelessPlaybackTargetType() const;
 
     String wirelessPlaybackTargetName() const;
+    String wirelessPlaybackRouteName() const;
 
     bool wirelessVideoPlaybackDisabled() const;
     void setWirelessVideoPlaybackDisabled(bool);
@@ -679,6 +688,10 @@ public:
 #if USE(GSTREAMER)
     void simulateAudioInterruption();
     bool isGStreamerHolePunchingEnabled();
+#if USE(COORDINATED_GRAPHICS)
+    void setPlatformLayerBufferProxy(Ref<CoordinatedPlatformLayerBufferProxy>&&);
+    RefPtr<CoordinatedPlatformLayerBufferProxy> platformLayerBufferProxy() const;
+#endif
 #endif
 
     String languageOfPrimaryAudioTrack() const;
@@ -704,7 +717,7 @@ public:
     const ContentType& contentType() const LIFETIME_BOUND { return m_loadOptions.contentType; }
     String contentMIMEType() const;
     String contentTypeCodecs() const;
-    bool NODELETE contentMIMETypeWasInferredFromExtension() const;
+    bool LEGACY_NODELETE contentMIMETypeWasInferredFromExtension() const;
 
     const Vector<ContentType>& mediaContentTypesRequiringHardwareSupport() const;
     void setShouldCheckHardwareSupport(bool);
@@ -748,8 +761,8 @@ public:
     void remoteEngineFailedToLoad();
     SecurityOriginData documentSecurityOrigin() const;
 
-    const MediaPlayerPrivateInterface* NODELETE playerPrivate() const;
-    MediaPlayerPrivateInterface* NODELETE playerPrivate();
+    const MediaPlayerPrivateInterface* LEGACY_NODELETE playerPrivate() const;
+    MediaPlayerPrivateInterface* LEGACY_NODELETE playerPrivate();
 
     DynamicRangeMode preferredDynamicRangeMode() const { return m_preferredDynamicRangeMode; }
     void setPreferredDynamicRangeMode(DynamicRangeMode);
@@ -761,6 +774,7 @@ public:
     void audioOutputDeviceChanged();
 
     std::optional<MediaPlayerIdentifier> identifier() const;
+    bool isHostedInGPUProcess() const;
     bool hasMediaEngine() const;
 
     std::optional<VideoFrameMetadata> videoFrameMetadata();
@@ -770,7 +784,7 @@ public:
 
     void playerContentBoxRectChanged(const LayoutRect&);
 
-    String NODELETE lastErrorMessage() const;
+    String LEGACY_NODELETE lastErrorMessage() const;
 
     void renderVideoWillBeDestroyed();
 
@@ -798,7 +812,7 @@ public:
     void soundStageSizeDidChange();
 
     void setInFullscreenOrPictureInPicture(bool);
-    bool NODELETE isInFullscreenOrPictureInPicture() const;
+    bool LEGACY_NODELETE isInFullscreenOrPictureInPicture() const;
 
     PlatformVideoTarget videoTarget() const { return protect(client())->mediaPlayerVideoTarget(); }
     MediaPlayerClientIdentifier clientIdentifier() const { return protect(client())->mediaPlayerClientIdentifier(); }
@@ -814,7 +828,7 @@ public:
 #endif
 
     void setMessageClientForTesting(WeakPtr<MessageClientForTesting>);
-    MessageClientForTesting* NODELETE messageClientForTesting() const;
+    MessageClientForTesting* LEGACY_NODELETE messageClientForTesting() const;
 
     void elementIdChanged(const String&) const;
 
@@ -835,9 +849,19 @@ private:
     CheckedPtr<const MediaPlayerFactory> nextMediaEngine(const MediaPlayerFactory*);
     void reloadTimerFired();
 
+    // When the engine fallback chain is exhausted on FormatError/DecodeError and we haven't yet
+    // sniffed the body, fetch a short prefix of the resource, determine the actual Content-Type
+    // from magic bytes, and — if it differs from what we originally tried — re-run engine
+    // selection with the sniffed type. Returns true if a sniff was started (in which case the
+    // caller should defer reporting the failure up to the client until the sniff settles).
+    bool attemptSniffAndReload();
+    void cancelSniffer();
+
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     MediaPlaybackTargetType playbackTargetType() const;
 #endif
+
+    void seekToTime(const MediaTime&);
 
     WeakPtr<MediaPlayerClient> m_client;
     Timer m_reloadTimer;
@@ -863,7 +887,9 @@ private:
     PlatformDynamicRangeLimit m_platformDynamicRangeLimit { PlatformDynamicRangeLimit::initialValueForVideos() };
     PitchCorrectionAlgorithm m_pitchCorrectionAlgorithm { PitchCorrectionAlgorithm::BestAllAround };
     ViewportVisibility m_viewportVisibility { ViewportVisibility::NotVisible };
-    RefPtr<PlatformMediaResourceLoader> m_mediaResourceLoader;
+    const RefPtr<PlatformMediaResourceLoader> m_mediaResourceLoader;
+    RefPtr<MediaResourceSniffer> m_sniffer;
+    bool m_sniffAttempted { false };
 
 #if ENABLE(MEDIA_SOURCE)
     ThreadSafeWeakPtr<MediaSourcePrivateClient> m_mediaSource;
@@ -917,6 +943,10 @@ public:
     virtual void clearMediaCache(const String&, WallTime) const { }
     virtual void clearMediaCacheForOrigins(const String&, const HashSet<SecurityOriginData>&) const { }
     virtual bool supportsKeySystem(const String& /* keySystem */, const String& /* mimeType */) const { return false; }
+
+    // Describes how this factory may be used. Default is Playback; subclasses
+    // override only if they need to answer differently for some contexts.
+    virtual MediaPlayerScope supportedScope() const { return MediaPlayerScope::Playback; }
 };
 
 using MediaEngineRegistrar = void(std::unique_ptr<MediaPlayerFactory>&&);
@@ -931,6 +961,12 @@ class RemoteMediaPlayerSupport {
 public:
     using RegisterRemotePlayerCallback = Function<void(MediaEngineRegistrar, MediaPlayerEnums::MediaEngineIdentifier, PlatformMediaDecodingType)>;
     WEBCORE_EXPORT static void setRegisterRemotePlayerCallback(RegisterRemotePlayerCallback&&);
+
+    // If a remote-player callback has been installed (i.e. this is the WebContent
+    // process and a GPU process is available), register a remote proxy factory for
+    // the given engine and return true. Otherwise return false and leave the
+    // caller to register a local factory.
+    WEBCORE_EXPORT static bool registerRemoteEngineIfAvailable(MediaEngineRegistrar, MediaPlayerEnums::MediaEngineIdentifier, PlatformMediaDecodingType);
 };
 
 inline String MediaPlayer::audioOutputDeviceId() const

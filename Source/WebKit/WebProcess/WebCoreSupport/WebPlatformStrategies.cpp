@@ -27,7 +27,6 @@
 #include "WebPlatformStrategies.h"
 
 #include "BlobRegistryProxy.h"
-#include "BlockingResponseMap.h"
 #include "HangDetectionDisabler.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkProcessConnection.h"
@@ -43,15 +42,16 @@
 #include "WebPasteboardProxyMessages.h"
 #include "WebProcess.h"
 #include "WebProcessProxyMessages.h"
+#include "WriteWebArchiveToPasteBoardResult.h"
 #include <WebCore/AudioDestination.h>
 #include <WebCore/Color.h>
 #include <WebCore/Document.h>
 #include <WebCore/DocumentLoader.h>
+#include <WebCore/ExceptionData.h>
 #include <WebCore/ExceptionOr.h>
 #include <WebCore/LoaderStrategy.h>
 #include <WebCore/LocalFrameInlines.h>
 #include <WebCore/MediaStrategy.h>
-#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/Page.h>
 #include <WebCore/PageGroup.h>
 #include <WebCore/PagePasteboardContext.h>
@@ -294,7 +294,7 @@ int64_t WebPlatformStrategies::writeWebArchive(WebCore::LegacyWebArchive& webArc
         collectFrameWebArchives(identifier, localFrameWebArchives, remoteFrameIdentifiers);
 
     auto sendResult = protect(WebProcess::singleton().parentProcessConnection())->sendSync(Messages::WebPasteboardProxy::WriteWebArchiveToPasteBoard(pasteboardName, *frameIdentifier, WTF::move(localFrameWebArchives), WTF::move(remoteFrameIdentifiers)), 0);
-    auto [newChangeCount] = sendResult.takeReplyOr(0);
+    auto [result, newChangeCount] = sendResult.takeReplyOr(WriteWebArchiveToPasteBoardResult::FailureOther, 0);
     return newChangeCount;
 }
 
@@ -426,13 +426,6 @@ void WebPlatformStrategies::clearClipboard(const String& pasteboardName)
     WebProcess::singleton().parentProcessConnection()->send(Messages::WebPasteboardProxy::ClearClipboard(pasteboardName), 0);
 }
 
-int64_t WebPlatformStrategies::changeCount(const String& pasteboardName)
-{
-    auto sendResult = protect(WebProcess::singleton().parentProcessConnection())->sendSync(Messages::WebPasteboardProxy::GetPasteboardChangeCount(pasteboardName), 0);
-    auto [changeCount] = sendResult.takeReplyOr(0);
-    return changeCount;
-}
-
 #elif USE(LIBWPE)
 // PasteboardStrategy
 
@@ -454,6 +447,17 @@ void WebPlatformStrategies::writeToPasteboard(const String& pasteboardType, cons
 }
 
 #endif // USE(LIBWPE)
+
+#if PLATFORM(GTK) || PLATFORM(WPE) || PLATFORM(WIN)
+
+int64_t WebPlatformStrategies::changeCount(const String& pasteboardName)
+{
+    auto sendResult = protect(WebProcess::singleton().parentProcessConnection())->sendSync(Messages::WebPasteboardProxy::GetPasteboardChangeCount(pasteboardName), 0);
+    auto [changeCount] = sendResult.takeReplyOr(0);
+    return changeCount;
+}
+
+#endif // PLATFORM(GTK) || PLATFORM(WPE) || PLATFORM(WIN)
 
 Vector<String> WebPlatformStrategies::typesSafeForDOMToReadAndWrite(const String& pasteboardName, const String& origin, const PasteboardContext* context)
 {
@@ -547,7 +551,7 @@ void WebPlatformStrategies::windowSubscribeToPushService(const URL& scope, const
         callback(WTF::move(*valueOrException));
     };
 
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorSubscribeToPushService(scope, applicationServerKey), WTF::move(completionHandler));
+    protect(WebProcess::singleton().ensureNetworkProcessConnection().connection())->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorSubscribeToPushService(scope, applicationServerKey), WTF::move(completionHandler));
 }
 
 void WebPlatformStrategies::windowUnsubscribeFromPushService(const URL& scope, std::optional<PushSubscriptionIdentifier> subscriptionIdentifier, UnsubscribeFromPushServiceCallback&& callback)
@@ -560,7 +564,7 @@ void WebPlatformStrategies::windowUnsubscribeFromPushService(const URL& scope, s
         callback(WTF::move(*valueOrException));
     };
 
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorUnsubscribeFromPushService(scope, *subscriptionIdentifier), WTF::move(completionHandler));
+    protect(WebProcess::singleton().ensureNetworkProcessConnection().connection())->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorUnsubscribeFromPushService(scope, *subscriptionIdentifier), WTF::move(completionHandler));
 }
 
 void WebPlatformStrategies::windowGetPushSubscription(const URL& scope, GetPushSubscriptionCallback&& callback)
@@ -573,7 +577,7 @@ void WebPlatformStrategies::windowGetPushSubscription(const URL& scope, GetPushS
         callback(WTF::move(*valueOrException));
     };
 
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorGetPushSubscription(scope), WTF::move(completionHandler));
+    protect(WebProcess::singleton().ensureNetworkProcessConnection().connection())->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorGetPushSubscription(scope), WTF::move(completionHandler));
 }
 
 void WebPlatformStrategies::windowGetPushPermissionState(const URL& scope, GetPushPermissionStateCallback&& callback)
@@ -584,7 +588,7 @@ void WebPlatformStrategies::windowGetPushPermissionState(const URL& scope, GetPu
         callback(static_cast<PushPermissionState>(*valueOrException));
     };
 
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorGetPushPermissionState(scope), WTF::move(completionHandler));
+    protect(WebProcess::singleton().ensureNetworkProcessConnection().connection())->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::NavigatorGetPushPermissionState(scope), WTF::move(completionHandler));
 }
 
 #endif // ENABLE(DECLARATIVE_WEB_PUSH)

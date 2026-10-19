@@ -141,7 +141,7 @@ static RefPtr<AudioInfo> createAudioInfoForFormat(OSType formatID, Vector<uint8_
 #endif // ENABLE(VORBIS) || ENABLE(OPUS)
 
 #if ENABLE(OPUS)
-constexpr Seconds NODELETE opusConfigToFrameDuration(uint8_t config)
+constexpr Seconds LEGACY_NODELETE opusConfigToFrameDuration(uint8_t config)
 {
     // Refer to https://tools.ietf.org/html/rfc6716#section-3:
     // Section 3.1. The TOC Byte
@@ -188,7 +188,7 @@ constexpr Seconds NODELETE opusConfigToFrameDuration(uint8_t config)
     return 20_ms; // The most common Opus frame duration.
 }
 
-constexpr int32_t NODELETE opusConfigToBandwidth(uint8_t config)
+constexpr int32_t LEGACY_NODELETE opusConfigToBandwidth(uint8_t config)
 {
     // Refer to https://tools.ietf.org/html/rfc6716#section-3:
     // Section 3.1. The TOC Byte
@@ -462,7 +462,10 @@ Vector<uint8_t> createOpusPrivateData(const AudioStreamBasicDescription& descrip
 }
 
 #if ENABLE(VORBIS)
+#if !defined(WEBCORE_kAudioFormatVorbis_DEFINED)
+#define WEBCORE_kAudioFormatVorbis_DEFINED
 static constexpr uint32_t kAudioFormatVorbis = 'vorb';
+#endif
 
 static Vector<uint8_t> cookieFromVorbisCodecPrivate(std::span<const uint8_t> codecPrivateData)
 {

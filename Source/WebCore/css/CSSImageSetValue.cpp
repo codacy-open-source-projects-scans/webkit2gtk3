@@ -29,6 +29,7 @@
 #include "CSSImageSetOptionValue.h"
 #include "CSSImageValue.h"
 #include "CSSPrimitiveValue.h"
+#include "DeprecatedCSSOMValueList.h"
 #include "StyleBuilderState.h"
 #include "StyleImageSet.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
@@ -44,7 +45,7 @@ Ref<CSSImageSetValue> CSSImageSetValue::create(CSSValueListBuilder builder)
 }
 
 CSSImageSetValue::CSSImageSetValue(CSSValueListBuilder builder)
-    : CSSValueContainingVector(ClassType::ImageSet, CommaSeparator, WTF::move(builder))
+    : CSSValueContainingVector(ClassType::ImageSet, ValueSeparator::Comma, WTF::move(builder))
 {
 }
 
@@ -60,6 +61,11 @@ String CSSImageSetValue::customCSSText(const CSS::SerializationContext& context)
     }
     result.append(')');
     return result.toString();
+}
+
+Ref<DeprecatedCSSOMValue> CSSImageSetValue::customCreateDeprecatedCSSOMWrapper(CSSStyleDeclaration& owner) const
+{
+    return DeprecatedCSSOMValueList::create(*this, owner);
 }
 
 RefPtr<Style::Image> CSSImageSetValue::createStyleImage(const Style::BuilderState& state) const

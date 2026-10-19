@@ -279,7 +279,7 @@ void linkPolymorphicCall(VM& vm, JSCell* owner, CallFrame* callFrame, CallLinkIn
 
 #if ENABLE(JIT)
 
-static ECMAMode NODELETE ecmaModeFor(PutByKind putByKind)
+static ECMAMode LEGACY_NODELETE ecmaModeFor(PutByKind putByKind)
 {
     switch (putByKind) {
     case PutByKind::ByIdSloppy:
@@ -359,7 +359,7 @@ static InlineCacheAction actionForCell(VM& vm, JSCell* cell)
     return AttemptToCache;
 }
 
-static bool NODELETE forceICFailure(JSGlobalObject*)
+static bool LEGACY_NODELETE forceICFailure(JSGlobalObject*)
 {
     return Options::forceICFailure();
 }
@@ -426,15 +426,13 @@ static std::optional<NonStringPrimitiveKeyInfo> nonStringPrimitiveKeyInfoForUID(
     return std::nullopt;
 }
 
-inline CodePtr<CFunctionPtrTag> NODELETE appropriateGetByOptimizeFunction(GetByKind kind)
+inline CodePtr<CFunctionPtrTag> LEGACY_NODELETE appropriateGetByOptimizeFunction(GetByKind kind)
 {
     switch (kind) {
     case GetByKind::ById:
         return operationGetByIdOptimize;
     case GetByKind::ByIdWithThis:
         return operationGetByIdWithThisOptimize;
-    case GetByKind::TryById:
-        return operationTryGetByIdOptimize;
     case GetByKind::ByIdDirect:
         return operationGetByIdDirectOptimize;
     case GetByKind::ByVal:
@@ -449,15 +447,13 @@ inline CodePtr<CFunctionPtrTag> NODELETE appropriateGetByOptimizeFunction(GetByK
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-inline CodePtr<CFunctionPtrTag> NODELETE appropriateGetByGaveUpFunction(GetByKind kind)
+inline CodePtr<CFunctionPtrTag> LEGACY_NODELETE appropriateGetByGaveUpFunction(GetByKind kind)
 {
     switch (kind) {
     case GetByKind::ById:
         return operationGetByIdGaveUp;
     case GetByKind::ByIdWithThis:
         return operationGetByIdWithThisGaveUp;
-    case GetByKind::TryById:
-        return operationTryGetByIdGaveUp;
     case GetByKind::ByIdDirect:
         return operationGetByIdDirectGaveUp;
     case GetByKind::ByVal:
@@ -601,7 +597,7 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
 
             RefPtr<PolyProtoAccessChain> prototypeAccessChain;
 
-            PropertyOffset offset = slot.isUnset() ? invalidOffset : slot.cachedOffset();
+            PropertyOffset offset = slot.isUnset() || slot.isCustom() ? invalidOffset : slot.cachedOffset();
 
             if (slot.isCustom() && slot.slotBase() == baseValue) {
                 // To cache self customs, we must disallow dictionaries because we
@@ -669,6 +665,14 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
                 }
             }
 
+            // Fresh dictionaries were flattened above, but one that has already been flattened once is not
+            // re-flattened and stays a dictionary. A custom with no backing property in the slot base's structure
+            // (invalidOffset, such as one served from a static property table) is shadowed by adding that
+            // property, which on a dictionary happens in place with no structure transition, leaving the
+            // constant custom getter recorded here stale.
+            if (slot.isCacheableCustom() && slot.slotBase()->structure()->isDictionary() && !isValidOffset(slot.cachedOffset()))
+                return GiveUpOnCache;
+
             JSFunction* getter = nullptr;
             if (slot.isCacheableGetter())
                 getter = dynamicDowncast<JSFunction>(slot.getterSetter()->getter());
@@ -677,19 +681,7 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
             if (slot.isCacheableCustom() && slot.domAttribute())
                 domAttribute = slot.domAttribute();
 
-            if (kind == GetByKind::TryById) {
-                AccessCase::AccessType type;
-                if (slot.isCacheableValue())
-                    type = AccessCase::Load;
-                else if (slot.isUnset())
-                    type = AccessCase::Miss;
-                else if (slot.isCacheableGetter())
-                    type = AccessCase::GetGetter;
-                else
-                    RELEASE_ASSERT_NOT_REACHED();
-
-                newCase = ProxyableAccessCase::create(vm, codeBlock, type, propertyName, offset, structure, conditionSet, loadTargetFromProxy, slot.watchpointSet(), WTF::move(prototypeAccessChain));
-            } else if (!loadTargetFromProxy && getter && InlineCacheCompiler::canEmitIntrinsicGetter(propertyCache, getter, structure))
+            if (!loadTargetFromProxy && getter && InlineCacheCompiler::canEmitIntrinsicGetter(propertyCache, getter, structure))
                 newCase = IntrinsicGetterAccessCase::create(vm, codeBlock, propertyName, slot.cachedOffset(), structure, conditionSet, getter, WTF::move(prototypeAccessChain));
             else {
                 if (isPrivate) {
@@ -796,6 +788,7 @@ void repatchGetBy(JSGlobalObject* globalObject, CodeBlock* codeBlock, JSValue ba
 // Mainly used to transition from megamorphic case to generic case.
 void repatchGetBySlowPathCall(CodeBlock* codeBlock, PropertyInlineCache& propertyCache, GetByKind kind)
 {
+    ConcurrentJSLocker locker(codeBlock->m_lock);
     resetGetBy(codeBlock, propertyCache, kind);
     repatchSlowPathCall(codeBlock, propertyCache, appropriateGetByGaveUpFunction(kind));
 }
@@ -828,10 +821,6 @@ static InlineCacheAction tryCacheArrayGetByVal(JSGlobalObject* globalObject, Cod
             accessType = AccessCase::IndexedProxyObjectLoad;
         else if (isTypedView(base->type())) {
             auto* typedArray = uncheckedDowncast<JSArrayBufferView>(base);
-#if USE(JSVALUE32_64)
-            if (typedArray->isResizableOrGrowableShared())
-                return GiveUpOnCache;
-#endif
             switch (typedArray->type()) {
             case Int8ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt8Load : AccessCase::IndexedTypedArrayInt8Load;
@@ -964,7 +953,7 @@ void repatchArrayGetByVal(JSGlobalObject* globalObject, CodeBlock* codeBlock, JS
     }
 }
 
-static CodePtr<CFunctionPtrTag> NODELETE appropriatePutByGaveUpFunction(PutByKind putByKind)
+static CodePtr<CFunctionPtrTag> LEGACY_NODELETE appropriatePutByGaveUpFunction(PutByKind putByKind)
 {
     switch (putByKind) {
     case PutByKind::ByIdStrict:
@@ -1000,11 +989,12 @@ static CodePtr<CFunctionPtrTag> NODELETE appropriatePutByGaveUpFunction(PutByKin
 // Mainly used to transition from megamorphic case to generic case.
 void repatchPutBySlowPathCall(CodeBlock* codeBlock, PropertyInlineCache& propertyCache, PutByKind kind)
 {
+    ConcurrentJSLocker locker(codeBlock->m_lock);
     resetPutBy(codeBlock, propertyCache, kind);
     repatchSlowPathCall(codeBlock, propertyCache, appropriatePutByGaveUpFunction(kind));
 }
 
-static CodePtr<CFunctionPtrTag> NODELETE appropriatePutByOptimizeFunction(PutByKind putByKind)
+static CodePtr<CFunctionPtrTag> LEGACY_NODELETE appropriatePutByOptimizeFunction(PutByKind putByKind)
 {
     switch (putByKind) {
     case PutByKind::ByIdStrict:
@@ -1224,6 +1214,13 @@ static InlineCacheAction tryCachePutBy(JSGlobalObject* globalObject, CodeBlock* 
                 if (!cacheStatus)
                     return GiveUpOnCache;
 
+                // prepareChainForCaching leaves a dictionary that has already been flattened once as a dictionary.
+                // A custom with no backing property in the base's structure (invalidOffset, such as one served from
+                // a static property table) is shadowed by adding that property, which on a dictionary happens in
+                // place with no structure transition, leaving this cache stale.
+                if (!isValidOffset(slot.cachedOffset()) && slot.base()->structure()->isDictionary())
+                    return GiveUpOnCache;
+
                 if (slot.base() != baseValue) {
                     if (cacheStatus->usesPolyProto) {
                         prototypeAccessChain = PolyProtoAccessChain::tryCreate(globalObject, baseCell, propertyName, slot.base());
@@ -1399,10 +1396,6 @@ static InlineCacheAction tryCacheArrayPutByVal(JSGlobalObject* globalObject, Cod
             }
         } else if (isTypedView(base->type())) {
             auto* typedArray = uncheckedDowncast<JSArrayBufferView>(base);
-#if USE(JSVALUE32_64)
-            if (typedArray->isResizableOrGrowableShared())
-                return GiveUpOnCache;
-#endif
             switch (typedArray->type()) {
             case Int8ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt8Store : AccessCase::IndexedTypedArrayInt8Store;
@@ -1602,7 +1595,7 @@ void repatchDeleteBy(JSGlobalObject* globalObject, CodeBlock* codeBlock, DeleteP
     }
 }
 
-inline CodePtr<CFunctionPtrTag> NODELETE appropriateInByOptimizeFunction(InByKind kind)
+inline CodePtr<CFunctionPtrTag> LEGACY_NODELETE appropriateInByOptimizeFunction(InByKind kind)
 {
     switch (kind) {
     case InByKind::ById:
@@ -1615,7 +1608,7 @@ inline CodePtr<CFunctionPtrTag> NODELETE appropriateInByOptimizeFunction(InByKin
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-inline CodePtr<CFunctionPtrTag> NODELETE appropriateInByGaveUpFunction(InByKind kind)
+inline CodePtr<CFunctionPtrTag> LEGACY_NODELETE appropriateInByGaveUpFunction(InByKind kind)
 {
     switch (kind) {
     case InByKind::ById:
@@ -1631,6 +1624,7 @@ inline CodePtr<CFunctionPtrTag> NODELETE appropriateInByGaveUpFunction(InByKind 
 // Mainly used to transition from megamorphic case to generic case.
 void repatchInBySlowPathCall(CodeBlock* codeBlock, PropertyInlineCache& propertyCache, InByKind kind)
 {
+    ConcurrentJSLocker locker(codeBlock->m_lock);
     resetInBy(codeBlock, propertyCache, kind);
     repatchSlowPathCall(codeBlock, propertyCache, appropriateInByGaveUpFunction(kind));
 }
@@ -2003,10 +1997,6 @@ static InlineCacheAction tryCacheArrayInByVal(JSGlobalObject* globalObject, Code
             accessType = AccessCase::IndexedProxyObjectIn;
         else if (isTypedView(base->type())) {
             auto* typedArray = uncheckedDowncast<JSArrayBufferView>(base);
-#if USE(JSVALUE32_64)
-            if (typedArray->isResizableOrGrowableShared())
-                return GiveUpOnCache;
-#endif
             switch (typedArray->type()) {
             case Int8ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt8In : AccessCase::IndexedTypedArrayInt8In;

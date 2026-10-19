@@ -40,10 +40,6 @@
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION)
 #import <pal/spi/mac/TelephonyUtilitiesSPI.h>
-#import <wtf/SoftLinking.h>
-
-SOFT_LINK_PRIVATE_FRAMEWORK_OPTIONAL(TelephonyUtilities)
-SOFT_LINK_CLASS(TelephonyUtilities, TUCall)
 #endif
 
 #import <pal/cocoa/DataDetectorsCoreSoftLink.h>
@@ -99,7 +95,7 @@ using namespace WebCore;
 
 RetainPtr<NSString> menuItemTitleForTelephoneNumberGroup()
 {
-    return [getTUCallClassSingleton() supplementalDialTelephonyCallString];
+    return [TUCall supplementalDialTelephonyCallString];
 }
 
 static RetainPtr<PlatformDDAction> actionForMenuItem(NSMenuItem *item)
@@ -122,7 +118,8 @@ NSMenuItem *menuItemForTelephoneNumber(const String& telephoneNumber)
     [actionContext setAllowedActionUTIs:@[ @"com.apple.dial" ]];
 
     RetainPtr<NSArray> proposedMenuItems = [[PAL::getDDActionsManagerClassSingleton() sharedManager] menuItemsForValue:telephoneNumber.createNSString().get() type:PAL::get_DataDetectorsCore_DDBinderPhoneNumberKeySingleton() service:nil context:actionContext.get()];
-    for (NSMenuItem *item in proposedMenuItems.get()) {
+    // FIXME: Remove the suppression once https://github.com/llvm/llvm-project/pull/230818 is deployed (rdar://189710680).
+    for (SUPPRESS_UNRETAINED_LOCAL NSMenuItem *item in proposedMenuItems.get()) {
         RetainPtr action = actionForMenuItem(item);
         if ([retainPtr(action.get().actionUTI) hasPrefix:@"com.apple.dial"]) {
             item.title = formattedPhoneNumberString(telephoneNumber.createNSString().get()).get();

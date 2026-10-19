@@ -40,7 +40,7 @@ class RenderMathMLFraction final : public RenderMathMLRow {
     WTF_MAKE_TZONE_ALLOCATED(RenderMathMLFraction);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderMathMLFraction);
 public:
-    RenderMathMLFraction(MathMLFractionElement&, RenderStyle&&);
+    RenderMathMLFraction(MathMLFractionElement&, Style::ComputedStyle&&);
     virtual ~RenderMathMLFraction();
 
     LayoutUnit defaultLineThickness() const;
@@ -50,18 +50,18 @@ public:
 private:
     ASCIILiteral renderName() const final { return "RenderMathMLFraction"_s; }
 
-    void computePreferredLogicalWidths() final;
+    void computeIntrinsicLogicalWidthContributions() final;
     void layoutBlock(RelayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) final;
     std::optional<LayoutUnit> firstLineBaseline() const final;
     void paint(PaintInfo&, const LayoutPoint&) final;
-    RenderMathMLOperator* unembellishedOperator() const final;
+    CheckedPtr<RenderMathMLOperator> unembellishedOperator() const final;
     bool isMathContentCentered() const final { return true; }
 
-    MathMLFractionElement& NODELETE element() const;
+    MathMLFractionElement& LEGACY_NODELETE element() const;
 
-    bool isValid() const;
-    RenderBox& numerator() const;
-    RenderBox& denominator() const;
+    bool LEGACY_NODELETE isValid() const;
+    RenderBox& LEGACY_NODELETE numerator() const;
+    RenderBox& LEGACY_NODELETE denominator() const;
     LayoutUnit horizontalOffset(RenderBox&, MathMLFractionElement::FractionAlignment) const;
     struct FractionParameters {
         LayoutUnit numeratorShiftUp;

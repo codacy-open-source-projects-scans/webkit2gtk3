@@ -36,12 +36,6 @@ namespace CSS {
 struct CustomIdent {
     AtomString value;
 
-    std::optional<AtomString> tryResolved() const
-    {
-        // FIXME: When ident() function is added, only successfully resolve when there are no <integer> components.
-        return value;
-    }
-
     bool operator==(const CustomIdent&) const = default;
 };
 
@@ -49,6 +43,7 @@ template<> struct Serialize<CustomIdent> { void operator()(StringBuilder&, const
 template<> struct ComputedStyleDependenciesCollector<CustomIdent> { constexpr void operator()(ComputedStyleDependencies&, const CustomIdent&) { } };
 template<> struct CSSValueChildrenVisitor<CustomIdent> { constexpr IterationStatus operator()(NOESCAPE const Function<IterationStatus(CSSValue&)>&, const CustomIdent&) { return IterationStatus::Continue; } };
 template<> struct CSSValueCreation<CustomIdent> { Ref<CSSValue> operator()(CSSValuePool&, const CustomIdent&); };
+template<> struct DeprecatedCSSOMValueCreation<CustomIdent> { Ref<DeprecatedCSSOMValue> operator()(CSSValuePool&, CSSStyleDeclaration&, const CustomIdent&); };
 
 // MARK: - Logging
 
@@ -56,7 +51,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, const CustomIdent&);
 
 // MARK: - Hashing
 
-void NODELETE add(Hasher&, const CustomIdent&);
+void LEGACY_NODELETE add(Hasher&, const CustomIdent&);
 
 } // namespace CSS
 } // namespace WebCore

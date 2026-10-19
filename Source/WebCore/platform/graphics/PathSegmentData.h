@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <WebCore/ColorTypes.h>
 #include <WebCore/FloatRect.h>
 #include <WebCore/FloatRoundedRect.h>
 #include <WebCore/PathElement.h>
@@ -44,15 +45,15 @@ struct PathMoveTo {
 
     bool operator==(const PathMoveTo&) const = default;
 
-    FloatPoint NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> NODELETE tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void NODELETE transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathMoveTo&);
@@ -65,15 +66,15 @@ struct PathLineTo {
 
     bool operator==(const PathLineTo&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathLineTo&);
@@ -87,15 +88,15 @@ struct PathQuadCurveTo {
 
     bool operator==(const PathQuadCurveTo&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathQuadCurveTo&);
@@ -110,15 +111,15 @@ struct PathBezierCurveTo {
 
     bool operator==(const PathBezierCurveTo&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathBezierCurveTo&);
@@ -133,11 +134,11 @@ struct PathArcTo {
 
     bool operator==(const PathArcTo&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -155,11 +156,11 @@ struct PathArc {
 
     bool operator==(const PathArc&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -173,11 +174,11 @@ struct PathClosedArc {
 
     bool operator==(const PathClosedArc&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -201,7 +202,7 @@ struct PathEllipse {
     std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
 
     void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -215,11 +216,11 @@ struct PathEllipseInRect {
 
     bool operator==(const PathEllipseInRect&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -233,11 +234,11 @@ struct PathRect {
 
     bool operator==(const PathRect&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -257,11 +258,11 @@ struct PathRoundedRect {
 
     bool operator==(const PathRoundedRect&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -277,11 +278,11 @@ struct PathContinuousRoundedRect {
 
     bool operator==(const PathContinuousRoundedRect&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -307,20 +308,30 @@ struct PathDataLine {
 
     bool operator==(const PathDataLine&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 private:
     std::array<float, 4> m_values { };
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataLine&);
+
+struct PathDataLineColorThickness {
+    PathDataLine line;
+    PackedColor::RGBA color;
+    float thickness;
+
+    bool operator==(const PathDataLineColorThickness&) const = default;
+};
+
+WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataLineColorThickness&);
 
 struct PathDataQuadCurve {
     FloatPoint start;
@@ -332,15 +343,15 @@ struct PathDataQuadCurve {
 
     bool operator==(const PathDataQuadCurve&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataQuadCurve&);
@@ -356,15 +367,15 @@ struct PathDataBezierCurve {
 
     bool operator==(const PathDataBezierCurve&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataBezierCurve&);
@@ -380,11 +391,11 @@ struct PathDataArc {
 
     bool operator==(const PathDataArc&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
 };
 
@@ -396,15 +407,15 @@ struct PathCloseSubpath {
 
     bool operator==(const PathCloseSubpath&) const = default;
 
-    FloatPoint calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
-    std::optional<FloatPoint> tryGetEndPointWithoutContext() const;
+    FloatPoint LEGACY_NODELETE calculateEndPoint(const FloatPoint& currentPoint, FloatPoint& lastMoveToPoint) const;
+    std::optional<FloatPoint> LEGACY_NODELETE tryGetEndPointWithoutContext() const;
 
-    void extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
-    void extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendFastBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
+    void LEGACY_NODELETE extendBoundingRect(const FloatPoint& currentPoint, const FloatPoint& lastMoveToPoint, FloatRect& boundingRect) const;
 
-    void applyElements(const PathElementApplier&) const;
+    void applyElements(NOESCAPE const PathElementApplier&) const;
 
-    void NODELETE transform(const AffineTransform&);
+    void LEGACY_NODELETE transform(const AffineTransform&);
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathCloseSubpath&);

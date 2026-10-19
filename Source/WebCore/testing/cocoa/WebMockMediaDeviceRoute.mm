@@ -31,27 +31,32 @@
 #import "MockMediaDeviceRouteURLCallback.h"
 #import <WebCore/JSDOMPromise.h>
 #import <wtf/BlockPtr.h>
+#import <wtf/SoftLinking.h>
 #import <wtf/WeakObjCPtr.h>
+
+SOFT_LINK_FRAMEWORK(AVKit)
+SOFT_LINK_CLASS(AVKit, AVPlaybackUserInterfacePlaybackPosition)
 
 NS_ASSUME_NONNULL_BEGIN
 
 NSErrorDomain const WebMockMediaDeviceRouteErrorDomain = @"WebMockMediaDeviceRouteErrorDomain";
 
-@interface WebMockMediaDeviceRoute (Staging_169033633)
-@property (nonatomic) CMTime currentPlaybackPosition;
-@property (nonatomic) CMTime currentValue;
+@interface WebMockMediaDeviceRoute ()
+@property (nonatomic, copy) AVPlaybackUserInterfacePlaybackPosition *playbackPosition;
 @end
 
 @implementation WebMockMediaDeviceRoute {
     RefPtr<WebCore::MockMediaDeviceRouteURLCallback> _urlCallback;
     RefPtr<WebCore::DOMPromise> _urlPromise;
-    CMTime _currentPlaybackPosition;
+    BOOL _connected;
+    CMTime _lastSeekTolerance;
 }
 
 @synthesize timeRange;
 @synthesize segments;
 @synthesize currentSegment;
 @synthesize seekableTimeRanges;
+@synthesize playbackPosition;
 @synthesize ready;
 @synthesize playing;
 @synthesize buffering;
@@ -60,38 +65,47 @@ NSErrorDomain const WebMockMediaDeviceRouteErrorDomain = @"WebMockMediaDeviceRou
 @synthesize state;
 @synthesize supportedSeekCapabilities;
 @synthesize containsLiveStreamingContent;
-@synthesize playbackError;
+@synthesize error;
 @synthesize currentAudioOption;
+@synthesize currentAudioDescriptionOption;
 @synthesize currentLegibleOption;
 @synthesize audioOptions;
+@synthesize audioDescriptionOptions;
 @synthesize legibleOptions;
 @synthesize hasAudio;
 @synthesize muted;
 @synthesize volume;
 @synthesize metadata;
 @synthesize routeDisplayName;
+@synthesize protocolType;
 
-- (CMTime)currentPlaybackPosition
+- (instancetype)init
 {
-    return _currentPlaybackPosition;
+    if (!(self = [super init]))
+        return nil;
+
+    timeRange = CMTimeRangeMake(kCMTimeZero, CMTimeMakeWithSeconds(60, 1000));
+    _lastSeekTolerance = kCMTimeInvalid;
+
+    return self;
 }
 
-- (void)setCurrentPlaybackPosition:(CMTime)currentPlaybackPosition
+- (CMTime)lastSeekTolerance
 {
-    _currentPlaybackPosition = currentPlaybackPosition;
+    return _lastSeekTolerance;
 }
 
-ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
-- (CMTime)currentValue
+- (void)seekToPosition:(CMTime)position tolerance:(CMTime)tolerance
 {
-    return self.currentPlaybackPosition;
+    _lastSeekTolerance = tolerance;
+    RetainPtr playbackPosition = adoptNS([allocAVPlaybackUserInterfacePlaybackPositionInstance() initWithPosition:position hostTime:CMClockGetTime(CMClockGetHostTimeClock()) rate:0]);
+    self.playbackPosition = playbackPosition.get();
 }
 
-- (void)setCurrentValue:(CMTime)currentValue
+- (BOOL)isConnected
 {
-    self.currentPlaybackPosition = currentValue;
+    return _connected;
 }
-ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
 - (WebCore::MockMediaDeviceRouteURLCallback* _Nullable)urlCallback
 {
@@ -103,7 +117,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     _urlCallback = urlCallback;
 }
 
-- (void)startWithURL:(NSURL *)url completionHandler:(void (^)(NSError * _Nullable, NSObject<AVMediaSource> * _Nullable))completionHandler
+- (void)startWithURL:(NSURL *)url completionHandler:(void (^)(NSError * _Nullable, NSObject<AVPlaybackUserInterfaceControllable> * _Nullable))completionHandler
 {
     if (!_urlCallback)
         return completionHandler([NSError errorWithDomain:WebMockMediaDeviceRouteErrorDomain code:WebMockMediaDeviceRouteErrorCodeInvalidState userInfo:nil], nil);
@@ -120,6 +134,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
         switch (std::exchange(strongSelf->_urlPromise, nullptr)->status()) {
         case WebCore::DOMPromise::Status::Fulfilled:
+            strongSelf->_connected = YES;
             return completionHandler(nil, strongSelf.get());
         case WebCore::DOMPromise::Status::Rejected:
             return completionHandler([NSError errorWithDomain:WebMockMediaDeviceRouteErrorDomain code:WebMockMediaDeviceRouteErrorCodeUnsupportedURL userInfo:nil], nil);
@@ -129,6 +144,11 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
         RELEASE_ASSERT_NOT_REACHED();
     });
+}
+
+- (void)stop
+{
+    _connected = NO;
 }
 
 @end

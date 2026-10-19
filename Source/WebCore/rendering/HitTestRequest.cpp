@@ -25,13 +25,16 @@
 #include "config.h"
 #include "HitTestRequest.h"
 
-#include "RenderStyle+GettersInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
+#include "UsedStyle.h"
 
 namespace WebCore {
 
-bool HitTestRequest::isVisibleForStyle(const RenderStyle& style) const
+bool HitTestRequest::isVisibleForStyle(const UsedStyle& usedStyle) const
 {
-    return (userTriggered() ? style.usedVisibility() : style.visibility()) == Visibility::Visible;
+    if (!userTriggered())
+        return usedStyle.computedStyle().visibility() == Visibility::Visible;
+    return usedStyle.visibility() == UsedVisibility::Visible;
 }
 
 } // namespace WebCore

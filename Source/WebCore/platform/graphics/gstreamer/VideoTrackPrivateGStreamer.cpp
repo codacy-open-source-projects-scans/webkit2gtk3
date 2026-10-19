@@ -62,15 +62,15 @@ VideoTrackPrivateGStreamer::VideoTrackPrivateGStreamer(ThreadSafeWeakPtr<MediaPl
     ensureVideoTrackDebugCategoryInitialized();
 }
 
-VideoTrackPrivateGStreamer::VideoTrackPrivateGStreamer(ThreadSafeWeakPtr<MediaPlayerPrivateGStreamer>&& player, unsigned index, GstStream* stream)
-    : TrackPrivateBaseGStreamer(WTF::move(player), GStreamerTrackType::Video, this, index, stream)
+VideoTrackPrivateGStreamer::VideoTrackPrivateGStreamer(ThreadSafeWeakPtr<MediaPlayerPrivateGStreamer>&& player, unsigned index, GRefPtr<GstStream>&& stream)
+    : TrackPrivateBaseGStreamer(WTF::move(player), GStreamerTrackType::Video, this, index, WTF::move(stream))
 {
     ensureVideoTrackDebugCategoryInitialized();
 
-    auto caps = adoptGRef(gst_stream_get_caps(m_data->m_stream.get()));
+    GRefPtr caps = adoptGRef(gst_stream_get_caps(m_data->m_stream.get()));
     updateConfigurationFromCaps(WTF::move(caps));
 
-    auto tags = adoptGRef(gst_stream_get_tags(m_data->m_stream.get()));
+    GRefPtr tags = adoptGRef(gst_stream_get_tags(m_data->m_stream.get()));
     updateConfigurationFromTags(WTF::move(tags));
 }
 
@@ -129,7 +129,6 @@ void VideoTrackPrivateGStreamer::updateConfigurationFromCaps(GRefPtr<GstCaps>&& 
         setConfiguration(WTF::move(configuration));
     });
 
-#if GST_CHECK_VERSION(1, 20, 0)
     auto mimeCodec = GMallocString::unsafeAdoptFromUTF8(gst_codec_utils_caps_get_mime_codec(caps.get()));
     if (!mimeCodec.isEmpty()) {
         String codec(mimeCodec.span());
@@ -147,7 +146,6 @@ void VideoTrackPrivateGStreamer::updateConfigurationFromCaps(GRefPtr<GstCaps>&& 
         }
         configuration.codec = WTF::move(codec);
     }
-#endif
 
     int pixelAspectRatioNumerator, pixelAspectRatioDenominator, stride;
     double frameRate;

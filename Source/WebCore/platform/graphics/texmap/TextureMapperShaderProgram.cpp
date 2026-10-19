@@ -87,7 +87,7 @@ static const char* vertexTemplateLT320Vars =
         varying vec2 v_texCoord;
         varying vec2 v_transformedTexCoord;
         varying float v_antialias;
-        varying vec4 v_nonProjectedPosition;
+        varying highp vec4 v_nonProjectedPosition;
     );
 // clang-format off
 static const char* vertexTemplateCommon =
@@ -237,7 +237,7 @@ static const char* fragmentTemplateLT320Vars =
         varying float v_antialias;
         varying vec2 v_texCoord;
         varying vec2 v_transformedTexCoord;
-        varying vec4 v_nonProjectedPosition;
+        varying highp vec4 v_nonProjectedPosition;
     );
 
 static const char* fragmentTemplateYUVToRGB =
@@ -350,8 +350,8 @@ static const char* fragmentTemplateCommon =
         uniform int u_gaussianKernelHalfSize;
         uniform vec2 u_blurDirection;
         uniform int u_roundedRectNumber;
-        uniform vec4 u_roundedRect[ROUNDED_RECT_ARRAY_SIZE];
-        uniform mat4 u_roundedRectInverseTransformMatrix[ROUNDED_RECT_INVERSE_TRANSFORM_ARRAY_SIZE];
+        uniform highp vec4 u_roundedRect[ROUNDED_RECT_ARRAY_SIZE];
+        uniform highp mat4 u_roundedRectInverseTransformMatrix[ROUNDED_RECT_INVERSE_TRANSFORM_ARRAY_SIZE];
 
         void noop(inout vec4 dummyParameter) { }
         void noop(inout vec4 dummyParameter, vec2 texCoord) { }
@@ -558,32 +558,32 @@ static const char* fragmentTemplateCommon =
 
         void applySolidColor(inout vec4 color) { color *= u_color; }
 
-        float ellipsisDist(vec2 p, vec2 radius)
+        float ellipsisDist(highp vec2 p, highp vec2 radius)
         {
             if (radius == vec2(0, 0))
                 return 0.0;
 
-            vec2 p0 = p / radius;
-            vec2 p1 = 2.0 * p0 / radius;
+            highp vec2 p0 = p / radius;
+            highp vec2 p1 = 2.0 * p0 / radius;
 
             return (dot(p0, p0) - 1.0) / length (p1);
         }
 
-        float ellipsisCoverage(vec2 point, vec2 center, vec2 radius)
+        float ellipsisCoverage(highp vec2 point, highp vec2 center, highp vec2 radius)
         {
-            float d = ellipsisDist(point - center, radius);
+            highp float d = ellipsisDist(point - center, radius);
             return clamp(0.5 - d, 0.0, 1.0);
         }
 
-        float roundedRectCoverage(vec2 p, vec4 bounds, vec2 topLeftRadii, vec2 topRightRadii, vec2 bottomLeftRadii, vec2 bottomRightRadii)
+        float roundedRectCoverage(highp vec2 p, highp vec4 bounds, highp vec2 topLeftRadii, highp vec2 topRightRadii, highp vec2 bottomLeftRadii, highp vec2 bottomRightRadii)
         {
             if (p.x < bounds.x || p.y < bounds.y || p.x >= bounds.z || p.y >= bounds.w)
                 return 0.0;
 
-            vec2 topLeftCenter = bounds.xy + topLeftRadii;
-            vec2 topRightCenter = bounds.zy + (topRightRadii * vec2(-1, 1));
-            vec2 bottomLeftCenter = bounds.xw + (bottomLeftRadii * vec2(1, -1));
-            vec2 bottomRightCenter = bounds.zw + (bottomRightRadii * vec2(-1, -1));
+            highp vec2 topLeftCenter = bounds.xy + topLeftRadii;
+            highp vec2 topRightCenter = bounds.zy + (topRightRadii * vec2(-1, 1));
+            highp vec2 bottomLeftCenter = bounds.xw + (bottomLeftRadii * vec2(1, -1));
+            highp vec2 bottomRightCenter = bounds.zw + (bottomRightRadii * vec2(-1, -1));
 
             if (p.x < topLeftCenter.x && p.y < topLeftCenter.y)
                 return ellipsisCoverage(p, topLeftCenter, topLeftRadii);
@@ -611,17 +611,24 @@ static const char* fragmentTemplateCommon =
             //
             // This implementation is not optimal, but it's done this way in order to overcome rpi3's
             // proprietary video driver limitations (see https://bugs.webkit.org/show_bug.cgi?id=219739).
+            //
+            // The round-clip data, varying and locals carry highp because some proprietary GLES
+            // drivers mishandle the (dot(p0,p0) - 1.0) / length(p1) form in ellipsisDist() under
+            // mediump (fp16): on PowerVR B-Series (Imagination DDK) ellipsisCoverage returns 0
+            // for fragments deep inside the inscribed ellipse, turning the clipped descendant
+            // layers into solid coverage=0 (silent black). highp on the round-clip path only
+            // restores correct output and preserves mediump elsewhere.
 
             for (int rectIndex = 0; rectIndex < ROUNDED_RECT_MAX_RECTS; rectIndex++) {
                 if (rectIndex >= u_roundedRectNumber)
                     break;
 
-                vec4 fragCoord = u_roundedRectInverseTransformMatrix[rectIndex] * v_nonProjectedPosition;
-                vec4 bounds = vec4(u_roundedRect[rectIndex * 3].xy, u_roundedRect[rectIndex * 3].xy + u_roundedRect[rectIndex * 3].zw);
-                vec2 topLeftRadii = u_roundedRect[(rectIndex * 3) + 1].xy;
-                vec2 topRightRadii = u_roundedRect[(rectIndex * 3) + 1].zw;
-                vec2 bottomLeftRadii = u_roundedRect[(rectIndex * 3) + 2].xy;
-                vec2 bottomRightRadii = u_roundedRect[(rectIndex * 3) + 2].zw;
+                highp vec4 fragCoord = u_roundedRectInverseTransformMatrix[rectIndex] * v_nonProjectedPosition;
+                highp vec4 bounds = vec4(u_roundedRect[rectIndex * 3].xy, u_roundedRect[rectIndex * 3].xy + u_roundedRect[rectIndex * 3].zw);
+                highp vec2 topLeftRadii = u_roundedRect[(rectIndex * 3) + 1].xy;
+                highp vec2 topRightRadii = u_roundedRect[(rectIndex * 3) + 1].zw;
+                highp vec2 bottomLeftRadii = u_roundedRect[(rectIndex * 3) + 2].xy;
+                highp vec2 bottomRightRadii = u_roundedRect[(rectIndex * 3) + 2].zw;
                 float coverage = roundedRectCoverage(fragCoord.xy, bounds, topLeftRadii, topRightRadii, bottomLeftRadii, bottomRightRadii);
 
                 // Pixels outside the rect have coverage 0.0.
@@ -778,7 +785,7 @@ Ref<TextureMapperShaderProgram> TextureMapperShaderProgram::create(TextureMapper
 }
 
 #if !LOG_DISABLED
-static CString getShaderLog(GLuint shader)
+static UTF8CString getShaderLog(GLuint shader)
 {
     GLint logLength = 0;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
@@ -790,10 +797,10 @@ static CString getShaderLog(GLuint shader)
     glGetShaderInfoLog(shader, logLength, &infoLength, info.mutableSpan().data());
 
     size_t stringLength = std::max(infoLength, 0);
-    return byteCast<char>(info.span().first(stringLength));
+    return UTF8CString::fromUTF8(info.span().first(stringLength));
 }
 
-static CString getProgramLog(GLuint program)
+static UTF8CString getProgramLog(GLuint program)
 {
     GLint logLength = 0;
     glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
@@ -805,7 +812,7 @@ static CString getProgramLog(GLuint program)
     glGetProgramInfoLog(program, logLength, &infoLength, info.mutableSpan().data());
 
     size_t stringLength = std::max(infoLength, 0);
-    return byteCast<char>(info.span().first(stringLength));
+    return UTF8CString::fromUTF8(info.span().first(stringLength));
 }
 #endif
 
@@ -813,8 +820,8 @@ TextureMapperShaderProgram::TextureMapperShaderProgram(const String& vertex, con
 {
     m_vertexShader = glCreateShader(GL_VERTEX_SHADER);
     {
-        CString vertexCString = vertex.utf8();
-        const char* data = vertexCString.data();
+        auto vertexCString = vertex.utf8();
+        const char* data = vertexCString.legacyCStringPointer();
         int length = vertexCString.length();
         glShaderSource(m_vertexShader, 1, &data, &length);
     }
@@ -822,8 +829,8 @@ TextureMapperShaderProgram::TextureMapperShaderProgram(const String& vertex, con
 
     m_fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     {
-        CString fragmentCString = fragment.utf8();
-        const char* data = fragmentCString.data();
+        auto fragmentCString = fragment.utf8();
+        const char* data = fragmentCString.legacyCStringPointer();
         int length = fragmentCString.length();
         glShaderSource(m_fragmentShader, 1, &data, &length);
     }
@@ -837,9 +844,9 @@ TextureMapperShaderProgram::TextureMapperShaderProgram(const String& vertex, con
     if (!compositingLogEnabled() || glGetError() == GL_NO_ERROR)
         return;
 
-    LOG(Compositing, "Vertex shader log: %s\n", getShaderLog(m_vertexShader).data());
-    LOG(Compositing, "Fragment shader log: %s\n", getShaderLog(m_fragmentShader).data());
-    LOG(Compositing, "Program log: %s\n", getProgramLog(m_id).data());
+    LOG(Compositing, "Vertex shader log: %s\n", getShaderLog(m_vertexShader));
+    LOG(Compositing, "Fragment shader log: %s\n", getShaderLog(m_fragmentShader));
+    LOG(Compositing, "Program log: %s\n", getProgramLog(m_id));
 }
 
 TextureMapperShaderProgram::~TextureMapperShaderProgram()

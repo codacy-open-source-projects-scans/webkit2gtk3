@@ -85,6 +85,12 @@ enum class SubjectMessage
     // API.
     TextureIDDeleted,
 
+    // Indicates the underlying object storage has been reallocated.
+    ObjectReallocated,
+
+    // Indicates a layered texture's layer count has increased.
+    TextureLayerCountIncreased,
+
     // Indicates a change in foveated rendering state in the subject.
     FoveatedRenderingStateChanged,
 };

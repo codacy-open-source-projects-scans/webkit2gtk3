@@ -63,6 +63,10 @@ VTTRegion::VTTRegion(ScriptExecutionContext& context)
     : ContextDestructionObserver(&context)
     , m_id(emptyString())
     , m_scrollTimer(*this, &VTTRegion::scrollTimerFired)
+#if !RELEASE_LOG_DISABLED
+    , m_logger(&downcast<Document>(context).logger())
+    , m_logIdentifier(uniqueLogIdentifier())
+#endif
 {
 }
 
@@ -182,7 +186,7 @@ VTTRegion::RegionSetting VTTRegion::scanSettingName(VTTScanner& input)
     return None;
 }
 
-static inline bool NODELETE parsedEntireRun(const VTTScanner& input, const VTTScanner::Run& run)
+static inline bool LEGACY_NODELETE parsedEntireRun(const VTTScanner& input, const VTTScanner::Run& run)
 {
     return input.isAt(run.end()); 
 }
@@ -203,7 +207,7 @@ void VTTRegion::parseSettingValue(RegionSetting setting, VTTScanner& input)
         if (WebVTTParser::parseFloatPercentageValue(input, floatWidth) && parsedEntireRun(input, valueRun))
             m_width = floatWidth;
         else
-            LOG(Media, "VTTRegion::parseSettingValue, invalid Width");
+            ERROR_LOG(LOGIDENTIFIER, "invalid Width");
         break;
     }
     case Lines: {
@@ -211,7 +215,7 @@ void VTTRegion::parseSettingValue(RegionSetting setting, VTTScanner& input)
         if (input.scanDigits(number) && parsedEntireRun(input, valueRun))
             m_lines = number;
         else
-            LOG(Media, "VTTRegion::parseSettingValue, invalid Lines");
+            ERROR_LOG(LOGIDENTIFIER, "invalid Lines");
         break;
     }
     case RegionAnchor: {
@@ -219,7 +223,7 @@ void VTTRegion::parseSettingValue(RegionSetting setting, VTTScanner& input)
         if (WebVTTParser::parseFloatPercentageValuePair(input, ',', anchor) && parsedEntireRun(input, valueRun))
             m_regionAnchor = anchor;
         else
-            LOG(Media, "VTTRegion::parseSettingValue, invalid RegionAnchor");
+            ERROR_LOG(LOGIDENTIFIER, "invalid RegionAnchor");
         break;
     }
     case ViewportAnchor: {
@@ -227,14 +231,14 @@ void VTTRegion::parseSettingValue(RegionSetting setting, VTTScanner& input)
         if (WebVTTParser::parseFloatPercentageValuePair(input, ',', anchor) && parsedEntireRun(input, valueRun))
             m_viewportAnchor = anchor;
         else
-            LOG(Media, "VTTRegion::parseSettingValue, invalid ViewportAnchor");
+            ERROR_LOG(LOGIDENTIFIER, "invalid ViewportAnchor");
         break;
     }
     case Scroll:
         if (input.scanRun(valueRun, upKeyword()))
             m_scroll = ScrollSetting::Up;
         else
-            LOG(Media, "VTTRegion::parseSettingValue, invalid Scroll");
+            ERROR_LOG(LOGIDENTIFIER, "invalid Scroll");
         break;
     case None:
         break;
@@ -287,7 +291,7 @@ void VTTRegion::displayLastTextTrackCueBox()
         float height = childBottom - childTop;
 
         m_currentTop -= std::min(height, childBottom - regionBottom);
-        m_cueContainer->setInlineStyleProperty(CSSPropertyTop, m_currentTop, CSSUnitType::CSS_PX);
+        m_cueContainer->setInlineStyleProperty(CSSPropertyID::Top, m_currentTop, CSSUnitType::Px);
 
         startTimer();
         break;
@@ -296,7 +300,7 @@ void VTTRegion::displayLastTextTrackCueBox()
 
 void VTTRegion::willRemoveTextTrackCueBox(VTTCueBox* box)
 {
-    LOG(Media, "VTTRegion::willRemoveTextTrackCueBox");
+    DEBUG_LOG(LOGIDENTIFIER);
     ASSERT(m_cueContainer->contains(box));
 
     double boxHeight = box->boundingClientRect().height();
@@ -304,7 +308,7 @@ void VTTRegion::willRemoveTextTrackCueBox(VTTCueBox* box)
     protect(m_cueContainer->classList())->remove(textTrackCueContainerScrollingClass());
 
     m_currentTop += boxHeight;
-    m_cueContainer->setInlineStyleProperty(CSSPropertyTop, m_currentTop, CSSUnitType::CSS_PX);
+    m_cueContainer->setInlineStyleProperty(CSSPropertyID::Top, m_currentTop, CSSUnitType::Px);
 }
 
 HTMLDivElement& VTTRegion::getDisplayTree()
@@ -340,8 +344,8 @@ void VTTRegion::prepareRegionDisplayTree()
 
     // Let regionWidth be the WebVTT region width.
     // Let width be 'regionWidth vw' ('vw' is a CSS unit)
-    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyWidth, m_width, CSSUnitType::CSS_CQW);
-    m_cueContainer->setInlineStyleProperty(CSSPropertyWidth, m_width, CSSUnitType::CSS_CQW);
+    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyID::Width, m_width, CSSUnitType::Cqw);
+    m_cueContainer->setInlineStyleProperty(CSSPropertyID::Width, m_width, CSSUnitType::Cqw);
 
     // Let lineHeight be '6vh' ('vh' is a CSS unit) and regionHeight be
     // the WebVTT region lines. Let lines be 'lineHeight' multiplied
@@ -350,8 +354,8 @@ void VTTRegion::prepareRegionDisplayTree()
 
     // Although the spec does not say to set the height property to lines, without doing so,
     // the caption is not visible
-    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyHeight, lines, CSSUnitType::CSS_CQH);
-    m_cueContainer->setInlineStyleProperty(CSSPropertyHeight, lines, CSSUnitType::CSS_CQH);
+    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyID::Height, lines, CSSUnitType::Cqh);
+    m_cueContainer->setInlineStyleProperty(CSSPropertyID::Height, lines, CSSUnitType::Cqh);
 
     // Let viewportAnchorX be the x dimension of the WebVTT viewport
     // anchor and regionAnchorX be the x dimension of the WebVTT region
@@ -359,8 +363,8 @@ void VTTRegion::prepareRegionDisplayTree()
     // 100.0. Let left be leftOffset subtracted from 'viewportAnchorX vw'.
     double leftOffset = m_regionAnchor.x() * m_width / 100;
     double left = m_viewportAnchor.x() - leftOffset;
-    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyLeft, left, CSSUnitType::CSS_CQW);
-    m_cueContainer->setInlineStyleProperty(CSSPropertyLeft, left, CSSUnitType::CSS_CQW);
+    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyID::Left, left, CSSUnitType::Cqw);
+    m_cueContainer->setInlineStyleProperty(CSSPropertyID::Left, left, CSSUnitType::Cqw);
 
     // Let viewportAnchorY be the y dimension of the WebVTT region viewport
     // anchor and regionAnchorY be the y dimension of the WebVTT region
@@ -368,8 +372,8 @@ void VTTRegion::prepareRegionDisplayTree()
     // 100.0. Let top be topOffset subtracted from 'viewportAnchorY vh'.
     double topOffset = m_regionAnchor.y() * lines / 100;
     double top = m_viewportAnchor.y() - topOffset;
-    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyTop, top, CSSUnitType::CSS_CQH);
-    m_cueContainer->setInlineStyleProperty(CSSPropertyTop, top, CSSUnitType::CSS_CQH);
+    m_regionDisplayTree->setInlineStyleProperty(CSSPropertyID::Top, top, CSSUnitType::Cqh);
+    m_cueContainer->setInlineStyleProperty(CSSPropertyID::Top, top, CSSUnitType::Cqh);
 
     // 7.5 Every WebVTT region object is initialised with the following CSS
 
@@ -380,7 +384,7 @@ void VTTRegion::prepareRegionDisplayTree()
 
 void VTTRegion::startTimer()
 {
-    LOG(Media, "VTTRegion::startTimer");
+    DEBUG_LOG(LOGIDENTIFIER);
 
     if (m_scrollTimer.isActive())
         return;
@@ -391,7 +395,7 @@ void VTTRegion::startTimer()
 
 void VTTRegion::stopTimer()
 {
-    LOG(Media, "VTTRegion::stopTimer");
+    DEBUG_LOG(LOGIDENTIFIER);
 
     if (m_scrollTimer.isActive())
         m_scrollTimer.stop();
@@ -399,7 +403,7 @@ void VTTRegion::stopTimer()
 
 void VTTRegion::scrollTimerFired()
 {
-    LOG(Media, "VTTRegion::scrollTimerFired");
+    DEBUG_LOG(LOGIDENTIFIER);
 
     stopTimer();
     displayLastTextTrackCueBox();
@@ -409,6 +413,28 @@ Document* VTTRegion::document() const
 {
     return downcast<Document>(scriptExecutionContext());
 }
+
+#if !RELEASE_LOG_DISABLED
+ASCIILiteral VTTRegion::logClassName() const
+{
+    return "VTTRegion"_s;
+}
+
+WTFLogChannel& VTTRegion::logChannel() const
+{
+    return LogMedia;
+}
+
+const Logger& VTTRegion::logger() const
+{
+    return *m_logger;
+}
+
+uint64_t VTTRegion::logIdentifier() const
+{
+    return m_logIdentifier;
+}
+#endif
 
 } // namespace WebCore
 

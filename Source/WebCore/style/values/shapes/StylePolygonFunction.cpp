@@ -31,7 +31,6 @@
 #include "Path.h"
 #include "StylePrimitiveNumericTypes+Blending.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
-#include "TransformOperationData.h"
 #include <wtf/TinyLRUCache.h>
 
 namespace WebCore {
@@ -41,7 +40,7 @@ namespace Style {
 
 struct PolygonPathPolicy : TinyLRUCachePolicy<Vector<FloatPoint>, WebCore::Path> {
 public:
-    static bool NODELETE isKeyNull(const Vector<FloatPoint>& points)
+    static bool LEGACY_NODELETE isKeyNull(const Vector<FloatPoint>& points)
     {
         return !points.size();
     }
@@ -97,10 +96,8 @@ auto Blending<Polygon>::blend(const Polygon& a, const Polygon& b, const Blending
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-AcceleratedEffectPolygonFunction Evaluation<PolygonFunction, AcceleratedEffectPolygonFunction>::operator()(const PolygonFunction& value, const TransformOperationData& data, ZoomFactor zoom)
+AcceleratedEffectPolygonFunction Evaluation<PolygonFunction, AcceleratedEffectPolygonFunction>::operator()(const PolygonFunction& value, const FloatSize& containingBlockSize, ZoomFactor zoom)
 {
-    auto containingBlockSize = data.motionPathData->offsetRect().rect().size();
-
     return {
         .fillRule = windRule(value),
         .vertices = WTF::map(value->vertices, [&](auto& vertex) -> FloatPoint {

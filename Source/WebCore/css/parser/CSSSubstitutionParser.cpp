@@ -56,15 +56,18 @@ bool CSSSubstitutionParser::isValidCustomPropertyName(const CSSParserToken& toke
     return isCustomPropertyName(token.value());
 }
 
-static bool NODELETE isValidConstantName(const CSSParserToken& token)
+static bool LEGACY_NODELETE isValidEnvVariableName(const CSSParserToken& token)
 {
     return token.type() == IdentToken;
 }
 
 static bool isValidVariableReference(CSSParserTokenRange, const CSSParserContext&);
-static bool isValidConstantReference(CSSParserTokenRange, const CSSParserContext&);
+static bool isValidEnvReference(CSSParserTokenRange, const CSSParserContext&);
 static bool isValidDashedFunction(CSSParserTokenRange, const CSSParserContext&);
 static bool isValidAttrReference(CSSParserTokenRange, const CSSParserContext&);
+static bool isValidRandomItemReference(CSSParserTokenRange, const CSSParserContext&);
+static bool isValidIfReference(CSSParserTokenRange, const CSSParserContext&);
+static bool isValidIdentReference(CSSParserTokenRange, const CSSParserContext&);
 
 struct ClassifyBlockResult {
     bool hasSubstitutionFunctions { false };
@@ -77,6 +80,7 @@ static std::optional<ClassifyBlockResult> classifyBlock(CSSParserTokenRange rang
     struct ClassifyBlockState {
         CSSParserTokenRange range;
         bool isTopLevelBlock = true;
+        bool isInsideTopLevelBraceBlock = false;
         bool hasOtherValues = false;
         unsigned topLevelBraceBlocks = 0;
         bool doneWithThisRange = false;
@@ -121,25 +125,50 @@ static std::optional<ClassifyBlockResult> classifyBlock(CSSParserTokenRange rang
             if (token.type() == LeftBraceToken && current.isTopLevelBlock && block.atEnd())
                 result.hasEmptyTopLevelBraceBlock = true;
 
-            if (token.functionId() == CSSValueVar) {
+            if (token.functionId() == CSSValueID::Var) {
                 if (!isValidVariableReference(block, parserContext))
                     return { };
                 result.hasSubstitutionFunctions = true;
                 continue;
             }
-            if (token.functionId() == CSSValueEnv) {
-                if (!isValidConstantReference(block, parserContext))
+            if (token.functionId() == CSSValueID::Env) {
+                if (!isValidEnvReference(block, parserContext))
                     return { };
                 result.hasSubstitutionFunctions = true;
                 continue;
             }
-            if (token.functionId() == CSSValueAttr && parserContext.cssAttrSubstitutionFunctionEnabled) {
+            if (token.functionId() == CSSValueID::Inherit && parserContext.cssInheritFunctionEnabled) {
+                // <inherit-args> is the same argument grammar as var()'s.
+                if (!isValidVariableReference(block, parserContext))
+                    return { };
+                result.hasSubstitutionFunctions = true;
+                continue;
+            }
+            if (token.functionId() == CSSValueID::Attr) {
                 if (!isValidAttrReference(block, parserContext))
                     return { };
                 result.hasSubstitutionFunctions = true;
                 continue;
             }
-            if (token.functionId() == CSSValueInternalAutoBase && parserContext.cssInternalAutoBaseParsingEnabled) {
+            if (token.functionId() == CSSValueID::RandomItem && parserContext.cssRandomItemFunctionEnabled) {
+                if (!isValidRandomItemReference(block, parserContext))
+                    return { };
+                result.hasSubstitutionFunctions = true;
+                continue;
+            }
+            if (token.functionId() == CSSValueID::If && parserContext.cssIfFunctionEnabled) {
+                if (!isValidIfReference(block, parserContext))
+                    return { };
+                result.hasSubstitutionFunctions = true;
+                continue;
+            }
+            if (token.functionId() == CSSValueID::Ident && parserContext.cssIdentFunctionEnabled) {
+                if (!isValidIdentReference(block, parserContext))
+                    return { };
+                result.hasSubstitutionFunctions = true;
+                continue;
+            }
+            if (token.functionId() == CSSValueID::InternalAutoBase && parserContext.cssInternalAutoBaseParsingEnabled) {
                 result.hasSubstitutionFunctions = true;
                 continue;
             }
@@ -153,6 +182,10 @@ static std::optional<ClassifyBlockResult> classifyBlock(CSSParserTokenRange rang
             stack.push(ClassifyBlockState {
                 .range = block,
                 .isTopLevelBlock = false, // Nested block, not top-level
+                // A top-level brace block only wraps the value so that it can contain commas, so '!'
+                // inside it is still at the top level of the value.
+                // https://drafts.csswg.org/css-values-5/#component-function-commas
+                .isInsideTopLevelBraceBlock = token.type() == LeftBraceToken && current.isTopLevelBlock,
             });
             continue;
         }
@@ -164,7 +197,7 @@ static std::optional<ClassifyBlockResult> classifyBlock(CSSParserTokenRange rang
         case AtKeywordToken:
             break;
         case DelimiterToken: {
-            if (token.delimiter() == '!' && current.isTopLevelBlock)
+            if (token.delimiter() == '!' && (current.isTopLevelBlock || current.isInsideTopLevelBraceBlock))
                 return { };
             break;
         }
@@ -187,11 +220,62 @@ static std::optional<ClassifyBlockResult> classifyBlock(CSSParserTokenRange rang
     return result;
 }
 
+// Validates a single comma-separated argument that is a <declaration-value> subject to the
+// comma-containing-production rules: a {}-wrapped block groups internal commas, but may not be
+// mixed with other values, and a bare {} is not a valid value.
+// https://drafts.csswg.org/css-values-5/#component-function-commas
+// `allowEmpty` distinguishes <declaration-value># (dashed functions) from <declaration-value>?#
+// (random-item() items, where an item may be empty).
+static bool isValidDeclarationValueArgument(CSSParserTokenRange argumentRange, const CSSParserContext& parserContext, bool allowEmpty)
+{
+    if (argumentRange.atEnd())
+        return allowEmpty;
+
+    auto result = classifyBlock(argumentRange, parserContext);
+    return result && !result->hasTopLevelBraceBlockMixedWithOtherValues && !result->hasEmptyTopLevelBraceBlock;
+}
+
+// https://drafts.csswg.org/css-variables-2/#funcdef-var
+// <var-args> = var( <declaration-value> , <declaration-value>? )
+// The name argument is a <declaration-value>. It is substituted and then parsed as a
+// <custom-property-name> at substitution time, so parse-time validity only requires a
+// <declaration-value> here.
 bool isValidVariableReference(CSSParserTokenRange range, const CSSParserContext& parserContext)
 {
     range.consumeWhitespace();
-    if (!CSSSubstitutionParser::isValidCustomPropertyName(range.consumeIncludingWhitespace()))
+
+    // Split at the first literal comma into the name argument and optional fallback.
+    auto nameArgStart = range;
+    while (!range.atEnd() && range.peek().type() != CommaToken)
+        range.consumeComponentValue();
+
+    if (!isValidDeclarationValueArgument(nameArgStart.rangeUntil(range), parserContext, /* allowEmpty */ false))
         return false;
+
+    // The split stopped at a literal comma or at the end, so this covers both a missing and an empty fallback.
+    if (!CSSPropertyParserHelpers::consumeCommaIncludingWhitespace(range) || range.atEnd())
+        return true;
+
+    return !!classifyBlock(range, parserContext);
+}
+
+bool isValidEnvReference(CSSParserTokenRange range, const CSSParserContext& parserContext)
+{
+    range.consumeWhitespace();
+    auto nameToken = range.consumeIncludingWhitespace();
+    if (!isValidEnvVariableName(nameToken))
+        return false;
+
+    // viewport-segment-* env() variables require two space-separated integer indices (column, row).
+    if (parserContext.viewportSegmentsAPIEnabled && nameToken.value().startsWith("viewport-segment-"_s)) {
+        if (range.atEnd() || range.peek().type() != NumberToken)
+            return false;
+        range.consumeIncludingWhitespace();
+        if (range.atEnd() || range.peek().type() != NumberToken)
+            return false;
+        range.consumeIncludingWhitespace();
+    }
+
     if (range.atEnd())
         return true;
 
@@ -203,20 +287,16 @@ bool isValidVariableReference(CSSParserTokenRange range, const CSSParserContext&
     return !!classifyBlock(range, parserContext);
 }
 
-bool isValidConstantReference(CSSParserTokenRange range, const CSSParserContext& parserContext)
+// An argument may not begin with <dashed-ident> <colon>, which is reserved for named arguments.
+// A brace block starts with a brace rather than the ident, so wrapping the value in {} allows it.
+// https://github.com/w3c/csswg-drafts/issues/11749
+static bool LEGACY_NODELETE startsWithReservedNamedArgument(CSSParserTokenRange range)
 {
     range.consumeWhitespace();
-    if (!isValidConstantName(range.consumeIncludingWhitespace()))
+    if (!CSSSubstitutionParser::isValidCustomPropertyName(range.peek()))
         return false;
-    if (range.atEnd())
-        return true;
-
-    if (!CSSPropertyParserHelpers::consumeCommaIncludingWhitespace(range))
-        return false;
-    if (range.atEnd())
-        return true;
-
-    return !!classifyBlock(range, parserContext);
+    range.consumeIncludingWhitespace();
+    return range.peek().type() == ColonToken;
 }
 
 bool isValidDashedFunction(CSSParserTokenRange range, const CSSParserContext& parserContext)
@@ -224,19 +304,11 @@ bool isValidDashedFunction(CSSParserTokenRange range, const CSSParserContext& pa
     // <dashed-function> --*( <declaration-value>#? )
     range.consumeWhitespace();
 
-    auto validateArgument = [&](auto argumentRange) {
-        if (argumentRange.atEnd())
-            return false;
-
-        // https://drafts.csswg.org/css-values-5/#component-function-commas
-        // Empty brace blocks are just empty values.
-        auto result = classifyBlock(argumentRange, parserContext);
-        return result && !result->hasTopLevelBraceBlockMixedWithOtherValues && !result->hasEmptyTopLevelBraceBlock;
-    };
-
     unsigned index = 0;
     while (auto argumentRange = CSSPropertyParserHelpers::consumeArgument(range, index)) {
-        if (!validateArgument(*argumentRange))
+        if (startsWithReservedNamedArgument(*argumentRange))
+            return false;
+        if (!isValidDeclarationValueArgument(*argumentRange, parserContext, /* allowEmpty */ false))
             return false;
         ++index;
     }
@@ -271,6 +343,97 @@ bool isValidAttrReference(CSSParserTokenRange range, const CSSParserContext& par
         return true;
 
     return !!classifyBlock(range, parserContext);
+}
+
+// https://drafts.csswg.org/css-values-5/#funcdef-random-item
+// <random-item-args> = random-item( <declaration-value>, [ <declaration-value>? ]# )
+// Validate using the argument grammar. Parsing the first argument as <random-key> and
+// selecting an item happen at substitution time.
+bool isValidRandomItemReference(CSSParserTokenRange range, const CSSParserContext& parserContext)
+{
+    range.consumeWhitespace();
+
+    // The first argument is the required <random-key>. Split at the first literal comma;
+    // commas inside blocks (e.g. {a, b}) are not separators.
+    auto keyStart = range;
+    while (!range.atEnd() && range.peek().type() != CommaToken)
+        range.consumeComponentValue();
+    auto keyRange = keyStart.rangeUntil(range);
+
+    // The <random-key> argument must be non-empty.
+    if (keyRange.atEnd())
+        return false;
+
+    if (!classifyBlock(keyRange, parserContext))
+        return false;
+
+    // A comma must separate the key from the list of items.
+    if (!CSSPropertyParserHelpers::consumeCommaIncludingWhitespace(range))
+        return false;
+
+    // [ <declaration-value>? ]# : a comma-separated list of one or more items, each of which
+    // may be empty. Items follow the same comma-containing-production rules as dashed-function
+    // arguments, except an empty item is allowed here.
+    do {
+        auto itemStart = range;
+        while (!range.atEnd() && range.peek().type() != CommaToken)
+            range.consumeComponentValue();
+        auto itemRange = itemStart.rangeUntil(range);
+
+        if (!isValidDeclarationValueArgument(itemRange, parserContext, /* allowEmpty */ true))
+            return false;
+    } while (CSSPropertyParserHelpers::consumeCommaIncludingWhitespace(range));
+
+    return range.atEnd();
+}
+
+// https://drafts.csswg.org/css-values-5/#funcdef-if
+// <if-args> = if( [ <if-args-branch>; ]* <if-args-branch> ;? )
+// <if-args-branch> = <declaration-value> : <declaration-value>?
+// Validate using the argument grammar. Condition parsing happens at substitution time.
+bool isValidIfReference(CSSParserTokenRange range, const CSSParserContext& parserContext)
+{
+    range.consumeWhitespace();
+    if (range.atEnd())
+        return false;
+
+    // Validate semicolon-separated branches. classifyBlock rejects top-level semicolons,
+    // but they are valid branch separators in if(), so validate each branch separately.
+    while (!range.atEnd()) {
+        auto branchStart = range;
+        while (!range.atEnd() && range.peek().type() != SemicolonToken)
+            range.consumeComponentValue();
+        auto branchRange = branchStart.rangeUntil(range);
+
+        if (!range.atEnd())
+            range.consume(); // semicolon
+        range.consumeWhitespace();
+
+        if (branchRange.atEnd())
+            continue;
+
+        if (!classifyBlock(branchRange, parserContext))
+            return false;
+    }
+    return true;
+}
+
+// https://drafts.csswg.org/css-values-5/#ident
+// <ident-args> = ident( <declaration-value> )
+// Validate using the argument grammar. Parsing the argument as <ident-arg>+ and building the
+// identifier happen at substitution time.
+bool isValidIdentReference(CSSParserTokenRange range, const CSSParserContext& parserContext)
+{
+    range.consumeWhitespace();
+
+    // ident() takes a single argument, so a top-level comma cannot match its grammar.
+    auto argumentStart = range;
+    while (!range.atEnd() && range.peek().type() != CommaToken)
+        range.consumeComponentValue();
+    if (!range.atEnd())
+        return false;
+
+    return isValidDeclarationValueArgument(argumentStart.rangeUntil(range), parserContext, /* allowEmpty */ false);
 }
 
 struct VariableType {

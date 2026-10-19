@@ -30,7 +30,6 @@
 #include <wtf/SingleThreadIntegralWrapper.h>
 #include <wtf/ThreadAssertions.h>
 #include <wtf/ThreadSafeRefCounted.h>
-#include <wtf/Threading.h>
 #include <wtf/TypeCasts.h>
 
 namespace WTF {
@@ -90,6 +89,12 @@ public:
         : WeakPtrImplBase<DefaultWeakPtrImpl>(ptr)
     {
     }
+
+    // DefaultWeakPtrImpl is an implementation detail of WeakPtr.
+    // Deleting this object does not logically result in destruction of a user object.
+    SUPPRESS_NODELETE void LEGACY_NODELETE deref() const {
+        WeakPtrImplBase<DefaultWeakPtrImpl>::deref();
+    }
 };
 
 DECLARE_COMPACT_ALLOCATOR_WITH_HEAP_IDENTIFIER(WeakPtrImplBaseSingleThread);
@@ -139,7 +144,8 @@ public:
     {
         uint32_t tempRefCount = m_refCount - 1;
         if (!tempRefCount) {
-            delete const_cast<Derived*>(static_cast<const Derived*>(this));
+            // Derived derives from this class (CRTP), so this is always a Derived.
+            SUPPRESS_MEMORY_UNSAFE_CAST delete const_cast<Derived*>(static_cast<const Derived*>(this));
             return;
         }
         m_refCount = tempRefCount;

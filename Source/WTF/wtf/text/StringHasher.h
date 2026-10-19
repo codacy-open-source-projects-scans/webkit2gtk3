@@ -30,20 +30,24 @@ namespace WTF {
 // Golden ratio. Arbitrary start value to avoid mapping all zeros to a hash value of zero.
 static constexpr unsigned stringHashingStartValue = 0x9E3779B9U;
 
+class ASCIILiteral;
 class SuperFastHash;
-class WYHash;
+class RapidHash;
 
 class StringHasher {
 public:
     static constexpr unsigned flagCount = 8; // Save 8 bits for StringImpl to use as flags.
     static constexpr unsigned maskHash = (1U << (sizeof(unsigned) * 8 - flagCount)) - 1;
-    static constexpr unsigned numberOfCharactersInLargestBulkForWYHash = 24; // Don't change this value. It's fixed for WYhash algorithm.
 
     struct DefaultConverter {
         template<typename CharType>
         static constexpr char16_t convert(CharType character)
         {
             return unsignedCast(character);
+        }
+        static constexpr char16_t convert(Latin1Character character)
+        {
+            return character;
         }
     };
 
@@ -53,9 +57,11 @@ public:
     template<typename T, unsigned characterCount>
     static constexpr unsigned computeLiteralHashAndMaskTop8Bits(const T (&characters)[characterCount]);
 
+    static constexpr unsigned computeLiteralHashAndMaskTop8Bits(ASCIILiteral);
+
 private:
     friend class SuperFastHash;
-    friend class WYHash;
+    friend class RapidHash;
 
     ALWAYS_INLINE static constexpr unsigned avalancheBits(unsigned hash)
     {

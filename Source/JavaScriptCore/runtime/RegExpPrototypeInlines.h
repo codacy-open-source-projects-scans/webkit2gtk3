@@ -28,12 +28,8 @@
 
 namespace JSC {
 
-ALWAYS_INLINE bool regExpExecWatchpointIsValid(VM& vm, JSObject* thisObject)
+ALWAYS_INLINE bool regExpExecWatchpointIsValid(VM& vm, JSGlobalObject* globalObject, JSObject* thisObject)
 {
-    JSGlobalObject* globalObject = thisObject->realmMayBeNull();
-    if (!globalObject)
-        return false;
-
     RegExpPrototype* regExpPrototype = globalObject->regExpPrototype();
 
     ASSERT(globalObject->regExpPrimordialPropertiesWatchpointSet().state() != ClearWatchpoint);
@@ -47,30 +43,6 @@ ALWAYS_INLINE bool regExpExecWatchpointIsValid(VM& vm, JSObject* thisObject)
         return true;
 
     return thisObject->getDirectOffset(vm, vm.propertyNames->exec) == invalidOffset;
-}
-
-ALWAYS_INLINE bool regExpMatchAllWathpointIsValid(RegExpObject* regExpObject)
-{
-    JSGlobalObject* globalObject = regExpObject->realm();
-    RegExpPrototype* regExpPrototype = globalObject->regExpPrototype();
-
-    if (regExpPrototype != regExpObject->getPrototypeDirect())
-        return false;
-
-    if (globalObject->regExpPrimordialPropertiesWatchpointSet().state() != IsWatched)
-        return false;
-
-    if (regExpObject->hasCustomProperties())
-        return false;
-
-    if (!regExpObject->lastIndexIsWritable())
-        return false;
-
-    JSValue lastIndex = regExpObject->getLastIndex();
-    if (!lastIndex.isNumber())
-        return false;
-
-    return true;
 }
 
 inline Structure* RegExpPrototype::createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)

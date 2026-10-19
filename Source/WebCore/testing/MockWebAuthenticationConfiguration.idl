@@ -46,7 +46,8 @@
     "wrong-channel-id",
     "malicious-payload",
     "unsupported-options",
-    "wrong-nonce"
+    "wrong-nonce",
+    "short-init-response"
 };
 
 [
@@ -125,4 +126,6 @@
     Conditional=WEB_AUTHN,
 ] dictionary MockCcidConfiguration {
     sequence<DOMString> payloadBase64 = [];
+    DOMString appletSelectionResponseBase64 = "";
+    DOMString u2fVersionResponseBase64 = "";
 };

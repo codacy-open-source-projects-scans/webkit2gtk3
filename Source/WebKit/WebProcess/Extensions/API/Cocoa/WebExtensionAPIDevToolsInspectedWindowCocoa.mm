@@ -29,6 +29,7 @@
 
 #import "config.h"
 #import "WebExtensionAPIDevToolsInspectedWindow.h"
+#import "WebExtensionAPIKeys.h"
 
 #if ENABLE(WK_WEB_EXTENSIONS) && ENABLE(INSPECTOR_EXTENSIONS)
 
@@ -36,16 +37,11 @@
 #import "JSWebExtensionWrapper.h"
 #import "JavaScriptEvaluationResult.h"
 #import "MessageSenderInlines.h"
+#import "RunJavaScriptResult.h"
 #import "WebExtensionContextMessages.h"
 #import "WebExtensionTabIdentifier.h"
 #import "WebExtensionUtilities.h"
 #import "WebProcess.h"
-
-static NSString * const frameURLKey = @"frameURL";
-static NSString * const ignoreCacheKey = @"ignoreCache";
-
-static NSString * const isExceptionKey = @"isException";
-static NSString * const valueKey = @"value";
 
 namespace WebKit {
 
@@ -67,12 +63,12 @@ void WebExtensionAPIDevToolsInspectedWindow::eval(WebPageProxyIdentifier webPage
         frameURL = URL { url };
 
         if (!frameURL.value().isValid()) {
-            *outExceptionString = toErrorString(nullString(), frameURLKey, @"'%@' is not a valid URL", url).createNSString().autorelease();
+            *outExceptionString = toErrorString(nullString(), frameURLKey, makeString("'"_s, String(url), "' is not a valid URL"_s)).createNSString().autorelease();
             return;
         }
     }
 
-    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::DevToolsInspectedWindowEval(webPageProxyIdentifier, expression, frameURL), [protectedThis = Ref { *this }, callback = WTF::move(callback)](Expected<Expected<JavaScriptEvaluationResult, std::optional<WebCore::ExceptionDetails>>, WebExtensionError>&& result) mutable {
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::DevToolsInspectedWindowEval(webPageProxyIdentifier, expression, frameURL), [protectedThis = Ref { *this }, callback = WTF::move(callback)](std::expected<RunJavaScriptResult, WebExtensionError>&& result) mutable {
         if (!result) {
             callback->reportError(result.error().createNSString().get());
             return;
@@ -84,7 +80,7 @@ void WebExtensionAPIDevToolsInspectedWindow::eval(WebPageProxyIdentifier webPage
         if (!result.value()) {
             // If an error occurred, element 0 will be undefined, and element 1 will contain an object giving details about the error.
             String valueKey = result.value().error() ? result.value().error()->message : emptyString();
-            SUPPRESS_UNCOUNTED_ARG auto valueData = JSValueMakeString(globalContext, toJSString(valueKey).get());
+            auto valueData = JSValueMakeString(globalContext, toJSString(valueKey).get());
             SUPPRESS_UNCOUNTED_ARG auto resultObject = fromObject(globalContext, {
                 { "isExceptionKey"_s, Protected(globalContext, JSValueMakeBoolean(globalContext, true)) },
                 { "valueKey"_s, Protected(globalContext, valueData) }

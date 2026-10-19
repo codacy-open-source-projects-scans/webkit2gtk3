@@ -6,17 +6,15 @@
 
 // DisplayEGL.cpp: Common across EGL parts of platform specific egl::Display implementations
 
-#ifdef UNSAFE_BUFFERS_BUILD
-#    pragma allow_unsafe_libc_calls
-#endif
-
 #include "libANGLE/renderer/gl/egl/DisplayEGL.h"
+#include "common/unsafe_buffers.h"
 
 #include "common/debug.h"
 #include "common/system_utils.h"
 #include "libANGLE/Context.h"
 #include "libANGLE/Display.h"
 #include "libANGLE/Surface.h"
+#include "libANGLE/renderer/driver_utils.h"
 #include "libANGLE/renderer/gl/ContextGL.h"
 #include "libANGLE/renderer/gl/RendererGL.h"
 #include "libANGLE/renderer/gl/egl/ContextEGL.h"
@@ -90,7 +88,12 @@ namespace rx
 
 DisplayEGL::DisplayEGL(const egl::DisplayState &state) : DisplayGL(state) {}
 
-DisplayEGL::~DisplayEGL() {}
+DisplayEGL::~DisplayEGL()
+{
+    // Make sure mRenderer is released before the rest of DisplayEGL is destroyed.  Its destructor
+    // calls into this object.
+    mRenderer.reset();
+}
 
 ImageImpl *DisplayEGL::createImage(const egl::ImageState &state,
                                    const gl::Context *context,
@@ -100,7 +103,7 @@ ImageImpl *DisplayEGL::createImage(const egl::ImageState &state,
     return new ImageEGL(state, context, target, attribs, mEGL);
 }
 
-EGLSyncImpl *DisplayEGL::createSync()
+EGLSyncImpl *ThreadSafeDisplayEGL::createSync()
 {
     return new SyncEGL(mEGL);
 }
@@ -700,17 +703,6 @@ egl::ConfigSet DisplayEGL::generateConfigs()
     return configSet;
 }
 
-bool DisplayEGL::testDeviceLost()
-{
-    return false;
-}
-
-egl::Error DisplayEGL::restoreLostDevice(const egl::Display *display)
-{
-    UNIMPLEMENTED();
-    return egl::NoError();
-}
-
 bool DisplayEGL::isValidNativeWindow(EGLNativeWindowType window) const
 {
     return true;
@@ -783,8 +775,9 @@ egl::Error DisplayEGL::makeCurrent(egl::Display *display,
         }
         else if (context)
         {
-            // Switch surface but not context.
-            ASSERT(currentContext.context == newContext);
+            // For external contexts, the underlying native EGLContext might have been destroyed
+            // and recreated by the OS without ANGLE being told to unbind.
+            currentContext.context = newContext;
             ASSERT(newSurface == EGL_NO_SURFACE);
             ASSERT(newContext != EGL_NO_CONTEXT);
             // We only support using external surface with external context.
@@ -1099,7 +1092,7 @@ egl::Error DisplayEGL::queryDmaBufFormats(EGLint maxFormats, EGLint *formats, EG
     {
         // Do not copy data beyond the limits of the vector
         maxFormats = std::min(maxFormats, formatsSize);
-        std::memcpy(formats, mDrmFormats.data(), maxFormats * sizeof(EGLint));
+        ANGLE_UNSAFE_TODO(std::memcpy(formats, mDrmFormats.data(), maxFormats * sizeof(EGLint)));
     }
 
     return egl::NoError();

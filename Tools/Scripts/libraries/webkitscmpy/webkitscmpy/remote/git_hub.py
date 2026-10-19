@@ -165,12 +165,12 @@ class GitHub(Scm):
                 json=params,
             )
             if response.status_code == 422:
-                sys.stderr.write(self.repository.tracker.parse_error(response.json()))
+                sys.stderr.write(self.repository.tracker.parse_error(Tracker.decode_json(response)))
                 return None
             if response.status_code // 100 != 2:
                 sys.stderr.write("Request to '{}' returned status code '{}'\n".format(url, response.status_code))
-                sys.stderr.write(self.repository.tracker.parse_error(response.json()))
-                sys.stderr.write(Tracker.REFRESH_TOKEN_PROMPT)
+                sys.stderr.write(self.repository.tracker.parse_error(Tracker.decode_json(response)))
+                sys.stderr.write(Tracker.api_error_hint(response))
                 return None
             result = self.PullRequest(response.json())
 
@@ -182,7 +182,9 @@ class GitHub(Scm):
         def update(self, pull_request, head=None, title=None, body=None, commits=None, base=None, opened=None, draft=None):
             if not isinstance(pull_request, PullRequest):
                 raise ValueError("Expected 'pull_request' to be of type '{}' not '{}'".format(PullRequest, type(pull_request)))
-            if not any((head, title, body, commits, base)) and opened is None:
+            if head is not None and head != pull_request.head:
+                raise ValueError(f"GitHub does not support updating the head branch of a pull request (requested: {pull_request.head} to {head})")
+            if not any((title, body, commits, base)) and opened is None:
                 raise ValueError('No arguments to update pull-request provided')
             if draft is not None:
                 sys.stderr.write('GitHub does not allow editing draft state via API\n')
@@ -192,8 +194,6 @@ class GitHub(Scm):
                 title=title or pull_request.title,
                 base=base or pull_request.base,
             )
-            if head:
-                updates['head'] = '{}:{}'.format(user, head)
             if body or commits:
                 updates['body'] = PullRequest.create_body(body, commits)
             if opened is not None:
@@ -210,13 +210,13 @@ class GitHub(Scm):
                 json=updates,
             )
             if response.status_code == 422:
-                sys.stderr.write(self.repository.tracker.parse_error(response.json()))
+                sys.stderr.write(self.repository.tracker.parse_error(Tracker.decode_json(response)))
                 pull_request._opened = False
                 return pull_request
             if response.status_code // 100 != 2:
                 sys.stderr.write("Request to '{}' returned status code '{}'\n".format(url, response.status_code))
-                sys.stderr.write(self.repository.tracker.parse_error(response.json()))
-                sys.stderr.write(Tracker.REFRESH_TOKEN_PROMPT)
+                sys.stderr.write(self.repository.tracker.parse_error(Tracker.decode_json(response)))
+                sys.stderr.write(Tracker.api_error_hint(response))
                 return None
             data = response.json()
 
@@ -402,9 +402,8 @@ class GitHub(Scm):
             )
             if response.status_code // 100 != 2:
                 sys.stderr.write("Request to '{}' returned status code '{}'\n".format(url, response.status_code))
-                sys.stderr.write(self.repository.tracker.parse_error(response.json()))
-                if response.status_code != 422:
-                    sys.stderr.write(Tracker.REFRESH_TOKEN_PROMPT)
+                sys.stderr.write(self.repository.tracker.parse_error(Tracker.decode_json(response)))
+                sys.stderr.write(Tracker.api_error_hint(response))
                 return False
             return True
 
@@ -471,9 +470,8 @@ class GitHub(Scm):
 
             if response.status_code // 100 != 2:
                 sys.stderr.write("Request to '{}' returned status code '{}'\n".format(url, response.status_code))
-                sys.stderr.write(self.repository.tracker.parse_error(response.json()))
-                if response.status_code != 422:
-                    sys.stderr.write(Tracker.REFRESH_TOKEN_PROMPT)
+                sys.stderr.write(self.repository.tracker.parse_error(Tracker.decode_json(response)))
+                sys.stderr.write(Tracker.api_error_hint(response))
                 return None
 
             me = self._contributor(self.repository.credentials(required=True)[0])
@@ -619,7 +617,7 @@ class GitHub(Scm):
             if message:
                 sys.stderr.write('Message: {}\n'.format(message))
             if auth:
-                sys.stderr.write(Tracker.REFRESH_TOKEN_PROMPT)
+                sys.stderr.write(Tracker.api_error_hint(response))
             return None
 
         if not is_json_response:
@@ -643,10 +641,10 @@ class GitHub(Scm):
         )
         if response.status_code != 200:
             sys.stderr.write("Request to '{}' returned status code '{}'\n".format(url, response.status_code))
-            message = response.json().get('message')
+            message = Tracker.decode_json(response).get('message')
             if message:
                 sys.stderr.write('Message: {}\n'.format(message))
-            sys.stderr.write(Tracker.REFRESH_TOKEN_PROMPT)
+            sys.stderr.write(Tracker.api_error_hint(response))
             return None
         return response.json()
 

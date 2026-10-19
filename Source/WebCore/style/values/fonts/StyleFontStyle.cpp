@@ -51,11 +51,11 @@ auto CSSValueConversion<FontStyle>::operator()(BuilderState& state, const CSSVal
         return CSS::Keyword::Normal { };
 
     switch (auto valueID = keywordValue->valueID(); valueID) {
-    case CSSValueNormal:
+    case CSSValueID::Normal:
         return CSS::Keyword::Normal { };
-    case CSSValueItalic:
+    case CSSValueID::Italic:
         return CSS::Keyword::Italic { };
-    case CSSValueOblique:
+    case CSSValueID::Oblique:
         return CSS::Keyword::Oblique { };
     default:
         if (CSSPropertyParserHelpers::isSystemFontShorthand(valueID))
@@ -66,7 +66,7 @@ auto CSSValueConversion<FontStyle>::operator()(BuilderState& state, const CSSVal
     }
 }
 
-auto CSSValueCreation<FontStyle>::operator()(CSSValuePool& pool, const RenderStyle& style, const FontStyle& value) -> Ref<CSSValue>
+auto CSSValueCreation<FontStyle>::operator()(CSSValuePool& pool, const Style::ComputedStyle& style, const FontStyle& value) -> Ref<CSSValue>
 {
     if (value.isNormal())
         return createCSSValue(pool, style, CSS::Keyword::Normal { });

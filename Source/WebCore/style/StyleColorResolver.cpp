@@ -25,8 +25,9 @@
 
 #include "config.h"
 #include "StyleColorResolver.h"
+#include "StyleResolvedColors.h"
 
-#include "RenderStyle+GettersInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
 
 namespace WebCore {
 namespace Style {
@@ -38,24 +39,34 @@ WebCore::Color ColorResolver::colorApplyingColorFilter(const WebCore::Color& col
     return transformedColor;
 }
 
+WebCore::Color ColorResolver::resolveColor(const Style::Color& color, StyleColorOptionsPurpose purpose) const
+{
+    return color.resolveColor(ResolvedColors::fromStyle(m_style, purpose));
+}
+
+WebCore::Color ColorResolver::resolveVisitedLinkColor(const Style::Color& color, StyleColorOptionsPurpose purpose) const
+{
+    return color.resolveColor(ResolvedColors::fromVisitedLinkStyle(m_style, purpose));
+}
+
 WebCore::Color ColorResolver::colorResolvingCurrentColor(const Style::Color& color) const
 {
-    return color.resolveColor(m_style->color());
+    return resolveColor(color, StyleColorOptionsPurpose::ComputedStyle);
 }
 
 WebCore::Color ColorResolver::colorResolvingCurrentColorApplyingColorFilter(const Style::Color& color) const
 {
-    return colorApplyingColorFilter(colorResolvingCurrentColor(color));
+    return colorApplyingColorFilter(resolveColor(color, StyleColorOptionsPurpose::Rendering));
 }
 
 WebCore::Color ColorResolver::visitedLinkColorResolvingCurrentColor(const Style::Color& color) const
 {
-    return color.resolveColor(m_style->visitedLinkColor());
+    return resolveVisitedLinkColor(color, StyleColorOptionsPurpose::ComputedStyle);
 }
 
 WebCore::Color ColorResolver::visitedLinkColorResolvingCurrentColorApplyingColorFilter(const Style::Color& color) const
 {
-    return colorApplyingColorFilter(visitedLinkColorResolvingCurrentColor(color));
+    return colorApplyingColorFilter(resolveVisitedLinkColor(color, StyleColorOptionsPurpose::Rendering));
 }
 
 bool ColorResolver::visitedDependentShouldReturnUnvisitedLinkColor(OptionSet<PaintBehavior> paintBehavior) const

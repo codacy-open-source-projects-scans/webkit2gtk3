@@ -336,6 +336,43 @@ function pathAsBoundsOfID(id) {
     return { x: parseFloat(match[1]), y: parseFloat(match[2]), width: parseFloat(match[3]), height: parseFloat(match[4]) };
 }
 
+// Finds the popover Menu for a base-appearance select. On macOS, the menu is a
+// child of the select. On iOS, it is reparented to be a sibling, as both the menu
+// and menu items need to be isAccessibilityElement=YES at the same time (the menu
+// so it can be expanded and collapsed, and menu items so they can be selected).
+function findBaseSelectMenu(select) {
+    for (var i = 0; i < select.childrenCount; i++) {
+        var child = select.childAtIndex(i);
+        var childRole = child ? child.role : null;
+        if (childRole && childRole.toLowerCase().includes("menu"))
+            return child;
+    }
+
+    var parent = select.parentElement();
+    if (parent) {
+        for (var i = 0; i < parent.childrenCount; i++) {
+            var sibling = parent.childAtIndex(i);
+            var siblingRole = sibling ? sibling.role : null;
+            if (siblingRole && siblingRole.toLowerCase().includes("menu"))
+                return sibling;
+        }
+    }
+    return null;
+}
+
+// Same as findBaseSelectMenu, but waits until the menu has the given number of menu items.
+// With the isolated tree enabled, the select's expanded state is committed in an earlier
+// cycle than the newly rendered popover contents, so a menu found the moment the select
+// reports itself expanded can still have no children.
+async function waitForBaseSelectMenu(select, menuItemCount) {
+    var menu = null;
+    await waitFor(() => {
+        menu = findBaseSelectMenu(select);
+        return menu && menu.childrenCount === menuItemCount;
+    });
+    return menu;
+}
+
 // Executes the operation and waits until an accessibility notification of the provided
 // `notificationName` is received. A notification listener is added to the passed
 // AccessibilityUIElement if not null, or a global listener is installed, before
@@ -675,6 +712,42 @@ function formatAnnouncementUserInfo(userInfo) {
     result += `AXPriorityKey: ${userInfo["AXPriorityKey"]}\n`;
     result += `AXAnnouncementIsLiveRegionKey: ${userInfo["AXAnnouncementIsLiveRegionKey"]}\n`;
     return result;
+}
+
+function stripObjectReplacementCharacters(text) {
+    return text.replace(/\uFFFC/g, "");
+}
+
+// The text of each message a field vends as its error, which is what the user actually receives. Empty
+// entries are dropped because iOS flattens a message container into the elements inside it, and some of
+// those carry no text of their own. Asserting text rather than DOM ids keeps one baseline for both
+// platforms, since iOS does not report DOM ids.
+function errorMessageText(axElement) {
+    var messages = axElement.errorMessageElements();
+    if (!messages || !messages.length)
+        return "no error messages";
+    return messages.map(function(message) {
+        var text = message.stringForTextMarkerRange(message.textMarkerRangeForElement(message));
+        return stripObjectReplacementCharacters(text).trim();
+    }).filter(function(text) { return text.length; }).join(" | ");
+}
+
+function errorMessageCount(axElement) {
+    var messages = axElement.errorMessageElements();
+    return messages ? messages.length : 0;
+}
+
+function formFieldWithErrorCount(axContainer) {
+    var count = 0;
+    var field = null;
+    while ((field = axContainer.uiElementForSearchPredicate(field, true, "AXFormFieldWithErrorSearchKey", "", false)))
+        ++count;
+    return count;
+}
+
+function formatFormValidationUserInfo(userInfo) {
+    return `AXFormValidationUnannouncedText: ${userInfo["AXFormValidationUnannouncedText"].join(" | ")}\n`
+        + `AXFormValidationErrorFieldCount: ${userInfo["AXFormValidationErrorFieldCount"]}\n`;
 }
 
 // Checks that text alternatives include all expected values and exclude all unexpected values.

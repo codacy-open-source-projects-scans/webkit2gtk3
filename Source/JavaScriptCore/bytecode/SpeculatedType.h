@@ -29,6 +29,7 @@
 #pragma once
 
 #include <JavaScriptCore/CPU.h>
+#include <JavaScriptCore/JSType.h>
 #include <wtf/Forward.h>
 
 namespace JSC {
@@ -39,7 +40,7 @@ class Structure;
 
 struct ClassInfo;
 
-enum JSType : uint8_t;
+using IndexingType = uint8_t;
 enum TypedArrayType : uint8_t;
 
 typedef uint64_t SpeculatedType;
@@ -131,7 +132,7 @@ static constexpr SpeculatedType SpecTypeofMightBeFunction             = SpecFunc
 // SpecCellCheck is the type set representing the values that can flow through a cell check.
 // On 64-bit platforms, the empty value passes a cell check. Also, ~SpecCellCheck is the type
 // set that representing the values that flow through when testing that something is not a cell.
-static constexpr SpeculatedType SpecCellCheck          = is64Bit() ? (SpecCell | SpecEmpty) : SpecCell;
+static constexpr SpeculatedType SpecCellCheck          = SpecCell | SpecEmpty;
 
 typedef bool (*SpeculatedTypeChecker)(SpeculatedType);
 
@@ -560,41 +561,49 @@ inline bool speculationChecked(SpeculatedType actual, SpeculatedType desired)
 // ASSERT(!c->inherits(classInfo) || speculationChecked(speculationFromCell(c), speculationFromClassInfoInheritance(classInfo)));
 SpeculatedType speculationFromClassInfoInheritance(const ClassInfo*);
 
-SpeculatedType NODELETE speculationFromStructure(Structure*);
-SpeculatedType NODELETE speculationFromCell(JSCell*);
-SpeculatedType NODELETE speculationFromValue(JSValue);
+SpeculatedType LEGACY_NODELETE speculationFromStructure(Structure*);
+SpeculatedType LEGACY_NODELETE speculationFromCell(JSCell*);
+SpeculatedType LEGACY_NODELETE speculationFromValue(JSValue);
+// For collecting a value profile, which merges what it is told and so may be given a broader type
+// than the truth. This never dereferences a JSString's StringImpl, so it must not be used where the
+// exact type is required, such as constant reasoning or OSR entry validation.
+SpeculatedType LEGACY_NODELETE speculationFromValueForProfiling(JSValue);
 // If it's an anyInt(), it'll return speculated types from the Int52 lattice.
 // Otherwise, it'll return types from the JSValue lattice.
-JS_EXPORT_PRIVATE SpeculatedType NODELETE int52AwareSpeculationFromValue(JSValue);
-std::optional<SpeculatedType> NODELETE speculationFromJSType(JSType);
+JS_EXPORT_PRIVATE SpeculatedType LEGACY_NODELETE int52AwareSpeculationFromValue(JSValue);
+std::optional<SpeculatedType> LEGACY_NODELETE speculationFromJSType(JSType);
+std::optional<SpeculatedType> LEGACY_NODELETE speculationFromJSTypeRange(JSTypeRange);
 
-SpeculatedType NODELETE speculationFromTypedArrayType(TypedArrayType); // only valid for typed views.
-TypedArrayType NODELETE typedArrayTypeFromSpeculation(SpeculatedType);
+SpeculatedType LEGACY_NODELETE speculationFromTypedArrayType(TypedArrayType); // only valid for typed views.
+TypedArrayType LEGACY_NODELETE typedArrayTypeFromSpeculation(SpeculatedType);
 
-SpeculatedType NODELETE leastUpperBoundOfStrictlyEquivalentSpeculations(SpeculatedType);
+SpeculatedType LEGACY_NODELETE leastUpperBoundOfStrictlyEquivalentSpeculations(SpeculatedType);
 
-bool NODELETE valuesCouldBeEqual(SpeculatedType, SpeculatedType);
+bool LEGACY_NODELETE valuesCouldBeEqual(SpeculatedType, SpeculatedType);
 
 // Precise computation of the type of the result of a double computation after we
 // already know that the inputs are doubles and that the result must be a double. Use
 // the closest one of these that applies.
-SpeculatedType NODELETE typeOfDoubleSum(SpeculatedType, SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleDifference(SpeculatedType, SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleIncOrDec(SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleProduct(SpeculatedType, SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleQuotient(SpeculatedType, SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleMinMax(SpeculatedType, SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleNegation(SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleAbs(SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleRounding(SpeculatedType);
-SpeculatedType NODELETE typeOfDoublePow(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleSum(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleDifference(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleIncOrDec(SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleProduct(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleQuotient(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleMinMax(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleNegation(SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleAbs(SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleRounding(SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoublePow(SpeculatedType, SpeculatedType);
 
 // This conservatively models the behavior of arbitrary double operations.
-SpeculatedType NODELETE typeOfDoubleBinaryOp(SpeculatedType, SpeculatedType);
-SpeculatedType NODELETE typeOfDoubleUnaryOp(SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleBinaryOp(SpeculatedType, SpeculatedType);
+SpeculatedType LEGACY_NODELETE typeOfDoubleUnaryOp(SpeculatedType);
 
 // This is mostly for debugging so we can fill profiles from strings.
-SpeculatedType speculationFromString(const char*);
+SpeculatedType speculationFromString(StringView);
+
+bool LEGACY_NODELETE isProvenValidTypeForIndexingShapeStorage(IndexingType, SpeculatedType);
+IndexingType LEGACY_NODELETE leastUpperBoundOfIndexingTypeAndTypeForSpeculation(IndexingType, SpeculatedType);
 
 } // namespace JSC
 

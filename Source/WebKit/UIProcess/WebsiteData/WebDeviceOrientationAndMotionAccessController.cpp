@@ -31,8 +31,10 @@
 #include "APIUIClient.h"
 #include "FrameInfoData.h"
 #include "PageLoadState.h"
+#include "WebFrameProxy.h"
 #include "WebPageProxy.h"
 #include "WebsiteDataStore.h"
+#include <wtf/Borrow.h>
 
 namespace WebKit {
 
@@ -45,25 +47,28 @@ WebDeviceOrientationAndMotionAccessController::WebDeviceOrientationAndMotionAcce
 
 void WebDeviceOrientationAndMotionAccessController::shouldAllowAccess(WebPageProxy& page, WebFrameProxy& frame, FrameInfoData&& frameInfo, bool mayPrompt, CompletionHandler<void(DeviceOrientationOrMotionPermissionState)>&& completionHandler)
 {
-    auto originData = SecurityOrigin::create(page.pageLoadState().activeURL())->data();
-    auto currentPermission = cachedDeviceOrientationPermission(originData);
+    RefPtr mainFrame = frame.mainFrame();
+    if (!mainFrame)
+        return completionHandler(DeviceOrientationOrMotionPermissionState::Denied);
+    auto requestOriginData = mainFrame->documentSecurityOriginData();
+    auto currentPermission = cachedDeviceOrientationPermission(requestOriginData);
     if (currentPermission != DeviceOrientationOrMotionPermissionState::Prompt || !mayPrompt)
         return completionHandler(currentPermission);
 
-    auto& pendingRequests = m_pendingRequests.ensure(originData, [] {
+    auto& pendingRequests = m_pendingRequests.ensure(requestOriginData, [] {
         return Vector<CompletionHandler<void(WebCore::DeviceOrientationOrMotionPermissionState)>> { };
     }).iterator->value;
     pendingRequests.append(WTF::move(completionHandler));
     if (pendingRequests.size() > 1)
         return;
 
-    page.uiClient().shouldAllowDeviceOrientationAndMotionAccess(page, frame, WTF::move(frameInfo), [weakThis = WeakPtr { *this }, originData](bool granted) mutable {
+    page.uiClient().shouldAllowDeviceOrientationAndMotionAccess(page, frame, WTF::move(frameInfo), [weakThis = WeakPtr { *this }, requestOriginData](bool granted) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
-        protectedThis->m_deviceOrientationPermissionDecisions.set(originData, granted);
-        auto requests = protectedThis->m_pendingRequests.take(originData);
-        for (auto& completionHandler : requests)
+        protectedThis->m_deviceOrientationPermissionDecisions.set(requestOriginData, granted);
+        auto requests = protectedThis->m_pendingRequests.take(requestOriginData);
+        for (auto& completionHandler : borrow(requests))
             completionHandler(granted ? DeviceOrientationOrMotionPermissionState::Granted : DeviceOrientationOrMotionPermissionState::Denied);
     });
 }

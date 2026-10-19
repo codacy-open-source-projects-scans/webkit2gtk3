@@ -121,8 +121,8 @@ const Vector<Ref<SpeechSynthesisVoice>>& SpeechSynthesis::getVoices()
     // If the voiceList is empty, that's the cue to get the voices from the platform again.
     RefPtr speechSynthesisClient = m_speechSynthesisClient.get();
     auto& voiceList = speechSynthesisClient ? speechSynthesisClient->voiceList() : protect(ensurePlatformSpeechSynthesizer())->voiceList();
-    m_voiceList = voiceList.map([](auto& voice) {
-        return SpeechSynthesisVoice::create(protect(voice));
+    m_voiceList = voiceList.map([](const Ref<PlatformSpeechSynthesisVoice>& voice) {
+        return SpeechSynthesisVoice::create(voice);
     });
 
     return *m_voiceList;
@@ -228,7 +228,9 @@ void SpeechSynthesis::resumeSynthesis()
 void SpeechSynthesis::handleSpeakingCompleted(SpeechSynthesisUtterance& utterance, bool errorOccurred)
 {
     // Ignore callbacks for stale utterances. This can happen when cancel() is called
-    // and a new utterance is queued before the platform's async cancel callback fires.
+    // and a new utterance is queued before the platform's async cancel callback fires, or when
+    // stopPlatformSpeech() already cleared m_currentSpeechUtterance and the platform cancel()
+    // fired this callback synchronously (e.g. the mock).
     if (!m_currentSpeechUtterance || &utterance != currentSpeechUtterance())
         return;
 
@@ -274,42 +276,42 @@ void SpeechSynthesis::didStartSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didStartSpeaking(currentSpeechUtterance()->platformUtterance());
+    didStartSpeaking(protect(currentSpeechUtterance()->platformUtterance()));
 }
 
 void SpeechSynthesis::didFinishSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didFinishSpeaking(currentSpeechUtterance()->platformUtterance());
+    didFinishSpeaking(protect(currentSpeechUtterance()->platformUtterance()));
 }
 
 void SpeechSynthesis::didPauseSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didPauseSpeaking(currentSpeechUtterance()->platformUtterance());
+    didPauseSpeaking(protect(currentSpeechUtterance()->platformUtterance()));
 }
 
 void SpeechSynthesis::didResumeSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didResumeSpeaking(currentSpeechUtterance()->platformUtterance());
+    didResumeSpeaking(protect(currentSpeechUtterance()->platformUtterance()));
 }
 
 void SpeechSynthesis::speakingErrorOccurred()
 {
     if (!m_currentSpeechUtterance)
         return;
-    speakingErrorOccurred(currentSpeechUtterance()->platformUtterance());
+    speakingErrorOccurred(protect(currentSpeechUtterance()->platformUtterance()));
 }
 
 void SpeechSynthesis::boundaryEventOccurred(bool wordBoundary, unsigned charIndex, unsigned charLength)
 {
     if (!m_currentSpeechUtterance)
         return;
-    boundaryEventOccurred(currentSpeechUtterance()->platformUtterance(), wordBoundary ? SpeechBoundary::SpeechWordBoundary : SpeechBoundary::SpeechSentenceBoundary, charIndex, charLength);
+    boundaryEventOccurred(protect(currentSpeechUtterance()->platformUtterance()), wordBoundary ? SpeechBoundary::SpeechWordBoundary : SpeechBoundary::SpeechSentenceBoundary, charIndex, charLength);
 }
 
 void SpeechSynthesis::voicesChanged()
@@ -320,33 +322,33 @@ void SpeechSynthesis::voicesChanged()
 void SpeechSynthesis::didStartSpeaking(PlatformSpeechSynthesisUtterance& utterance)
 {
     if (utterance.client())
-        downcast<SpeechSynthesisUtterance>(*utterance.client()).eventOccurred(eventNames().startEvent, 0, 0, String());
+        protect(downcast<SpeechSynthesisUtterance>(*utterance.client()))->eventOccurred(eventNames().startEvent, 0, 0, String());
 }
 
 void SpeechSynthesis::didPauseSpeaking(PlatformSpeechSynthesisUtterance& utterance)
 {
     m_isPaused = true;
     if (utterance.client())
-        downcast<SpeechSynthesisUtterance>(*utterance.client()).eventOccurred(eventNames().pauseEvent, 0, 0, String());
+        protect(downcast<SpeechSynthesisUtterance>(*utterance.client()))->eventOccurred(eventNames().pauseEvent, 0, 0, String());
 }
 
 void SpeechSynthesis::didResumeSpeaking(PlatformSpeechSynthesisUtterance& utterance)
 {
     m_isPaused = false;
     if (utterance.client())
-        downcast<SpeechSynthesisUtterance>(*utterance.client()).eventOccurred(eventNames().resumeEvent, 0, 0, String());
+        protect(downcast<SpeechSynthesisUtterance>(*utterance.client()))->eventOccurred(eventNames().resumeEvent, 0, 0, String());
 }
 
 void SpeechSynthesis::didFinishSpeaking(PlatformSpeechSynthesisUtterance& utterance)
 {
     if (utterance.client())
-        handleSpeakingCompleted(downcast<SpeechSynthesisUtterance>(*utterance.client()), false);
+        handleSpeakingCompleted(protect(downcast<SpeechSynthesisUtterance>(*utterance.client())), false);
 }
 
 void SpeechSynthesis::speakingErrorOccurred(PlatformSpeechSynthesisUtterance& utterance)
 {
     if (utterance.client())
-        handleSpeakingCompleted(downcast<SpeechSynthesisUtterance>(*utterance.client()), true);
+        handleSpeakingCompleted(protect(downcast<SpeechSynthesisUtterance>(*utterance.client())), true);
 }
 
 SpeechSynthesisUtterance* SpeechSynthesis::currentSpeechUtterance()
@@ -363,6 +365,31 @@ void SpeechSynthesis::simulateVoicesListChange()
 
     if (m_platformSpeechSynthesizer)
         voicesDidChange();
+}
+
+void SpeechSynthesis::suspend(ReasonForSuspension)
+{
+    stopPlatformSpeech();
+}
+
+void SpeechSynthesis::stop()
+{
+    stopPlatformSpeech();
+}
+
+void SpeechSynthesis::stopPlatformSpeech()
+{
+    // Called from inside ScriptExecutionContext::forEachActiveDOMObject, which holds a
+    // ScriptDisallowedScope, so we cannot fire error events here as cancel() would. Any
+    // late completion callback from the platform will see m_currentSpeechUtterance == nullptr
+    // and be ignored by handleSpeakingCompleted().
+    m_utteranceQueue.clear();
+    m_currentSpeechUtterance = nullptr;
+    m_isPaused = false;
+    if (RefPtr speechSynthesisClient = m_speechSynthesisClient.get())
+        speechSynthesisClient->cancel();
+    else if (RefPtr platformSpeechSynthesizer = m_platformSpeechSynthesizer)
+        platformSpeechSynthesizer->cancel();
 }
 
 bool SpeechSynthesis::virtualHasPendingActivity() const

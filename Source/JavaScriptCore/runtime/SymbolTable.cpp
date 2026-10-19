@@ -34,6 +34,7 @@
 #include "JSCJSValueInlines.h"
 #include "ResourceExhaustion.h"
 #include "ScriptExecutable.h"
+#include "SymbolTableInlines.h"
 #include "TypeProfiler.h"
 
 #include <wtf/CommaPrinter.h>
@@ -43,15 +44,6 @@ namespace JSC {
 const ClassInfo SymbolTable::s_info = { "SymbolTable"_s, nullptr, nullptr, nullptr, CREATE_METHOD_TABLE(SymbolTable) };
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(SymbolTableEntryFatEntry);
-
-SymbolTableEntry& SymbolTableEntry::copySlow(const SymbolTableEntry& other)
-{
-    ASSERT(other.isFat());
-    FatEntry* newFatEntry = new FatEntry(*other.fatEntry());
-    freeFatEntry();
-    m_bits = std::bit_cast<intptr_t>(newFatEntry);
-    return *this;
-}
 
 void SymbolTable::destroy(JSCell* cell)
 {
@@ -65,21 +57,10 @@ void SymbolTableEntry::freeFatEntrySlow()
     delete fatEntry();
 }
 
-void SymbolTableEntry::prepareToWatch()
+void SymbolTableEntry::inflate()
 {
-    if (!isWatchable())
-        return;
-    FatEntry* entry = inflate();
-    if (entry->m_watchpoints)
-        return;
-    entry->m_watchpoints = WatchpointSet::create(ClearWatchpoint);
-}
-
-SymbolTableEntry::FatEntry* SymbolTableEntry::inflateSlow()
-{
-    FatEntry* entry = new FatEntry(m_bits);
-    m_bits = std::bit_cast<intptr_t>(entry);
-    return entry;
+    ASSERT(!isFat());
+    m_bits = std::bit_cast<intptr_t>(new FatEntry(m_bits));
 }
 
 SymbolTable::SymbolTable(VM& vm)
@@ -138,7 +119,7 @@ SymbolTableEntry* SymbolTable::entryFor(const ConcurrentJSLocker& locker, ScopeO
     return toEntryVector[offset.offset()];
 }
 
-SymbolTable* SymbolTable::cloneScopePart(VM& vm)
+SymbolTable* SymbolTable::cloneScopePart(VM& vm, PropagateCloneInvalidationToOriginal propagateCloneInvalidationToOriginal)
 {
     SymbolTable* result = SymbolTable::create(vm);
     
@@ -213,7 +194,14 @@ SymbolTable* SymbolTable::cloneScopePart(VM& vm)
                 result->m_rareData->m_privateNames.add(name.key, name.value);
         }
     }
+
     result->m_clonedFrom.set(vm, result, this);
+    result->m_propagateCloneInvalidationToOriginal = propagateCloneInvalidationToOriginal;
+    if (result->m_propagateCloneInvalidationToOriginal == PropagateCloneInvalidationToOriginal::Yes) {
+        // If the original SymbolTable's singleton is already invalidated, the new clone starts out invalidated too.
+        if (m_singleton.hasBeenInvalidated())
+            result->m_singleton.invalidate(vm, StringFireDetail("Singleton was previously invalidated"));
+    }
     return result;
 }
 
@@ -317,7 +305,7 @@ RefPtr<TypeSet> SymbolTable::globalTypeSetForVariable(const ConcurrentJSLocker& 
 }
 
 #if ASSERT_ENABLED
-bool SymbolTable::hasScopedWatchpointSet(WatchpointSet* watchpointSet)
+bool SymbolTable::hasScopedWatchpointSet(InlineWatchpointSet* watchpointSet)
 {
     for (auto iter = m_map.begin(), end = m_map.end(); iter != end; ++iter) {
         if (!iter->value.varOffset().isScope())

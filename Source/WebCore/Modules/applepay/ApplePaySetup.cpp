@@ -31,6 +31,7 @@
 #include "ContextDestructionObserverInlines.h"
 #include "DocumentPage.h"
 #include "JSApplePaySetupFeature.h"
+#include "JSDOMConvertBoolean.h"
 #include "JSDOMConvertInterface.h"
 #include "JSDOMConvertSequences.h"
 #include "JSDOMPromiseDeferred.h"
@@ -44,7 +45,7 @@
 
 namespace WebCore {
 
-static bool NODELETE shouldDiscloseFeatures(Document& document)
+static bool LEGACY_NODELETE shouldDiscloseFeatures(Document& document)
 {
     auto* page = document.page();
     if (!page || page->usesEphemeralSession())

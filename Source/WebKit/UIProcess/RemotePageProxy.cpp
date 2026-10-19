@@ -33,17 +33,24 @@
 #include "HandleMessage.h"
 #include "NativeWebMouseEvent.h"
 #include "NavigationActionData.h"
+#include "NotificationManagerMessageHandlerMessages.h"
 #include "PageLoadState.h"
+#include "PlatformXRSystem.h"
+#include "PlatformXRSystemMessages.h"
 #include "ProvisionalFrameProxy.h"
+#include "RemoteMediaSessionManagerProxy.h"
 #include "RemotePageDrawingAreaProxy.h"
 #include "RemotePageFullscreenManagerProxy.h"
 #include "RemotePageScreenOrientationManagerProxy.h"
 #include "RemotePageVisitedLinkStoreRegistration.h"
+#include "RemotePageWebAuthenticatorCoordinatorProxy.h"
 #include "RemotePageWebDeviceOrientationUpdateProviderProxy.h"
 #include "UserMediaProcessManager.h"
+#include "WebAuthenticatorCoordinatorProxy.h"
 #include "WebBackForwardList.h"
 #include "WebBackForwardListMessages.h"
 #include "WebFrameProxy.h"
+#include "WebNotificationManagerMessageHandler.h"
 #include "WebPageMessages.h"
 #include "WebPageProxy.h"
 #include "WebPageProxyMessages.h"
@@ -65,8 +72,18 @@
 #include "VideoPresentationManagerProxy.h"
 #endif
 
+#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#include "PlaybackSessionManagerProxy.h"
+#include "RemotePagePlaybackSessionManagerProxy.h"
+#endif
+
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
 #include "WebDeviceOrientationUpdateProviderProxy.h"
+#endif
+
+#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#include "PlaybackSessionManagerProxy.h"
+#include "RemotePagePlaybackSessionManagerProxy.h"
 #endif
 
 // FIXME: https://bugs.webkit.org/show_bug.cgi?id=306415
@@ -78,7 +95,9 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(RemotePageProxy);
 
 Ref<RemotePageProxy> RemotePageProxy::create(WebPageProxy& page, WebProcessProxy& process, const WebCore::Site& site, WebPageProxyMessageReceiverRegistration* registrationToTransfer, std::optional<WebCore::PageIdentifier> pageIDToTransfer)
 {
-    return adoptRef(*new RemotePageProxy(page, process, site, registrationToTransfer, pageIDToTransfer));
+    Ref remotePageProxy = adoptRef(*new RemotePageProxy(page, process, site, registrationToTransfer, pageIDToTransfer));
+    remotePageProxy->initializeAfterAdoption();
+    return remotePageProxy;
 }
 
 RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, const WebCore::Site& site, WebPageProxyMessageReceiverRegistration* registrationToTransfer, std::optional<WebCore::PageIdentifier> pageIDToTransfer)
@@ -88,11 +107,16 @@ RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, c
     , m_site(site)
     , m_processActivityState(makeUniqueRef<WebProcessActivityState>(*this))
 {
+    Ref backForwardListReceiver = protect(page)->backForwardListMessageReceiver();
     if (registrationToTransfer)
-        m_messageReceiverRegistration.transferMessageReceivingFrom(*registrationToTransfer, *this, page.backForwardListMessageReceiver());
+        m_messageReceiverRegistration.transferMessageReceivingFrom(*registrationToTransfer, *this, backForwardListReceiver);
     else
-        m_messageReceiverRegistration.startReceivingMessages(m_process, m_webPageID, *this, page.backForwardListMessageReceiver());
+        m_messageReceiverRegistration.startReceivingMessages(m_process, m_webPageID, *this, backForwardListReceiver);
+    m_process->addMessageReceiver(Messages::NotificationManagerMessageHandler::messageReceiverName(), m_webPageID, protect(page.notificationManagerMessageHandler()));
+}
 
+void RemotePageProxy::initializeAfterAdoption()
+{
     RefPtr protectedPage = m_page.get();
     if (!protectedPage)
         return;
@@ -104,6 +128,11 @@ RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, c
         m_process->setRunningBoardThrottlingEnabled();
 #endif
 
+#if ENABLE(IPC_TESTING_API)
+    if (protectedPage->preferences().ipcTestingAPIEnabled() && protectedPage->preferences().ignoreInvalidMessageWhenIPCTestingAPIEnabled())
+        m_process->setIgnoreInvalidMessageForTesting();
+#endif
+
     m_process->addRemotePageProxy(*this);
 
     protectedPage->didCreateRemotePage(*this);
@@ -111,10 +140,15 @@ RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, c
 
 void RemotePageProxy::disconnect()
 {
-    if (RefPtr page = m_page.get())
+    RefPtr page = m_page;
+    if (page)
         page->isNoLongerAssociatedWithRemotePage(*this);
-    if (m_drawingArea)
-        m_process->send(Messages::WebPage::Close(), m_webPageID);
+    if (m_drawingArea) {
+        // The process's own stop messages would arrive after stopReceivingMessages() below, so stop its tasks here.
+        if (page)
+            page->stopAllURLSchemeTasks(m_process.ptr());
+        m_process->sendPageCloseMessage(page ? std::optional { page->identifier() } : std::nullopt, m_webPageID);
+    }
     m_process->removeRemotePageProxy(*this);
 
     m_drawingArea = nullptr;
@@ -132,7 +166,17 @@ void RemotePageProxy::disconnect()
 #endif
     m_visitedLinkStoreRegistration = nullptr;
     m_messageReceiverRegistration.stopReceivingMessages();
+    m_process->removeMessageReceiver(Messages::NotificationManagerMessageHandler::messageReceiverName(), m_webPageID);
     m_screenOrientationManager = nullptr;
+#if ENABLE(WEB_AUTHN)
+    m_webAuthenticatorCoordinator = nullptr;
+#endif
+#if ENABLE(WEBXR)
+    if (m_isReceivingXRMessages) {
+        m_process->removeMessageReceiver(Messages::PlatformXRSystem::messageReceiverName(), m_webPageID);
+        m_isReceivingXRMessages = false;
+    }
+#endif
 #if ASSERT_ENABLED
     m_disconnected = true;
 #endif
@@ -168,6 +212,18 @@ void RemotePageProxy::injectPageIntoNewProcess()
     if (RefPtr screenOrientationManager = page->screenOrientationManager())
         m_screenOrientationManager = RemotePageScreenOrientationManagerProxy::create(m_webPageID, screenOrientationManager.get(), m_process);
 
+#if ENABLE(WEB_AUTHN)
+    if (RefPtr authenticatorCoordinator = page->webAuthenticatorCoordinatorProxy())
+        m_webAuthenticatorCoordinator = RemotePageWebAuthenticatorCoordinatorProxy::create(m_webPageID, authenticatorCoordinator.get(), m_process);
+#endif
+
+#if ENABLE(WEBXR)
+    if (page->xrSystem()) {
+        m_process->addMessageReceiver(Messages::PlatformXRSystem::messageReceiverName(), m_webPageID, *this);
+        m_isReceivingXRMessages = true;
+    }
+#endif
+
     m_visitedLinkStoreRegistration = makeUnique<RemotePageVisitedLinkStoreRegistration>(*page, m_process);
 
     RefPtr websitePolicies = page->mainFrameWebsitePolicies();
@@ -177,17 +233,25 @@ void RemotePageProxy::injectPageIntoNewProcess()
             page->creationParametersForRemotePage(m_process, drawingArea.get(), RemotePageParameters {
                 page->pageLoadState().url(),
                 protect(page->mainFrame())->frameTreeCreationParameters(),
-                websitePolicies ? std::make_optional(websitePolicies->dataForProcess(m_process)) : std::nullopt
+                websitePolicies ? std::make_optional(websitePolicies->dataForProcess(m_process)) : std::nullopt,
+                page->topDocumentSyncData()
             })
         ), 0
     );
+
+    // frameTreeCreationParameters above contains the main frame's current frameViewportInfo.
+    m_lastSentMainFrameViewportInfo = protect(page->mainFrame())->frameViewportInfo();
 }
 
 void RemotePageProxy::processDidTerminate(WebProcessProxy& process, ProcessTerminationReason reason)
 {
+    m_processActivityState->reset();
+    m_processActivityState->dropNetworkActivity();
+
     RefPtr page = m_page.get();
     if (!page)
         return;
+    page->stopAllURLSchemeTasks(&process);
     if (RefPtr drawingArea = page->drawingArea())
         drawingArea->remotePageProcessDidTerminate(process.coreProcessIdentifier());
     if (RefPtr mainFrame = page->mainFrame())
@@ -235,17 +299,33 @@ void RemotePageProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decode
         return;
 
     if (decoder.messageReceiverName() == Messages::WebBackForwardList::messageReceiverName()) {
-        page->backForwardListMessageReceiver().didReceiveMessage(connection, decoder);
+        Ref backForwardListReceiver = page->backForwardListMessageReceiver();
+        backForwardListReceiver->didReceiveMessage(connection, decoder);
         return;
     }
+#if ENABLE(WEBXR)
+    if (decoder.messageReceiverName() == Messages::PlatformXRSystem::messageReceiverName()) {
+        if (RefPtr xrSystem = page->xrSystem())
+            xrSystem->didReceiveMessage(connection, decoder);
+        return;
+    }
+#endif
     page->didReceiveMessage(connection, decoder);
 }
 
 void RemotePageProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& encoder)
 {
     if (RefPtr page = m_page.get()) {
-        if (decoder.messageReceiverName() == Messages::WebBackForwardList::messageReceiverName())
-            page->backForwardListMessageReceiver().didReceiveSyncMessage(connection, decoder, encoder);
+        if (decoder.messageReceiverName() == Messages::WebBackForwardList::messageReceiverName()) {
+            Ref backForwardListReceiver = page->backForwardListMessageReceiver();
+            backForwardListReceiver->didReceiveSyncMessage(connection, decoder, encoder);
+        }
+#if ENABLE(WEBXR)
+        else if (decoder.messageReceiverName() == Messages::PlatformXRSystem::messageReceiverName()) {
+            if (RefPtr xrSystem = page->xrSystem())
+                xrSystem->didReceiveSyncMessage(connection, decoder, encoder);
+        }
+#endif
         else
             page->didReceiveSyncMessage(connection, decoder, encoder);
     }
@@ -322,6 +402,9 @@ void RemotePageProxy::setDrawingArea(DrawingAreaProxy* drawingArea)
         return;
     }
 
+    if (m_drawingArea && m_drawingArea->identifier() == drawingArea->identifier())
+        return;
+
     m_drawingArea = RemotePageDrawingAreaProxy::create(*drawingArea, m_process);
     RefPtr websitePolicies = page->mainFrameWebsitePolicies();
     m_process->send(
@@ -330,10 +413,14 @@ void RemotePageProxy::setDrawingArea(DrawingAreaProxy* drawingArea)
             page->creationParametersForRemotePage(m_process, *drawingArea, RemotePageParameters {
                 page->pageLoadState().url(),
                 mainFrame->frameTreeCreationParameters(),
-                websitePolicies ? std::make_optional(websitePolicies->dataForProcess(m_process)) : std::nullopt
+                websitePolicies ? std::make_optional(websitePolicies->dataForProcess(m_process)) : std::nullopt,
+                page->topDocumentSyncData()
             })
         ), 0
     );
+
+    // frameTreeCreationParameters above contains the main frame's current frameViewportInfo.
+    m_lastSentMainFrameViewportInfo = mainFrame->frameViewportInfo();
 }
 
 void RemotePageProxy::setCurrentOrientation(WebCore::ScreenOrientationType orientation)
@@ -345,6 +432,13 @@ void RemotePageProxy::setCurrentOrientation(WebCore::ScreenOrientationType orien
     if (RefPtr manager = page->screenOrientationManager())
         manager->setCurrentOrientation(orientation);
 }
+
+#if ENABLE(DEVICE_ORIENTATION)
+void RemotePageProxy::clearDeviceOrientationAndMotionPermissions()
+{
+    m_process->send(Messages::WebPage::ClearDeviceOrientationAndMotionPermissions(), m_webPageID);
+}
+#endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
 void RemotePageProxy::didCreateContextInWebProcessForVisibilityPropagation(LayerHostingContextID contextID)

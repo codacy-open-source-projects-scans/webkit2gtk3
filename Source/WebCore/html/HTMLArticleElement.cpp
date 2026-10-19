@@ -29,7 +29,6 @@
 #include "HTMLDocument.h"
 #include "HTMLNames.h"
 #include "NodeDocument.h"
-#include "NodeInlines.h"
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -44,7 +43,7 @@ Ref<HTMLArticleElement> HTMLArticleElement::create(const QualifiedName& tagName,
 HTMLArticleElement::HTMLArticleElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document)
 {
-    ASSERT(tagName == HTMLNames::articleTag);
+    ASSERT(hasTagName(HTMLNames::articleTag));
 }
 
 auto HTMLArticleElement::insertionSteps(InsertionType insertionType, ContainerNode& parentOfInsertedTree) -> NeedsPostConnectionSteps

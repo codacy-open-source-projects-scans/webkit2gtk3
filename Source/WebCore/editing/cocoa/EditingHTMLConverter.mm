@@ -62,8 +62,8 @@
 #import "Page.h"
 #import "RenderImage.h"
 #import "RenderObjectStyle.h"
-#import "RenderStyle+GettersInlines.h"
 #import "RenderText.h"
+#import "StyleComputedStyle+GettersInlines.h"
 #import "StyleExtractor.h"
 #import "StyleProperties.h"
 #import "StyledElement.h"
@@ -104,7 +104,7 @@ static String preferredFilenameForElement(const HTMLImageElement& element)
 
     auto suggestedName = [&] -> String {
         Ref document = element.document();
-        RetainPtr url = document->completeURL(urlString).createNSURL();
+        RetainPtr url = document->encodingParseURL(urlString).createNSURL();
         if (!url)
             url = [NSURL _web_URLWithString:[urlString.createNSString() stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] relativeToURL:nil];
 
@@ -147,7 +147,7 @@ static RetainPtr<NSFileWrapper> fileWrapperForElement(const HTMLImageElement& el
     if (CheckedPtr renderImage = dynamicDowncast<RenderImage>(renderer)) {
         RefPtr image = renderImage->cachedImage();
         if (image && !image->errorOccurred()) {
-            RetainPtr<NSFileWrapper> wrapper = adoptNS([[NSFileWrapper alloc] initRegularFileWithContents:(__bridge NSData *)image->imageForRenderer(renderer)->adapter().tiffRepresentation()]);
+            RetainPtr<NSFileWrapper> wrapper = adoptNS([[NSFileWrapper alloc] initRegularFileWithContents:(__bridge NSData *)protect(protect(image->image())->adapter().tiffRepresentation()).get()]);
             [wrapper setPreferredFilename:@"image.tiff"];
             return wrapper;
         }
@@ -178,7 +178,7 @@ static RetainPtr<NSAttributedString> attributedStringWithAttachmentForFileWrappe
         return adoptNS([[NSAttributedString alloc] initWithString:@" "]).autorelease();
 
     RetainPtr attachment = adoptNS([[PlatformNSTextAttachment alloc] initWithFileWrapper:fileWrapper]);
-    return [NSAttributedString attributedStringWithAttachment:attachment.get()];
+    return [NSAttributedString attributedStringWithAttachment:checked_objc_cast<NSTextAttachment>(attachment.get())];
 }
 
 static RetainPtr<NSAttributedString> attributedStringWithAttachmentForElement(const HTMLImageElement& element)
@@ -258,7 +258,7 @@ static bool hasAncestorQualifyingForWritingToolsPreservation(Element* ancestor, 
 }
 #endif // ENABLE(WRITING_TOOLS)
 
-static RefPtr<Element> enclosingElement(const Node& node, ElementCache<RefPtr<Element>>& cache, Function<bool(Element *)>&& predicate)
+static RefPtr<Element> enclosingElement(const Node& node, ElementCache<RefPtr<Element>>& cache, NOESCAPE const Function<bool(Element*)>& predicate)
 {
     Vector<Ref<Element>> ancestors;
     RefPtr<Element> result;
@@ -344,7 +344,7 @@ static void associateElementWithTextLists(Element* element, ElementCache<RefPtr<
 }
 
 // FIXME: Encapsulate all these parameters into a type for readability and maintainability.
-static void updateAttributes(const Node* node, const RenderStyle& style, OptionSet<IncludedElement> includedElements, ElementCache<bool>& elementQualifiesForWritingToolsPreservationCache, ElementCache<RefPtr<Element>>& enclosingLinkCache, ElementCache<RefPtr<Element>>& enclosingListCache, NSMutableDictionary<NSAttributedStringKey, id> *attributes, ElementCache<RetainPtr<NSArray<NSTextList *>>>& textListsForListElements, const WeakHashSet<Node, WeakPtrImplWithEventTargetData>& clientPreservedNodes)
+static void updateAttributes(const Node* node, const Style::ComputedStyle& style, OptionSet<IncludedElement> includedElements, ElementCache<bool>& elementQualifiesForWritingToolsPreservationCache, ElementCache<RefPtr<Element>>& enclosingLinkCache, ElementCache<RefPtr<Element>>& enclosingListCache, NSMutableDictionary<NSAttributedStringKey, id> *attributes, ElementCache<RetainPtr<NSArray<NSTextList *>>>& textListsForListElements, const WeakHashSet<Node, WeakPtrImplWithEventTargetData>& clientPreservedNodes)
 {
 #if ENABLE(WRITING_TOOLS)
     if (includedElements.contains(IncludedElement::PreservedContent)) {
@@ -371,14 +371,14 @@ static void updateAttributes(const Node* node, const RenderStyle& style, OptionS
         [attributes removeObjectForKey:NSStrikethroughStyleAttributeName];
 
     CheckedRef fontCascade = style.fontCascade();
-    if (auto ctFont = fontCascade->primaryFont().ctFont())
-        [attributes setObject:(__bridge PlatformFont *)ctFont forKey:NSFontAttributeName];
+    if (RetainPtr ctFont = fontCascade->primaryFont().ctFont())
+        [attributes setObject:(__bridge PlatformFont *)ctFont.get() forKey:NSFontAttributeName];
     else {
         auto size = fontCascade->primaryFont().platformData().size();
 #if PLATFORM(IOS_FAMILY)
         PlatformFont *platformFont = [PlatformFontClass systemFontOfSize:size];
 #else
-        PlatformFont *platformFont = [[NSFontManager sharedFontManager] convertFont:WebDefaultFont() toSize:size];
+        RetainPtr platformFont = [[NSFontManager sharedFontManager] convertFont:protect(WebDefaultFont()) toSize:size];
 #endif
         [attributes setObject:platformFont forKey:NSFontAttributeName];
     }
@@ -424,7 +424,7 @@ static void updateAttributes(const Node* node, const RenderStyle& style, OptionS
     else
         [attributes removeObjectForKey:NSForegroundColorAttributeName];
 
-    auto backgroundColor = style.visitedDependentBackgroundColorApplyingColorFilter();
+    auto backgroundColor = style.visitedDependentUsedBackgroundColorApplyingColorFilter();
     if (backgroundColor.isVisible())
         [attributes setObject:cocoaColor(backgroundColor).get() forKey:NSBackgroundColorAttributeName];
     else

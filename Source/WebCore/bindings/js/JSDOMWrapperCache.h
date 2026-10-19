@@ -26,11 +26,12 @@
 #include <JavaScriptCore/HeapCellInlines.h>
 #include <JavaScriptCore/InternalFunction.h>
 #include <JavaScriptCore/JSArrayBuffer.h>
-#include <JavaScriptCore/JSGlobalObjectInlines.h>
-#include <JavaScriptCore/StructureInlines.h>
+#include <JavaScriptCore/JSGlobalObject.h>
+#include <JavaScriptCore/Structure.h>
 #include <JavaScriptCore/Weak.h>
 #include <JavaScriptCore/WeakInlines.h>
 #include <WebCore/DOMWrapperWorld.h>
+#include <WebCore/JSDOMBindingFacade.h>
 #include <WebCore/JSDOMGlobalObject.h>
 #include <WebCore/JSDOMWrapper.h>
 #include <WebCore/ScriptWrappableInlines.h>
@@ -97,7 +98,7 @@ template<typename WrapperClass> inline JSC::Structure* deprecatedGetDOMStructure
 
 template<typename WrapperClass> inline JSC::JSObject* getDOMPrototype(JSC::VM& vm, JSDOMGlobalObject& globalObject)
 {
-    return asObject(getDOMStructure<WrapperClass>(vm, globalObject)->storedPrototype());
+    return WebCore::storedPrototypeObject(getDOMStructure<WrapperClass>(vm, globalObject));
 }
 
 inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld& world, JSC::ArrayBuffer*)
@@ -188,7 +189,8 @@ template<typename DOMClass, typename T> inline auto createWrapper(JSDOMGlobalObj
         using WrapperClass = typename JSDOMWrapperConverterTraits<DOMClass>::WrapperClass;
 
         ASSERT(!getCachedWrapper(globalObject->world(), domObject));
-        auto* domObjectPtr = domObject.ptr();
+        // domObject is moved into the wrapper, which keeps it alive. Avoid ref churn in this hot code path.
+        SUPPRESS_UNCOUNTED_LOCAL auto* domObjectPtr = domObject.ptr();
         auto* wrapper = WrapperClass::create(getDOMStructure<WrapperClass>(globalObject->vm(), *globalObject), globalObject, WTF::move(domObject));
         cacheWrapper(globalObject->world(), domObjectPtr, wrapper);
         return wrapper;

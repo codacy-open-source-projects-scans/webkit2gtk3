@@ -120,7 +120,7 @@ void createImageControls(HTMLElement& element)
     style->setTextContent(String { shadowStyle });
     shadowRoot->appendChild(WTF::move(style));
     
-    Ref button = HTMLButtonElement::create(HTMLNames::buttonTag, protect(element.document()), nullptr);
+    Ref button = HTMLButtonElement::create(HTMLNames::buttonTag, protect(element.document()));
     button->setIdAttribute(imageControlsButtonIdentifier());
     controlLayer->appendChild(button);
     controlLayer->setUserAgentPart(UserAgentParts::appleAttachmentControlsContainer());
@@ -137,7 +137,7 @@ static Image* imageFromImageElementNode(Node& node)
     RefPtr image = renderer->cachedImage();
     if (!image || image->errorOccurred())
         return nullptr;
-    return image->imageForRenderer(renderer.get());
+    return image->image();
 }
 
 bool handleEvent(HTMLElement& element, Event& event)
@@ -170,7 +170,7 @@ bool handleEvent(HTMLElement& element, Event& event)
         if (!view)
             return false;
 
-        auto point = view->contentsToWindow(renderer->absoluteBoundingBoxRect()).minXMaxYCorner();
+        auto point = view->contentsToMainFrameView(renderer->absoluteBoundingBoxRect()).minXMaxYCorner();
 
         if (RefPtr shadowHost = dynamicDowncast<HTMLImageElement>(target->shadowHost())) {
             RefPtr image = imageFromImageElementNode(*shadowHost);
@@ -186,7 +186,7 @@ bool handleEvent(HTMLElement& element, Event& event)
     return false;
 }
 
-static bool NODELETE isImageMenuEnabled(HTMLElement& element)
+static bool LEGACY_NODELETE isImageMenuEnabled(HTMLElement& element)
 {
     if (auto* imageElement = dynamicDowncast<HTMLImageElement>(element))
         return imageElement->isImageMenuEnabled();

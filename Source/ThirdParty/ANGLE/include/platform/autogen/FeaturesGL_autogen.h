@@ -86,6 +86,12 @@ struct FeaturesGL : FeatureSetBase
         &members,
     };
 
+    FeatureInfo packLargeRowLengthSeparatelyPackBuffer = {
+        "packLargeRowLengthSeparatelyPackBuffer",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
     FeatureInfo initializeCurrentVertexAttributes = {
         "initializeCurrentVertexAttributes",
         FeatureCategory::OpenGLWorkarounds,
@@ -161,6 +167,12 @@ struct FeaturesGL : FeatureSetBase
     FeatureInfo forceMaxCombinedShaderOutputResources = {
         "forceMaxCombinedShaderOutputResources",
         FeatureCategory::OpenGLFeatures,
+        &members,
+    };
+
+    FeatureInfo dontInvalidateIncompleteFBOs = {
+        "dontInvalidateIncompleteFBOs",
+        FeatureCategory::OpenGLWorkarounds,
         &members,
     };
 
@@ -242,8 +254,44 @@ struct FeaturesGL : FeatureSetBase
         &members,
     };
 
+    FeatureInfo resetBaseLevelForASTCImage = {
+        "resetBaseLevelForASTCImage",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo recreateImmutableTextureOnBaseLevelIncrease = {
+        "recreateImmutableTextureOnBaseLevelIncrease",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo resetTexStorage2DBaseLevel = {
+        "resetTexStorage2DBaseLevel",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo useTempForNonZeroBaseLevelGenMipmapUsingCopyImageSubData = {
+        "useTempForNonZeroBaseLevelGenMipmapUsingCopyImageSubData",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo recreateTextureOnTexImage3dDepthIncrease = {
+        "recreateTextureOnTexImage3dDepthIncrease",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
     FeatureInfo limitMax3dArrayTextureSizeTo1024 = {
         "limitMax3dArrayTextureSizeTo1024",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo roundUp3dTextureSizeToPOTForLimit = {
+        "roundUp3dTextureSizeToPOTForLimit",
         FeatureCategory::OpenGLWorkarounds,
         &members,
     };
@@ -292,12 +340,6 @@ struct FeaturesGL : FeatureSetBase
 
     FeatureInfo preAddTexelFetchOffsets = {
         "preAddTexelFetchOffsets",
-        FeatureCategory::OpenGLWorkarounds,
-        &members,
-    };
-
-    FeatureInfo regenerateStructNames = {
-        "regenerateStructNames",
         FeatureCategory::OpenGLWorkarounds,
         &members,
     };
@@ -682,6 +724,90 @@ struct FeaturesGL : FeatureSetBase
 
     FeatureInfo limitMaxBufferSizeTo1gb = {
         "limitMaxBufferSizeTo1gb",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo reattachFboDepthStencilOnReallocation = {
+        "reattachFboDepthStencilOnReallocation",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo disableClearTexture = {
+        "disableClearTexture",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo flushBeforeGenerateMipmap = {
+        "flushBeforeGenerateMipmap",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo splitLevel0PboFullSubImage2D = {
+        "splitLevel0PboFullSubImage2D",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo limitOutputVaryingsTo256AtCompileTime = {
+        "limitOutputVaryingsTo256AtCompileTime",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo avoidComplexExpressionsInStructConstructor = {
+        "avoidComplexExpressionsInStructConstructor",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo flushQueriesBeforeDeletingOrUnbindingFbo = {
+        "flushQueriesBeforeDeletingOrUnbindingFbo",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo reattachTextureToFboAfterLayerIncrease = {
+        "reattachTextureToFboAfterLayerIncrease",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo uploadOversizedMipLevelsViaUnpackBuffer = {
+        "uploadOversizedMipLevelsViaUnpackBuffer",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo validateState = {
+        "validateState",
+        FeatureCategory::OpenGLFeatures,
+        &members,
+    };
+
+    FeatureInfo finishBeforeBlitFramebufferMultiAttachment = {
+        "finishBeforeBlitFramebufferMultiAttachment",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo useTexSubImageForClientDataNpotUploads = {
+        "useTexSubImageForClientDataNpotUploads",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo doubleClearForRobustInit = {
+        "doubleClearForRobustInit",
+        FeatureCategory::OpenGLWorkarounds,
+        &members,
+    };
+
+    FeatureInfo deferGlDeleteBuffers = {
+        "deferGlDeleteBuffers",
         FeatureCategory::OpenGLWorkarounds,
         &members,
     };

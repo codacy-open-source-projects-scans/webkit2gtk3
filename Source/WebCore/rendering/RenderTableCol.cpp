@@ -34,10 +34,10 @@
 #include "RenderChildIterator.h"
 #include "RenderIterator.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyle+GettersInlines.h"
 #include "RenderTable.h"
 #include "RenderTableCaption.h"
 #include "RenderTableCell.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include <wtf/CheckedPtr.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -48,7 +48,7 @@ using namespace HTMLNames;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderTableCol);
 
-RenderTableCol::RenderTableCol(Element& element, RenderStyle&& style)
+RenderTableCol::RenderTableCol(Element& element, Style::ComputedStyle&& style)
     : RenderBox(Type::TableCol, element, WTF::move(style))
 {
     // init RenderObject attributes
@@ -57,7 +57,7 @@ RenderTableCol::RenderTableCol(Element& element, RenderStyle&& style)
     ASSERT(isRenderTableCol());
 }
 
-RenderTableCol::RenderTableCol(Document& document, RenderStyle&& style)
+RenderTableCol::RenderTableCol(Document& document, Style::ComputedStyle&& style)
     : RenderBox(Type::TableCol, document, WTF::move(style))
 {
     setInline(true);
@@ -66,7 +66,7 @@ RenderTableCol::RenderTableCol(Document& document, RenderStyle&& style)
 
 RenderTableCol::~RenderTableCol() = default;
 
-void RenderTableCol::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
+void RenderTableCol::styleDidChange(Style::Difference diff, const Style::ComputedStyle* oldStyle)
 {
     RenderBox::styleDidChange(diff, oldStyle);
     CheckedPtr table = this->table();
@@ -86,7 +86,7 @@ void RenderTableCol::styleDidChange(Style::Difference diff, const RenderStyle* o
                     CheckedPtr cell = section->primaryCellAt(i, j);
                     if (!cell)
                         continue;
-                    cell->setNeedsPreferredWidthsUpdate();
+                    cell->invalidateContentLogicalWidths();
                 }
             }
         }
@@ -98,13 +98,13 @@ void RenderTableCol::updateFromElement()
     ASSERT(element());
     unsigned oldSpan = m_span;
     if (element()->hasTagName(colTag) || element()->hasTagName(colgroupTag)) {
-        HTMLTableColElement& tc = static_cast<HTMLTableColElement&>(*element());
+        HTMLTableColElement& tc = downcast<HTMLTableColElement>(*element());
         m_span = tc.span();
     } else
         m_span = 1;
     if (m_span != oldSpan && parent()) {
         if (hasInitializedStyle())
-            setNeedsLayoutAndPreferredWidthsUpdate();
+            setNeedsLayoutAndInvalidateContentLogicalWidths();
         if (CheckedPtr table = this->table())
             table->invalidateColumns();
     }
@@ -125,7 +125,7 @@ void RenderTableCol::willBeRemovedFromTree()
     }
 }
 
-bool RenderTableCol::isChildAllowed(const RenderObject& child, const RenderStyle& style) const
+bool RenderTableCol::isChildAllowed(const RenderObject& child, const Style::ComputedStyle& style) const
 {
     // We cannot use isTableColumn here as style() may return 0.
     return style.display() == Style::DisplayType::TableColumn && child.isRenderTableCol();
@@ -138,7 +138,7 @@ bool RenderTableCol::canHaveChildren() const
     return isTableColumnGroup();
 }
 
-LayoutRect RenderTableCol::clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext context) const
+LayoutRect RenderTableCol::clippedOverflowRect(const RenderLayerModelObject* repaintContainer, const VisibleRectContext& context) const
 {
     // For now, just repaint the whole table.
     // FIXME: Find a better way to do this, e.g., need to repaint all the cells that we
@@ -166,12 +166,12 @@ void RenderTableCol::imageChanged(WrappedImagePtr, const IntRect*)
     repaint();
 }
 
-void RenderTableCol::clearNeedsPreferredLogicalWidthsUpdate()
+void RenderTableCol::clearContentLogicalWidthsInvalidation()
 {
-    clearNeedsPreferredWidthsUpdate();
+    RenderObject::clearContentLogicalWidthsInvalidation();
 
     for (CheckedRef child : childrenOfType<RenderObject>(*this))
-        child->clearNeedsPreferredWidthsUpdate();
+        child->clearContentLogicalWidthsInvalidation();
 }
 
 RenderTable* RenderTableCol::table() const

@@ -69,7 +69,8 @@ private:
     void removingSteps(RemovalType, ContainerNode&) override;
 
     void checkStyleSheet();
-    void setCSSStyleSheet(const String& href, const URL& baseURL, ASCIILiteral charset, const CachedCSSStyleSheet*) override;
+    void setSheet(RefPtr<StyleSheet>&&);
+    void setCSSStyleSheet(const String& href, const URL& baseURL, ASCIILiteral charset, const CachedCSSStyleSheet&) override;
 #if ENABLE(XSLT)
     void setXSLStyleSheet(const String& href, const URL& baseURL, const String& sheet) override;
 #endif
@@ -77,7 +78,7 @@ private:
     bool isLoading() const;
     bool sheetLoaded() override;
 
-    void addSubresourceAttributeURLs(ListHashSet<URL>&) const override;
+    void addSubresourceAttributeURLs(OrderedHashSet<URL>&) const override;
 
     void parseStyleSheet(const String& sheet);
 

@@ -26,7 +26,8 @@
 [
     LegacyNoInterfaceObject,
     Conditional=WEBGL,
-    GenerateIsReachable
+    GenerateIsReachable,
+    CallTracer=InspectorCanvasCallTracer
 ] interface EXTDisjointTimerQuery {
   const unsigned long QUERY_COUNTER_BITS_EXT      = 0x8864;
   const unsigned long CURRENT_QUERY_EXT           = 0x8865;
@@ -36,7 +37,7 @@
   const unsigned long TIMESTAMP_EXT               = 0x8E28;
   const unsigned long GPU_DISJOINT_EXT            = 0x8FBB;
 
-  WebGLTimerQueryEXT? createQueryEXT();
+  WebGLTimerQueryEXT createQueryEXT();
   undefined deleteQueryEXT(WebGLTimerQueryEXT? query);
   boolean isQueryEXT(WebGLTimerQueryEXT? query);
   undefined beginQueryEXT(unsigned long target, WebGLTimerQueryEXT query);

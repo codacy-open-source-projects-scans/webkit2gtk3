@@ -29,8 +29,8 @@
 #include "AnimationUtilities.h"
 #include "CSSKeywordValue.h"
 #include "CSSPropertyParserConsumer+Font.h"
-#include "RenderStyle+GettersInlines.h"
 #include "StyleBuilderChecking.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleKeyword+CSSValueConversion.h"
 #include "StyleKeyword+CSSValueCreation.h"
 #include "StyleKeyword+Serialization.h"
@@ -44,10 +44,10 @@ namespace Style {
 
 static constexpr auto defaultMetric = FontSizeAdjust::Metric::ExHeight;
 
-std::optional<float> FontSizeAdjust::resolvedMetricValue(const RenderStyle& style) const
+std::optional<float> FontSizeAdjust::resolvedMetricValue(const Style::ComputedStyle& style) const
 {
     if (m_platform.shouldResolveFromFont())
-        return m_platform.resolve(style.computedFontSize(), style.metricsOfPrimaryFont());
+        return m_platform.resolve(style.usedFontSize(), style.metricsOfPrimaryFont());
     return m_platform.value;
 }
 
@@ -57,10 +57,10 @@ auto CSSValueConversion<FontSizeAdjust>::operator()(BuilderState& state, const C
 {
     if (RefPtr keywordValue = dynamicDowncast<CSSKeywordValue>(value)) {
         switch (auto valueID = keywordValue->valueID(); valueID) {
-        case CSSValueNone:
+        case CSSValueID::None:
             return CSS::Keyword::None { };
 
-        case CSSValueFromFont:
+        case CSSValueID::FromFont:
             // We cannot determine the primary font here, so we defer resolving the
             // aspect value for from-font to when the primary font is created.
             // See FontCascadeFonts::primaryFont().
@@ -86,7 +86,7 @@ auto CSSValueConversion<FontSizeAdjust>::operator()(BuilderState& state, const C
 
     if (RefPtr secondIdentValue = dynamicDowncast<CSSKeywordValue>(pair->second)) {
         switch (secondIdentValue->valueID()) {
-        case CSSValueFromFont:
+        case CSSValueID::FromFont:
             // We cannot determine the primary font here, so we defer resolving the
             // aspect value for from-font to when the primary font is created.
             // See FontCascadeFonts::primaryFont().
@@ -101,7 +101,7 @@ auto CSSValueConversion<FontSizeAdjust>::operator()(BuilderState& state, const C
     return { metric, toStyleFromCSSValue<FontSizeAdjust::Number>(state, pair->second) };
 }
 
-auto CSSValueCreation<FontSizeAdjust>::operator()(CSSValuePool& pool, const RenderStyle& style, const FontSizeAdjust& value) -> Ref<CSSValue>
+auto CSSValueCreation<FontSizeAdjust>::operator()(CSSValuePool& pool, const Style::ComputedStyle& style, const FontSizeAdjust& value) -> Ref<CSSValue>
 {
     if (value.isNone())
         return createCSSValue(pool, style, CSS::Keyword::None { });
@@ -120,7 +120,7 @@ auto CSSValueCreation<FontSizeAdjust>::operator()(CSSValuePool& pool, const Rend
 
 // MARK: - Serialization
 
-void Serialize<FontSizeAdjust>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const RenderStyle& style, const FontSizeAdjust& value)
+void Serialize<FontSizeAdjust>::operator()(StringBuilder& builder, const CSS::SerializationContext& context, const Style::ComputedStyle& style, const FontSizeAdjust& value)
 {
     if (value.isNone()) {
         serializationForCSS(builder, context, style, CSS::Keyword::None { });

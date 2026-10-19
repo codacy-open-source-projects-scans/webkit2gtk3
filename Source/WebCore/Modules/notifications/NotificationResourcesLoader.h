@@ -30,6 +30,7 @@
 #include "Notification.h"
 #include "SharedBuffer.h"
 #include "ThreadableLoader.h"
+#include "ThreadableLoaderClient.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/HashSet.h>
 #include <wtf/TZoneMalloc.h>
@@ -54,7 +55,7 @@ public:
 
 private:
     enum class Resource { Image, Icon, Badge, ActionIcon };
-    static bool NODELETE resourceIsSupportedInPlatform(Resource);
+    static bool LEGACY_NODELETE resourceIsSupportedInPlatform(Resource);
 
     class ResourceLoader final : public ThreadableLoaderClient, public RefCounted<ResourceLoader> {
         WTF_DEPRECATED_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(ResourceLoader, ResourceLoader);

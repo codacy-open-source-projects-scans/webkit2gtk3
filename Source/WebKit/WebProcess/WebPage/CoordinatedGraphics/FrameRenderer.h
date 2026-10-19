@@ -37,6 +37,10 @@ class Region;
 class RunLoopObserver;
 }
 
+namespace WTF {
+enum class Critical : bool;
+}
+
 namespace WebKit {
 struct RenderProcessInfo;
 
@@ -66,13 +70,15 @@ public:
 
 #if ENABLE(DAMAGE_TRACKING)
     virtual void resetDamageHistoryForTesting() = 0;
-    virtual void foreachRegionInDamageHistoryForTesting(Function<void(const WebCore::Region&)>&&) const = 0;
+    virtual void foreachRegionInDamageHistoryForTesting(NOESCAPE const Function<void(const WebCore::Region&)>&) const = 0;
 #endif
 
 #if PLATFORM(GTK)
     virtual void adjustTransientZoom(double, WebCore::FloatPoint, WebCore::FloatPoint) = 0;
     virtual void commitTransientZoom(double, WebCore::FloatPoint, WebCore::FloatPoint) = 0;
 #endif
+
+    virtual void releaseMemory(WTF::Critical) = 0;
 
     void setLayerTreeStateIsFrozen(bool);
     void updateRenderingWithForcedRepaintAsync(CompletionHandler<void()>&&);
@@ -87,7 +93,7 @@ protected:
     void invalidateRenderingUpdateRunLoopObserver();
     void renderingUpdateRunLoopObserverFired();
 
-    std::unique_ptr<WebCore::RunLoopObserver> m_renderingUpdateRunLoopObserver;
+    const std::unique_ptr<WebCore::RunLoopObserver> m_renderingUpdateRunLoopObserver;
     bool m_layerTreeStateIsFrozen { false };
     bool m_isSuspended { false };
     bool m_isUpdatingRendering { false };

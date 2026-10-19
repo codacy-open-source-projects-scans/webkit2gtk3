@@ -28,10 +28,12 @@
 #if ENABLE(WEB_RTC) && USE(LIBWEBRTC)
 
 #include "ContextDestructionObserverInlines.h"
+#include "EventTarget.h"
 #include "JSDOMPromiseDeferred.h"
 #include "LibWebRTCRtpReceiverBackend.h"
 #include "LibWebRTCRtpSenderBackend.h"
 #include "LibWebRTCUtils.h"
+#include "RTCPeerConnection.h"
 #include "RTCRtpCodec.h"
 #include <wtf/TZoneMallocInlines.h>
 
@@ -104,7 +106,7 @@ static inline ExceptionOr<webrtc::RtpCodecCapability> toRtpCodecCapability(const
         auto position = parameter.find('=');
         if (position == notFound)
             return Exception { ExceptionCode::InvalidModificationError, "RTCRtpCodec sdpFmtLine badly formated"_s };
-        rtcCodec.parameters.emplace(parameter.left(position).utf8().data(), parameter.substring(position + 1).utf8().data());
+        rtcCodec.parameters.emplace(parameter.left(position).utf8().toStdString(), parameter.substring(position + 1).utf8().toStdString());
     }
 
     return rtcCodec;

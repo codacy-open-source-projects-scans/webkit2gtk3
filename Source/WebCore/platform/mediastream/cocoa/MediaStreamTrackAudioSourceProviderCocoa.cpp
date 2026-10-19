@@ -77,7 +77,7 @@ void MediaStreamTrackAudioSourceProviderCocoa::setClient(WeakPtr<AudioSourceProv
     if (m_client == client)
         return;
     m_client = WTF::move(client);
-    hasNewClient(m_client.get());
+    hasNewClient(protect(m_client.get()));
 }
 
 void MediaStreamTrackAudioSourceProviderCocoa::hasNewClient(AudioSourceProviderClient* client)
@@ -89,13 +89,13 @@ void MediaStreamTrackAudioSourceProviderCocoa::hasNewClient(AudioSourceProviderC
     m_connected = shouldBeConnected;
     if (!client) {
         if (m_captureSource)
-            m_captureSource->removeObserver(*this);
+            protect(m_captureSource.get())->removeObserver(*this);
         m_source->removeAudioSampleObserver(*this);
         return;
     }
 
     m_enabled = m_captureSource->enabled();
-    m_captureSource->addObserver(*this);
+    protect(m_captureSource.get())->addObserver(*this);
     m_source->addAudioSampleObserver(*this);
 }
 
@@ -104,8 +104,19 @@ void MediaStreamTrackAudioSourceProviderCocoa::trackEnabledChanged(MediaStreamTr
     m_enabled = track.enabled();
 }
 
+void MediaStreamTrackAudioSourceProviderCocoa::trackEnded(MediaStreamTrackPrivate&)
+{
+    // Once the captured track has ended, the node must output silence.
+    m_ended = true;
+}
+
 void MediaStreamTrackAudioSourceProviderCocoa::provideInput(AudioBus& bus, size_t framesToProcess)
 {
+    if (m_ended) {
+        bus.zero();
+        return;
+    }
+
     if (!m_lock.tryLock()) {
         bus.zero();
         return;
@@ -167,13 +178,13 @@ void MediaStreamTrackAudioSourceProviderCocoa::prepare(const AudioStreamBasicDes
     m_audioBufferList = makeUnique<WebAudioBufferList>(m_outputDescription.value());
 
     if (!m_dataSource)
-        m_dataSource = AudioSampleDataSource::create(kRingBufferDuration * sampleRate, loggerHelper(), m_pollSamplesCount);
+        lazyInitialize(m_dataSource, AudioSampleDataSource::create(kRingBufferDuration * sampleRate, loggerHelper(), m_pollSamplesCount));
     m_dataSource->setInputFormat(m_inputDescription.value());
     m_dataSource->setOutputFormat(m_outputDescription.value());
 
     callOnMainThread([protectedThis = Ref { *this }, numberOfChannels, sampleRate] {
         if (protectedThis->m_client)
-            protectedThis->m_client->setFormat(numberOfChannels, sampleRate);
+            protect(protectedThis->m_client.get())->setFormat(numberOfChannels, sampleRate);
     });
 }
 

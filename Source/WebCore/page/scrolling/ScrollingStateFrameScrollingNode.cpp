@@ -80,8 +80,8 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(
     int footerHeight,
     ScrollBehaviorForFixedElements&& scrollBehaviorForFixedElements,
     FloatBoxExtent&& obscuredContentInsets,
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    float bannerViewHeight,
+#if HAVE(NSREFRESHCONTROLLER)
+    float topScrollStretchForRefreshController,
 #endif
     bool visualViewportIsSmallerThanLayoutViewport,
     bool asyncFrameOrOverflowScrollingEnabled,
@@ -92,7 +92,8 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(
     FloatPoint minLayoutViewportOrigin,
     FloatPoint maxLayoutViewportOrigin,
     std::optional<FloatSize> overrideVisualViewportSize,
-    bool overlayScrollbarsEnabled
+    bool overlayScrollbarsEnabled,
+    int insetForLeftScrollbarSpace
 ) : ScrollingStateScrollingNode(
     isMainFrame ? ScrollingNodeType::MainFrame : ScrollingNodeType::Subframe,
     scrollingNodeID,
@@ -138,11 +139,12 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(
     , m_overrideVisualViewportSize(overrideVisualViewportSize)
     , m_frameScaleFactor(frameScaleFactor)
     , m_obscuredContentInsets(obscuredContentInsets)
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    , m_bannerViewHeight(bannerViewHeight)
+#if HAVE(NSREFRESHCONTROLLER)
+    , m_topScrollStretchForRefreshController(topScrollStretchForRefreshController)
 #endif
     , m_headerHeight(headerHeight)
     , m_footerHeight(footerHeight)
+    , m_insetForLeftScrollbarSpace(insetForLeftScrollbarSpace)
     , m_behaviorForFixed(WTF::move(scrollBehaviorForFixedElements))
 
     , m_visualViewportIsSmallerThanLayoutViewport(visualViewportIsSmallerThanLayoutViewport)
@@ -170,11 +172,12 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(const Scrolli
     , m_overrideVisualViewportSize(stateNode.overrideVisualViewportSize())
     , m_frameScaleFactor(stateNode.frameScaleFactor())
     , m_obscuredContentInsets(stateNode.obscuredContentInsets())
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    , m_bannerViewHeight(stateNode.bannerViewHeight())
+#if HAVE(NSREFRESHCONTROLLER)
+    , m_topScrollStretchForRefreshController(stateNode.topScrollStretchForRefreshController())
 #endif
     , m_headerHeight(stateNode.headerHeight())
     , m_footerHeight(stateNode.footerHeight())
+    , m_insetForLeftScrollbarSpace(stateNode.insetForLeftScrollbarSpace())
     , m_behaviorForFixed(stateNode.scrollBehaviorForFixedElements())
     , m_visualViewportIsSmallerThanLayoutViewport(stateNode.visualViewportIsSmallerThanLayoutViewport())
     , m_asyncFrameOrOverflowScrollingEnabled(stateNode.asyncFrameOrOverflowScrollingEnabled())
@@ -223,8 +226,8 @@ OptionSet<ScrollingStateNode::Property> ScrollingStateFrameScrollingNode::applic
         Property::FooterLayer,
         Property::BehaviorForFixedElements,
         Property::ObscuredContentInsets,
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-        Property::BannerViewHeight,
+#if HAVE(NSREFRESHCONTROLLER)
+        Property::TopScrollStretchForRefreshController,
 #endif
         Property::VisualViewportIsSmallerThanLayoutViewport,
         Property::AsyncFrameOrOverflowScrollingEnabled,
@@ -236,6 +239,7 @@ OptionSet<ScrollingStateNode::Property> ScrollingStateFrameScrollingNode::applic
         Property::MaxLayoutViewportOrigin,
         Property::OverrideVisualViewportSize,
         Property::OverlayScrollbarsEnabled,
+        Property::InsetForLeftScrollbarSpace,
     };
 
     auto properties = ScrollingStateScrollingNode::applicableProperties();
@@ -343,15 +347,24 @@ void ScrollingStateFrameScrollingNode::setObscuredContentInsets(const FloatBoxEx
     setPropertyChanged(Property::ObscuredContentInsets);
 }
 
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-
-void ScrollingStateFrameScrollingNode::setBannerViewHeight(float bannerViewHeight)
+void ScrollingStateFrameScrollingNode::setInsetForLeftScrollbarSpace(int insetForLeftScrollbarSpace)
 {
-    if (m_bannerViewHeight == bannerViewHeight)
+    if (m_insetForLeftScrollbarSpace == insetForLeftScrollbarSpace)
         return;
 
-    m_bannerViewHeight = bannerViewHeight;
-    setPropertyChanged(Property::BannerViewHeight);
+    m_insetForLeftScrollbarSpace = insetForLeftScrollbarSpace;
+    setPropertyChanged(Property::InsetForLeftScrollbarSpace);
+}
+
+#if HAVE(NSREFRESHCONTROLLER)
+
+void ScrollingStateFrameScrollingNode::setTopScrollStretchForRefreshController(float topScrollStretchForRefreshController)
+{
+    if (m_topScrollStretchForRefreshController == topScrollStretchForRefreshController)
+        return;
+
+    m_topScrollStretchForRefreshController = topScrollStretchForRefreshController;
+    setPropertyChanged(Property::TopScrollStretchForRefreshController);
 }
 
 #endif
@@ -489,9 +502,9 @@ void ScrollingStateFrameScrollingNode::dumpProperties(TextStream& ts, OptionSet<
         ts.dumpProperty("left content inset"_s, m_obscuredContentInsets.left());
     if (m_obscuredContentInsets.right())
         ts.dumpProperty("right content inset"_s, m_obscuredContentInsets.right());
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    if (m_bannerViewHeight)
-        ts.dumpProperty("banner view height"_s, m_bannerViewHeight);
+#if HAVE(NSREFRESHCONTROLLER)
+    if (m_topScrollStretchForRefreshController)
+        ts.dumpProperty("top scroll stretch for refresh controller"_s, m_topScrollStretchForRefreshController);
 #endif
     if (m_headerHeight)
         ts.dumpProperty("header height"_s, m_headerHeight);

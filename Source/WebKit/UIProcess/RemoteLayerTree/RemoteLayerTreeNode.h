@@ -33,9 +33,9 @@
 #include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <WebCore/ScrollTypes.h>
-#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/Vector.h>
 
 OBJC_CLASS CALayer;
@@ -49,7 +49,7 @@ namespace WebKit {
 class RemoteLayerTreeHost;
 class RemoteLayerTreeScrollbars;
 
-class RemoteLayerTreeNode final : public RefCountedAndCanMakeWeakPtr<RemoteLayerTreeNode> {
+class RemoteLayerTreeNode final : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteLayerTreeNode, WTF::DestructionThread::MainRunLoop> {
     WTF_MAKE_TZONE_ALLOCATED(RemoteLayerTreeNode);
 public:
     static Ref<RemoteLayerTreeNode> create(WebCore::PlatformLayerIdentifier, Markable<WebCore::LayerHostingContextIdentifier>, RetainPtr<CALayer>);
@@ -60,7 +60,7 @@ public:
 
     static Ref<RemoteLayerTreeNode> createWithPlainLayer(WebCore::PlatformLayerIdentifier);
 
-    CALayer *layer() const { return m_layer.get(); }
+    CALayer *layer() const LIFETIME_BOUND { return m_layer.get(); }
 #if ENABLE(GAZE_GLOW_FOR_INTERACTION_REGIONS) || HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
     const Markable<WebCore::FloatRect> visibleRect() const { return m_visibleRect; }
     void setVisibleRect(const WebCore::FloatRect& value) { m_visibleRect = value; }
@@ -143,12 +143,12 @@ public:
         m_cachedContentsBuffers = WTF::move(buffers);
     }
 
-    std::optional<WebCore::RenderingResourceIdentifier> asyncContentsIdentifier() const
+    std::optional<WebCore::PlaceholderFrameIdentifier> asyncContentsIdentifier() const
     {
         return m_asyncContentsIdentifier;
     }
 
-    void setAsyncContentsIdentifier(std::optional<WebCore::RenderingResourceIdentifier> identifier)
+    void setAsyncContentsIdentifier(std::optional<WebCore::PlaceholderFrameIdentifier> identifier)
     {
         m_asyncContentsIdentifier = identifier;
     }
@@ -206,7 +206,7 @@ private:
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    RetainPtr<UIView> m_uiView;
+    const RetainPtr<UIView> m_uiView;
 #endif
 
     WebCore::EventRegion m_eventRegion;
@@ -219,7 +219,7 @@ private:
     Vector<WebCore::PlatformLayerIdentifier> m_stationaryScrollContainerIDs;
 
     Vector<CachedContentsBuffer> m_cachedContentsBuffers;
-    std::optional<WebCore::RenderingResourceIdentifier> m_asyncContentsIdentifier;
+    std::optional<WebCore::PlaceholderFrameIdentifier> m_asyncContentsIdentifier;
 
 #if ENABLE(THREADED_ANIMATIONS)
     RefPtr<RemoteAnimationStack> m_animationStack;

@@ -33,6 +33,7 @@
 #include "config.h"
 #include "EventSource.h"
 
+#include "Blob.h"
 #include "CachedResourceRequestInitiatorTypes.h"
 #include "ContentSecurityPolicy.h"
 #include "ContextDestructionObserverInlines.h"
@@ -74,7 +75,7 @@ inline EventSource::EventSource(ScriptExecutionContext& context, const URL& url,
 
 ExceptionOr<Ref<EventSource>> EventSource::create(ScriptExecutionContext& context, const String& url, Init&& eventSourceInit)
 {
-    URL fullURL = context.completeURL(url);
+    URL fullURL = context.encodingParseURL(url);
     if (!fullURL.isValid())
         return Exception { ExceptionCode::SyntaxError };
 
@@ -116,8 +117,15 @@ void EventSource::connect()
     request.setHTTPMethod("GET"_s);
     request.setHTTPHeaderField(HTTPHeaderName::Accept, "text/event-stream"_s);
     request.setHTTPHeaderField(HTTPHeaderName::CacheControl, "no-cache"_s);
-    if (!m_lastEventId.isEmpty())
+    if (!m_lastEventId.isEmpty()) {
+#if PLATFORM(COCOA)
+        // CFNetwork sends header values as Latin-1 bytes, so pass the UTF-8 bytes as Latin-1 characters.
+        // Other network backends UTF-8 encode header values themselves.
+        request.setHTTPHeaderField(HTTPHeaderName::LastEventID, String(byteCast<Latin1Character>(m_lastEventId.utf8().span())));
+#else
         request.setHTTPHeaderField(HTTPHeaderName::LastEventID, m_lastEventId);
+#endif
+    }
 
     RefPtr context = scriptExecutionContext();
 
@@ -132,10 +140,14 @@ void EventSource::connect()
     options.initiatorType = cachedResourceRequestInitiatorTypes().eventsource;
 
     m_loader = ThreadableLoader::create(*context, *this, WTF::move(request), options);
+    if (!m_loader) {
+        if (m_state == CONNECTING)
+            abortConnectionAttempt();
+        return;
+    }
 
     // FIXME: Can we just use m_loader for this, null it out when it's no longer in flight, and eliminate the m_requestInFlight member?
-    if (m_loader)
-        m_requestInFlight = true;
+    m_requestInFlight = true;
 }
 
 void EventSource::networkRequestEnded()
@@ -330,7 +342,7 @@ void EventSource::doExplicitLoadCancellation()
 {
     ASSERT(m_requestInFlight);
     SetForScope explicitLoadCancellation(m_isDoingExplicitCancellation, true);
-    m_loader->cancel();
+    protect(m_loader)->cancel();
 }
 
 void EventSource::parseEventStream()

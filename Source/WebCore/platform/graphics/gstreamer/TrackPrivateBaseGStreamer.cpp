@@ -44,7 +44,7 @@ namespace WebCore {
 
 static GRefPtr<GstTagList> getAllTags(const GRefPtr<GstPad>& pad)
 {
-    auto allTags = adoptGRef(gst_tag_list_new_empty());
+    GRefPtr allTags = adoptGRef(gst_tag_list_new_empty());
     GstTagList* taglist = nullptr;
     for (unsigned i = 0;; i++) {
         GRefPtr<GstEvent> tagsEvent = adoptGRef(gst_pad_get_sticky_event(pad.get(), GST_EVENT_TAG, i));
@@ -84,11 +84,11 @@ static std::optional<String> getTag(GstTagList* tags, ASCIILiteral tagName)
 
 static std::optional<String> getLanguageCode(GstTagList* tags)
 {
-    auto language = getTag(tags, ASCIILiteral::fromLiteralUnsafe(GST_TAG_LANGUAGE_CODE));
+    auto language = getTag(tags, GST_TAG_LANGUAGE_CODE);
     if (!language)
         return std::nullopt;
 
-    auto convertedLanguage = CStringView::unsafeFromUTF8(gst_tag_get_language_code_iso_639_1(language->utf8().data()));
+    auto convertedLanguage = UTF8CStringView::unsafeFromUTF8(gst_tag_get_language_code_iso_639_1(language->utf8().legacyCStringPointer()));
     GST_DEBUG("Converted track's language code to %s.", convertedLanguage.utf8());
     return String(convertedLanguage.span());
 }
@@ -136,24 +136,29 @@ TrackPrivateBaseGStreamer::TrackPrivateBaseGStreamer(ThreadSafeWeakPtr<MediaPlay
     m_data->installUpdateConfigurationHandlers();
 }
 
-TrackPrivateBaseGStreamer::TrackPrivateBaseGStreamer(ThreadSafeWeakPtr<MediaPlayerPrivateGStreamer>&& player, GStreamerTrackType type, TrackPrivateBase* owner, unsigned index, GstStream* stream)
+TrackPrivateBaseGStreamer::TrackPrivateBaseGStreamer(ThreadSafeWeakPtr<MediaPlayerPrivateGStreamer>&& player, GStreamerTrackType type, TrackPrivateBase* owner, unsigned index, GRefPtr<GstStream>&& stream)
     : m_data(TrackDataHolder::create(*this))
 {
     ASSERT(stream);
 
     m_data->m_player = WTF::move(player);
     m_data->m_index = index;
-    m_data->m_gstStreamId = byteCast<Latin1Character>(unsafeSpan(gst_stream_get_stream_id(stream)));
+    m_data->m_gstStreamId = byteCast<Latin1Character>(unsafeSpan(gst_stream_get_stream_id(stream.get())));
     m_data->m_id = parseStreamId(m_data->m_gstStreamId).value_or(index);
     m_data->m_type = type;
     m_data->m_owner = owner;
 
-    m_data->setStream(GRefPtr(stream));
+    m_data->setStream(WTF::move(stream));
 
     // We can't call notifyTrackOfTagsChanged() directly, because we need tagsChanged() to setup m_tags.
     m_data->tagsChanged();
 
     m_data->installUpdateConfigurationHandlers();
+}
+
+TrackPrivateBaseGStreamer::~TrackPrivateBaseGStreamer()
+{
+    disconnect();
 }
 
 void TrackPrivateBaseGStreamer::setPad(GRefPtr<GstPad>&& pad)
@@ -165,8 +170,7 @@ void TrackDataHolder::setPad(GRefPtr<GstPad>&& pad)
 {
     ASSERT(isMainThread());
 
-    if (m_bestUpstreamPad && m_eventProbe)
-        gst_pad_remove_probe(m_bestUpstreamPad.get(), m_eventProbe);
+    m_eventProbeClient = nullptr;
 
     g_clear_signal_handler(&m_padTagsNotifyHandlerId, m_pad.get());
     g_clear_signal_handler(&m_padCapsNotifyHandlerId, m_pad.get());
@@ -180,11 +184,7 @@ void TrackDataHolder::setPad(GRefPtr<GstPad>&& pad)
     if (!m_bestUpstreamPad)
         return;
 
-    m_eventProbe = gst_pad_add_probe(m_bestUpstreamPad.get(), GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, reinterpret_cast<GstPadProbeCallback>(+[](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
-        RefPtr holder = reinterpret_cast<ThreadSafeWeakPtr<TrackDataHolder>*>(userData)->get();
-        if (!holder)
-            return GST_PAD_PROBE_REMOVE;
-
+    m_eventProbeClient = PadProbeHandle<TrackDataHolder>::create(*this, GRefPtr(m_bestUpstreamPad), GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, [](const auto& holder, const auto&, auto info) -> GstPadProbeReturn {
         auto event = gst_pad_probe_info_get_event(info);
         switch (GST_EVENT_TYPE(event)) {
         case GST_EVENT_TAG:
@@ -212,9 +212,7 @@ void TrackDataHolder::setPad(GRefPtr<GstPad>&& pad)
             break;
         }
         return GST_PAD_PROBE_OK;
-    }), new ThreadSafeWeakPtr<TrackDataHolder> { this }, reinterpret_cast<GDestroyNotify>(+[](gpointer data) {
-        delete static_cast<ThreadSafeWeakPtr<TrackDataHolder>*>(data);
-    }));
+    });
 }
 
 void TrackDataHolder::setStream(GRefPtr<GstStream>&& stream)
@@ -302,13 +300,15 @@ void TrackDataHolder::disconnect()
         m_stream.clear();
     }
 
-    m_tags.clear();
+    {
+        Locker locker { m_tagMutex };
+        m_tags.clear();
+    }
 
     m_notifier->cancelPendingNotifications();
 
-    if (m_bestUpstreamPad && m_eventProbe) {
-        gst_pad_remove_probe(m_bestUpstreamPad.get(), m_eventProbe);
-        m_eventProbe = 0;
+    if (m_bestUpstreamPad && m_eventProbeClient) {
+        m_eventProbeClient = nullptr;
         m_bestUpstreamPad.clear();
     }
 
@@ -336,7 +336,7 @@ void TrackDataHolder::tagsChanged()
                 GstTagList* tagsFromEvent = nullptr;
                 gst_event_parse_tag(tagEvent.get(), &tagsFromEvent);
                 tags = adoptGRef(gst_tag_list_copy(tagsFromEvent));
-                auto language = getTag(tags.get(), ASCIILiteral::fromLiteralUnsafe(GST_TAG_LANGUAGE_CODE));
+                auto language = getTag(tags.get(), GST_TAG_LANGUAGE_CODE);
                 if (language)
                     break;
             }
@@ -377,7 +377,7 @@ void TrackDataHolder::notifyTrackOfTagsChanged()
     if (!owner)
         return;
 
-    auto label = getTag(tags.get(), ASCIILiteral::fromLiteralUnsafe(GST_TAG_TITLE));
+    auto label = getTag(tags.get(), GST_TAG_TITLE);
     if (label) {
         m_label = *label;
         owner->notifyMainThreadClient([&](auto& client) {
@@ -411,7 +411,7 @@ void TrackDataHolder::streamIdChanged()
     ASSERT(isMainThread());
     m_gstStreamId = gstStreamId;
     m_id = streamId.value();
-    GST_INFO("Track %" PRIu64 " got stream start. GStreamer stream-id: %s", m_id, m_gstStreamId.utf8().data());
+    GST_INFO("Track %" PRIu64 " got stream start. GStreamer stream-id: %s", m_id, m_gstStreamId.utf8());
 }
 
 void TrackDataHolder::streamChanged()
@@ -430,7 +430,7 @@ void TrackDataHolder::installUpdateConfigurationHandlers()
                 return;
             if (!holder->m_pad)
                 return;
-            auto caps = adoptGRef(gst_pad_get_current_caps(holder->m_pad.get()));
+            GRefPtr caps = adoptGRef(gst_pad_get_current_caps(holder->m_pad.get()));
             // We will receive a synchronous notification for caps being unset during pipeline teardown.
             if (!caps)
                 return;
@@ -468,7 +468,7 @@ void TrackDataHolder::installUpdateConfigurationHandlers()
                 auto holder = weakHolder.get();
                 if (!holder)
                     return;
-                auto caps = adoptGRef(gst_stream_get_caps(holder->m_stream.get()));
+                GRefPtr caps = adoptGRef(gst_stream_get_caps(holder->m_stream.get()));
                 holder->m_track.capsChanged(getStreamIdFromStream(holder->m_stream.get()).value_or(holder->m_index), WTF::move(caps));
             });
         }), new ThreadSafeWeakPtr<TrackDataHolder> { this }, [](gpointer data, GClosure*) {
@@ -483,7 +483,7 @@ void TrackDataHolder::installUpdateConfigurationHandlers()
             if (!holder)
                 return;
             if (isMainThread()) {
-                auto tags = adoptGRef(gst_stream_get_tags(holder->m_stream.get()));
+                GRefPtr tags = adoptGRef(gst_stream_get_tags(holder->m_stream.get()));
                 holder->m_track.updateConfigurationFromTags(WTF::move(tags));
                 return;
             }
@@ -491,7 +491,7 @@ void TrackDataHolder::installUpdateConfigurationHandlers()
                 auto holder = weakHolder.get();
                 if (!holder)
                     return;
-                auto tags = adoptGRef(gst_stream_get_tags(holder->m_stream.get()));
+                GRefPtr tags = adoptGRef(gst_stream_get_tags(holder->m_stream.get()));
                 holder->m_track.updateConfigurationFromTags(WTF::move(tags));
             });
         }), new ThreadSafeWeakPtr<TrackDataHolder> { this }, [](gpointer data, GClosure*) {

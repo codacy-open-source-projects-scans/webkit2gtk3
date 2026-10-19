@@ -37,14 +37,19 @@ class HTMLSelectedContentElement final : public HTMLElement {
 public:
     static Ref<HTMLSelectedContentElement> create(const QualifiedName&, Document&);
 
-    bool isDisabled() { return m_isDisabled; }
+    bool isDisabled() const { return m_isDisabled; }
+    void updateClonedOptionSelectedStates();
 
 private:
-    explicit HTMLSelectedContentElement(Document&);
+    HTMLSelectedContentElement(const QualifiedName&, Document&);
 
     NeedsPostConnectionSteps insertionSteps(InsertionType, ContainerNode&) final;
     void postConnectionSteps() final;
     void removingSteps(RemovalType, ContainerNode&) final;
+    void movingSteps(MovingType, ContainerNode&) final;
+    void childrenChanged(const ChildChange&) final;
+
+    RefPtr<HTMLSelectElement> recalculateDisabledness();
 
     bool m_isDisabled { false };
     WeakPtr<HTMLSelectElement, WeakPtrImplWithEventTargetData> m_owningSelect;

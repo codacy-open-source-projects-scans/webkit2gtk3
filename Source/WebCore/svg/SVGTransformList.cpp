@@ -46,7 +46,7 @@ template<typename CharacterType> static constexpr std::array<CharacterType, 9> t
 template<typename CharacterType> static constexpr std::array<CharacterType, 6> rotateDesc  { 'r', 'o', 't', 'a', 't', 'e' };
 template<typename CharacterType> static constexpr std::array<CharacterType, 6> matrixDesc  { 'm', 'a', 't', 'r', 'i', 'x' };
 
-template<typename CharacterType> static std::optional<SVGTransformValue::SVGTransformType> parseTransformTypeGeneric(StringParsingBuffer<CharacterType>& buffer)
+template<typename CharacterType> static std::optional<SVGTransformValue::SVGTransformType> LEGACY_NODELETE parseTransformTypeGeneric(StringParsingBuffer<CharacterType>& buffer)
 {
     if (buffer.atEnd())
         return std::nullopt;
@@ -114,8 +114,9 @@ std::optional<AffineTransform> SVGTransformList::concatenate() const
 {
     if (m_items.isEmpty())
         return std::nullopt;
-    AffineTransform result;
-    for (auto& transform : m_items)
+    auto items = m_items.span();
+    AffineTransform result = items.front()->matrix().value();
+    for (auto& transform : items.subspan(1))
         result *= transform->matrix().value();
     return result;
 }
@@ -170,7 +171,7 @@ template<typename CharacterType> bool SVGTransformList::parseGeneric(StringParsi
     return !delimParsed;
 }
 
-void SVGTransformList::parse(StringView value)
+bool SVGTransformList::parse(StringView value)
 {
     bool parsingSucceeded = readCharactersForParsing(value, [&](auto buffer) {
         return parseGeneric(buffer, ListReplacement::Replace);
@@ -178,6 +179,7 @@ void SVGTransformList::parse(StringView value)
 
     if (!parsingSucceeded)
         clearItems();
+    return parsingSucceeded;
 }
 
 bool SVGTransformList::parse(StringParsingBuffer<Latin1Character>& buffer)

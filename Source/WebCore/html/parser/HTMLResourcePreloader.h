@@ -41,8 +41,8 @@ public:
         : m_initiatorType(initiatorType)
         , m_resourceURL(resourceURL)
         , m_baseURL(baseURL.isolatedCopy())
-        , m_resourceType(resourceType)
         , m_mediaAttribute(mediaAttribute)
+        , m_resourceType(resourceType)
         , m_scriptType(scriptType)
         , m_referrerPolicy(referrerPolicy)
         , m_fetchPriority(fetchPriority)
@@ -67,12 +67,12 @@ private:
     String m_resourceURL;
     URL m_baseURL;
     String m_charset;
-    CachedResource::Type m_resourceType;
     String m_mediaAttribute;
     String m_crossOriginMode;
     String m_nonceAttribute;
     String m_integrityAttribute;
     bool m_scriptIsAsync { false };
+    CachedResource::Type m_resourceType;
     ScriptType m_scriptType;
     ReferrerPolicy m_referrerPolicy;
     RequestPriority m_fetchPriority;
@@ -84,7 +84,7 @@ class HTMLResourcePreloader : public RefCountedAndCanMakeWeakPtr<HTMLResourcePre
     WTF_MAKE_TZONE_ALLOCATED(HTMLResourcePreloader);
     WTF_MAKE_NONCOPYABLE(HTMLResourcePreloader);
 public:
-    static Ref<HTMLResourcePreloader> create(Document&);
+    static Ref<HTMLResourcePreloader> LEGACY_NODELETE create(Document&);
     ~HTMLResourcePreloader();
 
     void preload(PreloadRequestStream);

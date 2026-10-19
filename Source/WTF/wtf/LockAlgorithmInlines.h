@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +29,8 @@
 #include <wtf/DataLog.h>
 #include <wtf/LockAlgorithm.h>
 #include <wtf/ParkingLot.h>
+#include <wtf/Platform.h>
+#include <wtf/SpinBackoff.h>
 #include <wtf/Threading.h>
 
 // It's a good idea to avoid including this header in too many places, so that it's possible to change
@@ -36,13 +39,10 @@
 
 namespace WTF {
 
-template<typename LockType, LockType isHeldBit, LockType hasParkedBit, typename Hooks>
+template<std::integral LockType, LockType isHeldBit, LockType hasParkedBit, typename Hooks>
 void LockAlgorithm<LockType, isHeldBit, hasParkedBit, Hooks>::lockSlow(Atomic<LockType>& lock)
 {
-    // This magic number turns out to be optimal based on past JikesRVM experiments.
-    static constexpr unsigned spinLimit = 40;
-    
-    unsigned spinCount = 0;
+    SpinBackoff backoff;
     
     for (;;) {
         LockType currentValue = lock.load();
@@ -55,11 +55,8 @@ void LockAlgorithm<LockType, isHeldBit, hasParkedBit, Hooks>::lockSlow(Atomic<Lo
         }
 
         // If there is nobody parked and we haven't spun too much, we can just try to spin around.
-        if (!(currentValue & hasParkedBit) && spinCount < spinLimit) {
-            spinCount++;
-            Thread::yield();
+        if (!(currentValue & hasParkedBit) && !backoff.shouldParkAfterSpinOnce())
             continue;
-        }
 
         // Need to park. We do this by setting the parked bit first, and then parking. We spin around
         // if the parked bit wasn't set and we failed at setting it.
@@ -102,22 +99,22 @@ void LockAlgorithm<LockType, isHeldBit, hasParkedBit, Hooks>::lockSlow(Atomic<Lo
     }
 }
 
-template<typename LockType, LockType isHeldBit, LockType hasParkedBit, typename Hooks>
+template<std::integral LockType, LockType isHeldBit, LockType hasParkedBit, typename Hooks>
 void LockAlgorithm<LockType, isHeldBit, hasParkedBit, Hooks>::unlockSlow(Atomic<LockType>& lock, Fairness fairness)
 {
     // We could get here because the weak CAS in unlock() failed spuriously, or because there is
     // someone parked. So, we need a CAS loop: even if right now the lock is just held, it could
     // be held and parked if someone attempts to lock just as we are unlocking.
     for (;;) {
-        uint8_t oldByteValue = lock.load();
-        if ((oldByteValue & mask) != isHeldBit
-            && (oldByteValue & mask) != (isHeldBit | hasParkedBit)) {
-            dataLog("Invalid value for lock: ", oldByteValue, "\n");
-            CRASH_WITH_INFO(oldByteValue);
+        LockType oldValue = lock.load();
+        if ((oldValue & mask) != isHeldBit
+            && (oldValue & mask) != (isHeldBit | hasParkedBit)) {
+            dataLog("Invalid value for lock: ", oldValue, "\n");
+            CRASH_WITH_INFO(oldValue);
         }
-        
-        if ((oldByteValue & mask) == isHeldBit) {
-            if (lock.compareExchangeWeak(oldByteValue, Hooks::unlockHook(oldByteValue & ~isHeldBit)))
+
+        if ((oldValue & mask) == isHeldBit) {
+            if (lock.compareExchangeWeak(oldValue, Hooks::unlockHook(oldValue & ~isHeldBit)))
                 return;
             continue;
         }
@@ -126,7 +123,7 @@ void LockAlgorithm<LockType, isHeldBit, hasParkedBit, Hooks>::unlockSlow(Atomic<
         // directly, or we will unlock the lock at the same time as we unpark to allow for barging.
         // When we unlock, we may leave the parked bit set if there is a chance that there are still
         // other threads parked.
-        ASSERT((oldByteValue & mask) == (isHeldBit | hasParkedBit));
+        ASSERT((oldValue & mask) == (isHeldBit | hasParkedBit));
         ParkingLot::unparkOne(
             &lock,
             [&] (ParkingLot::UnparkResult result) -> intptr_t {
@@ -134,7 +131,7 @@ void LockAlgorithm<LockType, isHeldBit, hasParkedBit, Hooks>::unlockSlow(Atomic<
                 // so we should still see both bits set right now.
                 ASSERT((lock.load() & mask) == (isHeldBit | hasParkedBit));
                 
-                if (result.didUnparkThread && (fairness == Fair || result.timeToBeFair)) {
+                if (result.unparkedCount && (fairness == Fair || result.timeToBeFair)) {
                     // We don't unlock anything. Instead, we hand the lock to the thread that was
                     // waiting.
                     lock.transaction(

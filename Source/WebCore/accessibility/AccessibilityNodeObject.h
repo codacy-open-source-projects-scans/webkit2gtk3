@@ -33,6 +33,7 @@
 #include "AXUtilities.h"
 #include "AccessibilityObject.h"
 #include "LayoutRect.h"
+#include "LocalNameWithNamespace.h"
 #include "RenderStyleConstants.h"
 #include <wtf/Forward.h>
 
@@ -41,11 +42,13 @@ namespace WebCore {
 class AXObjectCache;
 class Element;
 class HTMLLabelElement;
+class HTMLMediaElement;
+class HTMLVideoElement;
 class Node;
 
 class AccessibilityNodeObject : public AccessibilityObject {
 public:
-    static Ref<AccessibilityNodeObject> create(AXID, Node*, AXObjectCache&);
+    static Ref<AccessibilityNodeObject> LEGACY_NODELETE create(AXID, Node*, AXObjectCache&);
     virtual ~AccessibilityNodeObject();
 
     void init() override;
@@ -61,13 +64,13 @@ public:
     bool isOrderedList() const final;
     bool isDescriptionList() const final;
     bool isMultiSelectable() const override;
-    bool NODELETE isNativeImage() const;
-    bool isNativeTextControl() const final;
+    bool LEGACY_NODELETE isNativeImage() const;
     bool isSecureField() const final;
     bool isSearchField() const final;
 
     bool isChecked() const final;
     bool isEnabled() const override;
+    RefPtr<HTMLOptGroupElement> optGroupForLabel() const;
     bool isIndeterminate() const override;
     bool isPressed() const final;
     bool isRequired() const final;
@@ -79,8 +82,9 @@ public:
     Vector<String> determineDropEffects() const final;
 
     bool canSetSelectedAttribute() const override;
+    void setSelected(bool) final;
 
-    Node* NODELETE node() const final { return m_node.get(); }
+    Node* LEGACY_NODELETE node() const final { return m_node.get(); }
     Document* document() const override;
     LocalFrameView* documentFrameView() const override;
 
@@ -145,8 +149,8 @@ public:
     String axColumnIndexText() const final;
     unsigned colSpan() const;
     unsigned rowSpan() const;
-    void NODELETE incrementEffectiveRowSpan();
-    void NODELETE resetEffectiveRowSpan();
+    void LEGACY_NODELETE incrementEffectiveRowSpan();
+    void LEGACY_NODELETE resetEffectiveRowSpan();
     void setAXColIndexFromRow(int);
     void setColumnIndex(unsigned);
 #if USE(ATSPI)
@@ -184,7 +188,7 @@ public:
     String revealableText() const final;
     bool isHiddenUntilFoundContainer() const final;
     String text() const final;
-    void alternativeText(Vector<AccessibilityText>&) const;
+    virtual void alternativeText(Vector<AccessibilityText>&) const;
     void helpText(Vector<AccessibilityText>&) const;
     String stringValue() const override;
 
@@ -302,7 +306,7 @@ protected:
     bool isLabelable() const;
     AccessibilityObject* controlForLabelElement() const final;
     String textAsLabelFor(const AccessibilityObject&) const;
-    String textForLabelElements(Vector<Ref<HTMLElement>>&&) const;
+    String textForLabelElements(Vector<Ref<HTMLElement>>&&, DescendIntoContainers = DescendIntoContainers::No) const;
     HTMLLabelElement* labelElementContainer() const;
 
     Vector<Ref<Element>> ariaLabeledByElements() const;
@@ -341,7 +345,7 @@ private:
     bool needsToUpdateChildren() const final { return m_childrenDirty; }
     void setNeedsToUpdateSubtree() final { m_subtreeDirty = true; }
 
-    bool isDescendantOfElementType(const HashSet<QualifiedName>&) const;
+    bool isDescendantOfElementType(const HashSet<LocalNameWithNamespace>&) const;
 
     AXObjectRareData* rareDataWithCleanTableChildren();
     // Returns the number of columns the table should have.

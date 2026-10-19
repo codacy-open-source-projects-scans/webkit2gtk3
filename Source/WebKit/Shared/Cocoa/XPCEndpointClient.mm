@@ -42,14 +42,13 @@ void XPCEndpointClient::setEndpoint(xpc_endpoint_t endpoint)
         if (m_connection)
             return;
 
-        // FIXME: This is a false positive. <rdar://164843889>
-        SUPPRESS_RETAINPTR_CTOR_ADOPT m_connection = adoptOSObject(xpc_connection_create_from_endpoint(endpoint));
+        m_connection = adoptOSObject(xpc_connection_create_from_endpoint(endpoint));
 
         xpc_connection_set_target_queue(m_connection.get(), globalDispatchQueueSingleton(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0));
         xpc_connection_set_event_handler(m_connection.get(), ^(xpc_object_t message) {
             xpc_type_t type = xpc_get_type(message);
             if (type == XPC_TYPE_ERROR) {
-                if (message == XPC_ERROR_CONNECTION_INVALID || message == XPC_ERROR_TERMINATION_IMMINENT || XPC_ERROR_CONNECTION_INTERRUPTED) {
+                if (message == XPC_ERROR_CONNECTION_INVALID || message == XPC_ERROR_TERMINATION_IMMINENT || message == XPC_ERROR_CONNECTION_INTERRUPTED) {
                     Locker locker { m_connectionLock };
                     m_connection = nullptr;
                 }

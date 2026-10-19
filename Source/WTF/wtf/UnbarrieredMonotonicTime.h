@@ -65,6 +65,10 @@ class UnbarrieredMonotonicTime final : public GenericTimeMixin<UnbarrieredMonoto
 public:
     static constexpr ClockType clockType = ClockType::UnbarrieredMonotonic;
 
+    // Declared here, not inherited: Swift's C++ interop importer mishandles
+    // an `operator bool` inherited from a template base (rdar://181622867).
+    explicit constexpr operator bool() const { return !!m_value; }
+
     // This is the epoch. So, x.secondsSinceEpoch() should be the same as x - UnbarrieredMonotonicTime().
     constexpr UnbarrieredMonotonicTime() = default;
 
@@ -73,11 +77,6 @@ public:
 #else
     WTF_EXPORT_PRIVATE static UnbarrieredMonotonicTime now();
 #endif
-
-    UnbarrieredMonotonicTime approximateUnbarrieredMonotonicTime() const { return *this; }
-    WTF_EXPORT_PRIVATE WallTime approximateWallTime() const;
-    WTF_EXPORT_PRIVATE MonotonicTime approximateMonotonicTime() const;
-    WTF_EXPORT_PRIVATE ContinuousTime approximateContinuousTime() const;
 
     WTF_EXPORT_PRIVATE void dump(PrintStream&) const;
 
@@ -92,7 +91,7 @@ private:
 
 #if USE(HARDWARE_UNBARRIERED_MONOTONIC_TIME)
     struct Calibration {
-        uint64_t startCntpct;
+        uint64_t startCounter;
         double startNanoseconds;
         double nanosecondsPerTick;
     };
@@ -119,7 +118,7 @@ inline UnbarrieredMonotonicTime UnbarrieredMonotonicTime::now()
         calibrate();
 
     constexpr double nanosecondsPerSecond = 1000'000'000;
-    double nanoseconds = (readCounter() - s_calibration.startCntpct) * s_calibration.nanosecondsPerTick + s_calibration.startNanoseconds;
+    double nanoseconds = (readCounter() - s_calibration.startCounter) * s_calibration.nanosecondsPerTick + s_calibration.startNanoseconds;
     return UnbarrieredMonotonicTime::fromRawSeconds(nanoseconds / nanosecondsPerSecond);
 }
 #endif // USE(HARDWARE_UNBARRIERED_MONOTONIC_TIME)

@@ -482,29 +482,6 @@ Object.defineProperty(DocumentFragment.prototype, "createChild",
     value: Element.prototype.createChild
 });
 
-(function() {
-    const fontSymbol = Symbol("font");
-
-    Object.defineProperty(HTMLInputElement.prototype, "autosize",
-    {
-        value(extra = 0)
-        {
-            extra += 6; // UserAgent styles add 1px padding and 2px border.
-            if (this.type === "number")
-                extra += 13; // Number input inner spin button width.
-            extra += 2; // Add extra pixels for the cursor.
-
-            WI.ImageUtilities.scratchCanvasContext2D((context) => {
-                this[fontSymbol] ||= window.getComputedStyle(this).font;
-
-                context.font = this[fontSymbol];
-                let textMetrics = context.measureText(this.value || this.placeholder);
-                this.style.setProperty("width", (textMetrics.width + extra) + "px");
-            });
-        },
-    });
-})();
-
 Object.defineProperty(HTMLCollection.prototype, "indexOf",
 {
     value(element)
@@ -1221,7 +1198,7 @@ Object.defineProperty(String.prototype, "insertWordBreakCharacters",
         // Add zero width spaces after characters that are good to break after.
         // Otherwise a string with no spaces will not break and overflow its container.
         // This is mainly used on URL strings, so the characters are tailored for URLs.
-        return this.replace(/([\/;:\)\]\}&?])/g, "$1\u200b");
+        return this.replace(/([/;:)\]}&?])/g, "$1\u200b");
     }
 });
 
@@ -1507,7 +1484,7 @@ function parseMIMEType(fullMimeType)
         if (subparts[0].toLowerCase() === "boundary")
             boundary = subparts[1];
         else if (subparts[0].toLowerCase() === "charset")
-            encoding = subparts[1].replace("^\"|\"$", ""); // Trim quotes.
+            encoding = subparts[1].replaceAll("\"", ""); // Trim quotes.
     }
 
     return {type, boundary: boundary || null, encoding: encoding || null};
@@ -1657,7 +1634,9 @@ Object.defineProperty(Promise, "delay",
 {
     value(delay)
     {
-        return new Promise((resolve) => setTimeout(resolve, delay || 0));
+        return new Promise((resolve) => {
+            setTimeout(resolve, delay || 0);
+        });
     }
 });
 

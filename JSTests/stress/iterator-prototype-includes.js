@@ -1,5 +1,10 @@
 //@ requireOptions("--useIteratorIncludes=1")
 
+function assert(ok, message = '') {
+    if (!ok)
+        throw new Error(`Assertion!: ${message}`); 
+}
+
 function sameValue(a, b, testname) {
     if (a !== b)
         throw new Error(`${testname}: Expected ${b} but got ${a}`);
@@ -21,12 +26,24 @@ function shouldThrow(caseName, fn, expectedErrorCtor, expectedErrorMessage) {
     }
 }
 
+function shouldNotThrow(fn, caseName) {
+    if (!caseName)
+        throw new Error(`must specify message`);
+
+    try {
+        fn();
+    } catch (e) {
+        const actual = `${e.name}(${e.message})`;
+        throw new Error(`${caseName}: Expected not thrown but got ${actual}`);
+    }
+}
+
 function callTestTargetFunction(iterator, searchElement, skippedElements) {
     return Iterator.prototype.includes.call(iterator, searchElement, skippedElements);
 }
 
 class TestIterator extends Iterator {
-    value = 0;
+    begin = 0;
     isClosed = false;
     isDone = false;
     constructor(max) {
@@ -37,7 +54,7 @@ class TestIterator extends Iterator {
         this.max = max;
     }
     next() {
-        const value = this.value;
+        const value = this.begin;
         if (value > this.max) {
             this.isDone = true;
             return {
@@ -46,7 +63,7 @@ class TestIterator extends Iterator {
             };
         }
 
-        this.value += 1;
+        this.begin += 1;
         return {
             done: false,
             value,
@@ -192,6 +209,96 @@ class TestIterator extends Iterator {
     sameValue(callTestTargetFunction(iter, -1), false, `${TEST_NAME}: call`);
     sameValue(iter.isDone, true, `${TEST_NAME}: iterator should be done`);
     sameValue(iter.isClosed, false, `${TEST_NAME}: iterator should not be closed`);
+}
+
+{
+    const TEST_NAME = 'calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: return is method'
+
+    class ExpectedError extends Error {
+        constructor(...args) {
+            super(...args);
+            this.name = new.target.name;
+        }
+    }
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        return() {
+            throw new ExpectedError('this error should be propagated to the caller'); 
+        }
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2);
+    }, ExpectedError, 'this error should be propagated to the caller');
+}
+
+{
+    const TEST_NAME = 'calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: return is getter'
+
+    class ExpectedError extends Error {
+        constructor(...args) {
+            super(...args);
+            this.name = new.target.name;
+        }
+    }
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        get return() {
+            throw new ExpectedError('this error should be propagated to the caller'); 
+        }
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2);
+    }, ExpectedError, 'this error should be propagated to the caller');
+}
+
+{
+    const TEST_NAME = 'calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: return is not a function'
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        return = 'return';
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2);
+    }, TypeError, 'Type error');
+}
+
+{
+    const TEST_NAME = 'calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: the returned value of .return() is invalid'
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        return() {
+            // |IteratorClose| would throw a TypeError in the step 7 if the returned value is not an object.
+            // https://tc39.es/ecma262/2026/#sec-iteratorclose
+            return true;
+        }
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2);
+    }, TypeError, `Iterator result interface is not an object.`);
 }
 
 // with second argument
@@ -444,20 +551,143 @@ class TestIterator extends Iterator {
 }
 
 {
-    const valid2ndArgument = [
+    const greaterThanIteratorSize = [
         [Number.POSITIVE_INFINITY, `+Infinity`],
         [Number.MAX_SAFE_INTEGER, `Number.MAX_SAFE_INTEGER`],
-        [Number.MAX_SAFE_INTEGER + 1, `(Number.MAX_SAFE_INTEGER + 1)`],
-        [Number.MAX_VALUE, `Number.MAX_VALUE`],
+        [Number.MAX_SAFE_INTEGER - 1, `Number.MAX_SAFE_INTEGER - 1`],
+        [1, ''],
     ];
 
-    for (const [skippedElements, label] of valid2ndArgument) {
-        const testName = `call on short iterator with 2nd arg (large number): ${label}`;
+    for (const [skippedElements, name] of greaterThanIteratorSize) {
+        const label = name ?? String(skippedElements);
+        const testName = `call on short iterator with 2nd arg (large number > the iterator): ${label}`;
         const iter = new TestIterator(0);
+        assert(iter.max < skippedElements, `${testName}: to avoid test stucking`);
         sameValue(callTestTargetFunction(iter, 0, skippedElements), false, `${testName}: calling .includes()`);
         sameValue(iter.isDone, true, `${testName}: iterator should be done`);
         sameValue(iter.isClosed, false, `${testName}: iterator should not be closed`);
     }
+}
+
+{
+    const valid2ndArgumentAsLowerBound = [
+        [0, ],
+        [0.0, '0.0'],
+    ];
+
+    for (const [skippedElements, name] of valid2ndArgumentAsLowerBound) {
+        const label = name ?? String(skippedElements);
+        const testName = `call on iterator with args (1st should **not** found, 2nd is lower bound): ${label}`;
+        const iter = new TestIterator(0);
+        const searchElement = -1;
+        assert(searchElement < iter.begin, 'must not be found in the iterator');
+        shouldNotThrow(() => {
+            callTestTargetFunction(iter, searchElement, skippedElements);
+        }, `${testName}: calling .includes()`);
+        sameValue(iter.isDone, true, `${testName}: iterator should be done`);
+        sameValue(iter.isClosed, false, `${testName}: iterator should not be closed`);
+    }
+
+    for (const [skippedElements, name] of valid2ndArgumentAsLowerBound) {
+        const label = name ?? String(skippedElements);
+        const testName = `call on iterator with args (1st should be found, 2nd is lower bound): ${label}`;
+        const iter = new TestIterator(0);
+        const searchElement = 0;
+        assert(iter.begin <= searchElement && searchElement <= iter.max, `${testName}: must be found in the iterator's range`);
+        sameValue(callTestTargetFunction(iter, searchElement, skippedElements), true, `${testName}: calling .includes()`);
+        sameValue(iter.isDone, false, `${testName}: iterator should be done`);
+        sameValue(iter.isClosed, true, `${testName}: iterator should not be closed`);
+    }
+}
+
+{
+    const TEST_NAME = 'call with 2nd arg: calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: return is method'
+
+    class ExpectedError extends Error {
+        constructor(...args) {
+            super(...args);
+            this.name = new.target.name;
+        }
+    }
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        return() {
+            throw new ExpectedError('this error should be propagated to the caller'); 
+        }
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2, 1);
+    }, ExpectedError, 'this error should be propagated to the caller');
+}
+
+{
+    const TEST_NAME = 'call with 2nd arg: calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: return is not a function'
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        return = 'return';
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2, 1);
+    }, TypeError, 'Type error');
+}
+
+{
+    const TEST_NAME = 'call with 2nd arg: calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: return is getter'
+
+    class ExpectedError extends Error {
+        constructor(...args) {
+            super(...args);
+            this.name = new.target.name;
+        }
+    }
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        get return() {
+            throw new ExpectedError('this error should be propagated to the caller'); 
+        }
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2, 1);
+    }, ExpectedError, 'this error should be propagated to the caller');
+}
+
+{
+    const TEST_NAME = 'call with 2nd arg: calling .includes() should raise a thrown error in |IteratorClose| in step 10-d: the returned value of .return() is invalid'
+
+    class ThisTestIterator extends TestIterator {
+        constructor() {
+            super(5);
+        }
+
+        return() {
+            // |IteratorClose| would throw a TypeError in the step 7 if the returned value is not an object.
+            // https://tc39.es/ecma262/2026/#sec-iteratorclose
+            return true;
+        }
+    }
+
+    const iter = new ThisTestIterator();
+    shouldThrow(TEST_NAME, () => {
+        callTestTargetFunction(iter, 2, 1);
+    }, TypeError, `Iterator result interface is not an object.`);
 }
 
 // invalid
@@ -481,7 +711,7 @@ class TestIterator extends Iterator {
 }
 
 {
-    const invalidSkippedElements = [
+    const invalidSkippedElementsAsTypeError = [
         ['', ],
         ['1', `'1'`],
         [true, ],
@@ -497,28 +727,30 @@ class TestIterator extends Iterator {
         [Number.MIN_VALUE, `Number.MIN_VALUE`],
     ];
 
-    for (const [skip, label] of invalidSkippedElements) {
+    for (const [skip, label] of invalidSkippedElementsAsTypeError) {
         const testName = label ?? String(skip);
         const validIter = new TestIterator(3);
         shouldThrow(`the 2nd arg is invalid: ${testName}`, function () {
             callTestTargetFunction(validIter, null, skip);
-        }, TypeError, "Iterator.prototype.includes requires that the second argument is a non-negative integral Number or Infinity.");
+        }, TypeError, "Iterator.prototype.includes requires that the second argument is a non-negative safe integral Number or Infinity.");
         sameValue(validIter.isClosed, true, 'the given iterator should be closed.');
     }
 }
 
 {
-    const invalidSkippedElements = [
+    const invalidSkippedElementsAsRangeError = [
+        [Number.MAX_VALUE, `Number.MAX_VALUE`],
+        [Number.MAX_SAFE_INTEGER + 1, `(Number.MAX_SAFE_INTEGER + 1)`],
         [-1, ],
         [Number.NEGATIVE_INFINITY, ],
         [Number.MIN_SAFE_INTEGER, `Number.MIN_SAFE_INTEGER`],
     ];
-    for (const [skip, label] of invalidSkippedElements) {
+    for (const [skip, label] of invalidSkippedElementsAsRangeError) {
         const testName = label ?? String(skip);
         const validIter = new TestIterator(3);
         shouldThrow(`the 2nd arg is not positive integer: ${String(testName)}`, function () {
             callTestTargetFunction(validIter, null, skip);
-        }, RangeError, "Iterator.prototype.includes requires that the second argument is a non-negative integral Number or Infinity.");
+        }, RangeError, "Iterator.prototype.includes requires that the second argument is a non-negative safe integral Number or Infinity.");
         sameValue(validIter.isClosed, true, 'the given iterator should be closed.');
     }
 }

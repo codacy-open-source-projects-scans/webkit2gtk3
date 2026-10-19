@@ -49,7 +49,7 @@ public:
     RefPtr<SVGElement> clipChild() const;
     RenderElement* rendererClipChild() const;
 
-    SVGGraphicsElement* visibleTargetGraphicsElement() const;
+    RefPtr<SVGGraphicsElement> visibleTargetGraphicsElement() const;
 
     const SVGLengthValue& x() const LIFETIME_BOUND { return m_x->currentValue(); }
     const SVGLengthValue& y() const LIFETIME_BOUND { return m_y->currentValue(); }
@@ -74,12 +74,12 @@ private:
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) override;
     void svgAttributeChanged(const QualifiedName&) override;
 
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) override;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) override;
     Path toClipPath() override;
     bool selfHasRelativeLengths() const override;
     void notifyFinished(CachedResource&, const NetworkLoadMetrics&, LoadWillContinueInAnotherProcess) final;
 
-    Document* NODELETE externalDocument() const;
+    Document* LEGACY_NODELETE externalDocument() const;
     void updateExternalDocument();
 
     FloatRect getBBox(StyleUpdateStrategy = StyleUpdateStrategy::Allow) final;
@@ -87,7 +87,7 @@ private:
     RefPtr<SVGElement> findTarget(AtomString* targetID = nullptr) const;
 
     void cloneTarget(ContainerNode&, SVGElement& target) const;
-    RefPtr<SVGElement> NODELETE targetClone() const;
+    RefPtr<SVGElement> LEGACY_NODELETE targetClone() const;
 
     void expandUseElementsInShadowTree() const;
     void expandSymbolElementsInShadowTree() const;

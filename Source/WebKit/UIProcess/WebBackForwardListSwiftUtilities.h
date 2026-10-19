@@ -25,11 +25,12 @@
 
 #pragma once
 
+#include "BrowsingContextGroup.h"
 #include "Logging.h"
-#include "SessionState.h"
 #include "WebBackForwardListFrameItem.h"
 #include "WebBackForwardListItem.h"
 #include "WebBackForwardListMessages.h"
+#include "WebFrameProxy.h"
 #include "WebProcessProxy.h"
 #include <cstdint>
 #include <wtf/Function.h>
@@ -48,7 +49,6 @@ using SpanConstChar = std::span<const char>;
 // These can't be inline due to rdar://162531519
 void doLog(const WTF::String& msg); // rdar://168139823
 void doLoadingReleaseLog(const WTF::String& msg); // rdar://168139823
-void messageCheckFailed(Ref<WebKit::WebProcessProxy>); // rdar://168139740
 
 // Workaround for rdar://162357139
 template<typename T>
@@ -66,34 +66,13 @@ inline void setOptionalUInt32Value(std::optional<uint32_t>& optional, uint32_t v
     optional = value;
 }
 
-using WebBackForwardListItemFilter = WTF::RefCountable<WTF::Function<bool (WebKit::WebBackForwardListItem&)>>;
+// WebFrameProxy::webFrame() takes a std::optional, which Swift cannot construct.
+inline WebKit::WebFrameProxy* webFrameForFrameID(WebCore::FrameIdentifier frameID)
+{
+    return WebKit::WebFrameProxy::webFrame(frameID);
+}
 
-// Workaround for rdar://170233903
-// In each case the Swift call can be replaced with fn.pointee(args) when this is fixed
-inline bool callFilter(WebBackForwardListItemFilter& fn, WebKit::WebBackForwardListItem& item)
-{
-    return (*fn)(item);
-}
-inline void callCompletionHandler(CompletionHandlers::WebBackForwardList::BackForwardGoToItemCompletionHandler& fn, WebKit::WebBackForwardListCounts&& counts)
-{
-    (*fn)(WTF::move(counts));
-}
-inline void callCompletionHandler(CompletionHandlers::WebBackForwardList::BackForwardListContainsItemCompletionHandler& fn, bool found)
-{
-    (*fn)(found);
-}
-inline void callCompletionHandler(CompletionHandlers::WebBackForwardList::BackForwardAllItemsCompletionHandler& fn, WebKit::VectorRefFrameState&& items)
-{
-    (*fn)(WTF::move(items));
-}
-inline void callCompletionHandler(CompletionHandlers::WebBackForwardList::BackForwardItemAtIndexForWebContentCompletionHandler& fn, WebKit::RefPtrFrameState&& state)
-{
-    (*fn)(WTF::move(state));
-}
-inline bool filterSpecified(WebBackForwardListItemFilter& fn)
-{
-    return bool(*fn);
-}
+using WebBackForwardListItemFilter = WTF::RefCountable<WTF::Function<bool (WebKit::WebBackForwardListItem&)>>;
 
 // Workaround for rdar://168057355
 inline WebKit::FrameState* getFrameState(WebKit::WebBackForwardListFrameItem& item)
@@ -101,8 +80,17 @@ inline WebKit::FrameState* getFrameState(WebKit::WebBackForwardListFrameItem& it
     return &item.frameState();
 }
 
+void setFrameStateBackForwardItemIdentifier(WebKit::FrameState&, const WebCore::BackForwardItemIdentifier&);
+
 // Workarounds for rdar://171011011
 void appendToBackForwardStateItems(Vector<WebKit::BackForwardListItemState>& items, const WebKit::WebBackForwardListItem& entry);
 Ref<WebKit::WebBackForwardListItem> createItemFromState(const WebKit::BackForwardListItemState&, WebKit::WebPageProxyIdentifier pageIdentifier);
+Vector<Ref<WebKit::WebBackForwardListItem>> createItemsFromState(const WebKit::BackForwardListState&, WebKit::WebPageProxyIdentifier pageIdentifier);
+WebKit::WebBackForwardListItem* itemAtIndexInBackForwardListItemVector(const Vector<Ref<WebKit::WebBackForwardListItem>>& items, size_t index);
+size_t frameStateChildCount(const WebKit::FrameState&);
+WebKit::FrameState* frameStateChildAtIndex(const WebKit::FrameState&, size_t index);
+
+// WebCore::Page is not visible to Swift.
+unsigned maxFrameStateDepthForMessageCheck();
 
 #endif // ENABLE(BACK_FORWARD_LIST_SWIFT)

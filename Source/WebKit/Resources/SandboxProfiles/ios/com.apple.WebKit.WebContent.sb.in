@@ -351,12 +351,13 @@
             (xpc-service-name "com.apple.MTLCompilerService"))))
 #endif
 
-(with-filter (system-attribute apple-internal)
-    (allow mach-lookup (global-name "com.apple.diagnosticd")))
-
+#if !RC_XBS
 (with-filter (system-attribute apple-internal)
     (allow mach-lookup
-        (global-name "com.apple.osanalytics.osanalyticshelper")))
+        (global-name
+            "com.apple.diagnosticd"
+            "com.apple.osanalytics.osanalyticshelper")))
+#endif
 
 (disable-syscall-inference)
 
@@ -372,6 +373,9 @@
     (syscall-unix-rarely-in-use)
     (syscall-unix-rarely-in-use-blocked-in-lockdown-mode)
     (syscall-quicklook))
+
+(allow syscall-unix (with report) (with telemetry)
+    (syscall-unix-allowed-with-telemetry))
 
 #if ENABLE(QUICKLOOK_SANDBOX_RESTRICTIONS)
 (with-filter

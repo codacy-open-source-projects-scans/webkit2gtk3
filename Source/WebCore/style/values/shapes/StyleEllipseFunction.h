@@ -32,13 +32,12 @@
 namespace WebCore {
 
 struct AcceleratedEffectEllipseFunction;
-struct TransformOperationData;
 
 namespace Style {
 
 struct Ellipse {
     using Extent = CSS::Ellipse::Extent;
-    using Length = Style::LengthPercentage<CSS::NonnegativeUnzoomed>;
+    using Length = Style::LengthPercentage<CSS::Nonnegative>;
     using RadialSize = Variant<Length, Extent>;
 
     SpaceSeparatedPair<RadialSize> radii;
@@ -46,7 +45,7 @@ struct Ellipse {
 
     bool operator==(const Ellipse&) const = default;
 };
-using EllipseFunction = FunctionNotation<CSSValueEllipse, Ellipse>;
+using EllipseFunction = FunctionNotation<CSSValueID::Ellipse, Ellipse>;
 
 template<size_t I> const auto& get(const Ellipse& value)
 {
@@ -73,7 +72,7 @@ template<> struct Blending<Ellipse> {
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-template<> struct Evaluation<EllipseFunction, AcceleratedEffectEllipseFunction> { AcceleratedEffectEllipseFunction operator()(const EllipseFunction&, const TransformOperationData&, ZoomFactor); };
+template<> struct Evaluation<EllipseFunction, AcceleratedEffectEllipseFunction> { AcceleratedEffectEllipseFunction operator()(const EllipseFunction&, const FloatSize&, ZoomFactor); };
 
 #endif
 

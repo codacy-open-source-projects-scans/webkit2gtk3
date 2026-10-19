@@ -189,12 +189,16 @@ TEST(UIWKInteractionViewProtocol, SelectPositionAtPointInFocusedElementStartsInp
 
     // 1. Focus element
     [webView synchronouslyLoadHTMLString:@"<body style='margin: 0; padding: 0'><div contenteditable='true' style='height: 200px; width: 200px'></div></body>"];
+    [webView focusInWindow];
     [webView stringByEvaluatingJavaScript:@"document.querySelector('div').focus()"];
     TestWebKitAPI::Util::run(&didCallDecidePolicyForFocusedElement);
 
     // 2. Focus the element again via selecting a position at a point inside it.
     didCallDecidePolicyForFocusedElement = false;
-    [webView becomeFirstResponder];
+
+    // Resign first so that the next focusInWindow will re-fire the focus event that induces DecidePolicyForFocusedElement.
+    [webView resignFirstResponder];
+    [webView focusInWindow];
     [webView selectPositionAtPoint:CGPointMake(8, 8)];
     TestWebKitAPI::Util::run(&didCallDecidePolicyForFocusedElement);
 }
@@ -233,6 +237,7 @@ static std::pair<RetainPtr<TestWKWebView>, RetainPtr<TestInputDelegate>> setUpEd
     }];
 
     [webView synchronouslyLoadTestPageNamed:@"editable-responsive-body"];
+    [webView focusInWindow];
     TestWebKitAPI::Util::run(&didStartInputSession);
     return { WTF::move(webView), WTF::move(inputDelegate) };
 }
@@ -240,7 +245,7 @@ static std::pair<RetainPtr<TestWKWebView>, RetainPtr<TestInputDelegate>> setUpEd
 TEST(UIWKInteractionViewProtocol, TextInteractionCanBeginInExistingSelection)
 {
     auto [webView, inputDelegate] = setUpEditableWebViewAndWaitForInputSession();
-    auto contentView = [webView textInputContentView];
+    RetainPtr contentView = [webView textInputContentView];
     BOOL allowsTextInteractionOutsideOfSelection = [contentView textInteractionGesture:UIWKGestureLoupe shouldBeginAtPoint:CGPointMake(50, 50)];
     EXPECT_TRUE(allowsTextInteractionOutsideOfSelection);
 
@@ -254,7 +259,7 @@ TEST(UIWKInteractionViewProtocol, TextInteractionCanBeginInExistingSelection)
 TEST(UIWKInteractionViewProtocol, ReplaceDictatedTextContainingEmojis)
 {
     auto [webView, inputDelegate] = setUpEditableWebViewAndWaitForInputSession();
-    auto contentView = [webView textInputContentView];
+    RetainPtr contentView = [webView textInputContentView];
     [contentView selectAll:nil];
     [contentView insertText:@"Hello world. This 👉🏻 is a good boy"];
     [webView waitForNextPresentationUpdate];
@@ -267,7 +272,7 @@ TEST(UIWKInteractionViewProtocol, ReplaceDictatedTextContainingEmojis)
 TEST(UIWKInteractionViewProtocol, SuppressSelectionChangesDuringDictation)
 {
     auto [webView, inputDelegate] = setUpEditableWebViewAndWaitForInputSession();
-    auto contentView = [webView textInputContentView];
+    RetainPtr contentView = [webView textInputContentView];
     [contentView selectAll:nil];
     [contentView insertText:@"Hello world"];
     [webView waitForNextPresentationUpdate];

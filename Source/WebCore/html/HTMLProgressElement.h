@@ -52,8 +52,9 @@ private:
     bool isLabelable() const final { return true; }
     bool canContainRangeEndPoint() const final { return false; }
 
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
-    RenderProgress* NODELETE renderProgress() const;
+    bool LEGACY_NODELETE supportsBaseAppearance(StyleAppearance) const final;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) final;
+    RenderProgress* LEGACY_NODELETE renderProgress() const;
     bool childShouldCreateRenderer(const Node&) const final;
 
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;

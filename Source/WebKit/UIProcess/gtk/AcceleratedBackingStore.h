@@ -28,7 +28,7 @@
 #include "FenceMonitor.h"
 #include "MessageReceiver.h"
 #include "RendererBufferDescription.h"
-#include <WebCore/DMABufBufferAttributes.h>
+#include <WebCore/DMABufBuffer.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/RefPtrCairo.h>
@@ -44,7 +44,6 @@
 typedef void *EGLImage;
 
 #if USE(GBM)
-#include <WebCore/DMABufBuffer.h>
 struct gbm_bo;
 #endif
 
@@ -98,6 +97,7 @@ private:
     void didDestroyBuffer(uint64_t id);
     void frame(uint64_t id, Rects&&, WTF::UnixFileDescriptor&&);
     void frameDone();
+    void queuePendingDamageDraw();
 
     void ensureGLContext();
     bool swapBuffersIfNeeded();
@@ -249,7 +249,7 @@ private:
         RefPtr<WebCore::NativeImage> asNativeImageForTesting() const override;
         void release() override;
 
-        RefPtr<WebCore::ShareableBitmap> m_bitmap;
+        const RefPtr<WebCore::ShareableBitmap> m_bitmap;
 #if GTK_CHECK_VERSION(4, 16, 0)
         GRefPtr<GdkMemoryTextureBuilder> m_builder;
         GRefPtr<GdkTexture> m_texture;
@@ -268,6 +268,7 @@ private:
     RefPtr<Buffer> m_committedBuffer;
     Rects m_pendingDamageRects;
     HashMap<uint64_t, RefPtr<Buffer>> m_buffers;
+    bool m_needsFrame { false };
 };
 
 } // namespace WebKit

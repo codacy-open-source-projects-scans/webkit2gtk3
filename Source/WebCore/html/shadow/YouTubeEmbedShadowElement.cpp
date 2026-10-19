@@ -36,7 +36,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(YouTubeEmbedShadowElement);
 Ref<YouTubeEmbedShadowElement> YouTubeEmbedShadowElement::create(Document& document)
 {
     auto element = adoptRef(*new YouTubeEmbedShadowElement(document));
-    element->setInlineStyleProperty(CSSPropertyAll, CSSValueInitial);
+    element->setInlineStyleProperty(CSSPropertyID::All, CSSValueID::Initial);
     return element;
 }
 
@@ -45,7 +45,7 @@ YouTubeEmbedShadowElement::YouTubeEmbedShadowElement(Document& document)
 {
 }
 
-RenderPtr<RenderElement> YouTubeEmbedShadowElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
+RenderPtr<RenderElement> YouTubeEmbedShadowElement::createElementRenderer(Style::ComputedStyle&& style, const RenderTreePosition&)
 {
     return createRenderer<RenderBlockFlow>(RenderObject::Type::BlockFlow, *this, WTF::move(style));
 }

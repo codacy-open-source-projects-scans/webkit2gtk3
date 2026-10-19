@@ -81,11 +81,15 @@ public:
     FloatBoxExtent obscuredContentInsets() const { return m_obscuredContentInsets; }
     WEBCORE_EXPORT void setObscuredContentInsets(const FloatBoxExtent&);
 
-    // The target offset for rubber band animations when a banner view overlay is present.
+    // The horizontal space taken up by a vertical scrollbar placed on the left, which the contents are shifted right by.
+    int insetForLeftScrollbarSpace() const { return m_insetForLeftScrollbarSpace; }
+    WEBCORE_EXPORT void setInsetForLeftScrollbarSpace(int);
+
+    // The target offset for rubber band animations when refresh controller is present.
     // When non-zero, rubber banding will snap to this offset instead of the edge.
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    float bannerViewHeight() const { return m_bannerViewHeight; }
-    WEBCORE_EXPORT void setBannerViewHeight(float);
+#if HAVE(NSREFRESHCONTROLLER)
+    float topScrollStretchForRefreshController() const { return m_topScrollStretchForRefreshController; }
+    WEBCORE_EXPORT void setTopScrollStretchForRefreshController(float);
 #endif
 
     const LayerRepresentation& rootContentsLayer() const LIFETIME_BOUND { return m_rootContentsLayer; }
@@ -129,7 +133,7 @@ public:
     bool overlayScrollbarsEnabled() const { return m_overlayScrollbarsEnabled; }
     WEBCORE_EXPORT void setOverlayScrollbarsEnabled(bool);
 
-    WEBCORE_EXPORT bool NODELETE isMainFrame() const;
+    WEBCORE_EXPORT bool LEGACY_NODELETE isMainFrame() const;
     
     void dumpProperties(WTF::TextStream&, OptionSet<ScrollingStateTreeAsTextBehavior>) const override;
 
@@ -177,8 +181,8 @@ private:
         int footerHeight,
         ScrollBehaviorForFixedElements&&,
         FloatBoxExtent&& obscuredContentInsets,
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-        float bannerViewHeight,
+#if HAVE(NSREFRESHCONTROLLER)
+        float topScrollStretchForRefreshController,
 #endif
         bool visualViewportIsSmallerThanLayoutViewport,
         bool asyncFrameOrOverflowScrollingEnabled,
@@ -189,7 +193,8 @@ private:
         FloatPoint minLayoutViewportOrigin,
         FloatPoint maxLayoutViewportOrigin,
         std::optional<FloatSize> overrideVisualViewportSize,
-        bool overlayScrollbarsEnabled
+        bool overlayScrollbarsEnabled,
+        int insetForLeftScrollbarSpace
     );
 
     ScrollingStateFrameScrollingNode(ScrollingStateTree&, ScrollingNodeType, ScrollingNodeID);
@@ -214,11 +219,12 @@ private:
 
     float m_frameScaleFactor { 1 };
     FloatBoxExtent m_obscuredContentInsets;
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-    float m_bannerViewHeight { 0 };
+#if HAVE(NSREFRESHCONTROLLER)
+    float m_topScrollStretchForRefreshController { 0 };
 #endif
     int m_headerHeight { 0 };
     int m_footerHeight { 0 };
+    int m_insetForLeftScrollbarSpace { 0 };
     ScrollBehaviorForFixedElements m_behaviorForFixed { ScrollBehaviorForFixedElements::StickToDocumentBounds };
     bool m_visualViewportIsSmallerThanLayoutViewport { false };
     bool m_asyncFrameOrOverflowScrollingEnabled { false };

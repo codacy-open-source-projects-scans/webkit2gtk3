@@ -31,6 +31,7 @@
 #include "JSCInlines.h"
 #include "JSLexicalEnvironment.h"
 #include "JSModuleEnvironment.h"
+#include "JSScopeInlines.h"
 #include "JSWithScope.h"
 #include "TopExceptionScope.h"
 #include "VMTrapsInlines.h"
@@ -75,6 +76,8 @@ static inline bool abstractAccess(JSGlobalObject* globalObject, JSScope* scope, 
                     return true;
                 }
 
+                if (getOrPut == Put)
+                    entry.prepareToWatch();
                 op = ResolveOp(makeType(ClosureVar, needsVarInjectionChecks), depth, nullptr, lexicalEnvironment, entry.watchpointSet(), entry.scopeOffset().offset());
                 return true;
             }

@@ -25,9 +25,9 @@
 #include "config.h"
 #include "CSSCustomIdentValue.h"
 
-#include "CSSPrimitiveNumericTypes+CSSValueVisitation.h"
-#include "CSSPrimitiveNumericTypes+ComputedStyleDependencies.h"
-#include "CSSPrimitiveNumericTypes+Serialization.h"
+#include "CSSValuePool.h"
+#include "CSSValueTypes+DeprecatedCSSOMValueCreation.h"
+#include <wtf/Hasher.h>
 
 namespace WebCore {
 
@@ -52,14 +52,20 @@ bool CSSCustomIdentValue::equals(const CSSCustomIdentValue& other) const
     return m_customIdent == other.m_customIdent;
 }
 
-IterationStatus CSSCustomIdentValue::customVisitChildren(const Function<IterationStatus(CSSValue&)>& func) const
+IterationStatus CSSCustomIdentValue::customVisitChildren(NOESCAPE const Function<IterationStatus(CSSValue&)>& func) const
 {
     return CSS::visitCSSValueChildren(func, m_customIdent);
 }
 
-String CSSCustomIdentValue::stringValue() const
+bool CSSCustomIdentValue::addDerivedHash(Hasher& hasher) const
 {
-    return m_customIdent.value;
+    add(hasher, m_customIdent);
+    return true;
+}
+
+Ref<DeprecatedCSSOMValue> CSSCustomIdentValue::customCreateDeprecatedCSSOMWrapper(CSSStyleDeclaration& owner) const
+{
+    return CSS::createDeprecatedCSSOMValue(CSSValuePool::singleton(), owner, m_customIdent);
 }
 
 } // namespace WebCore

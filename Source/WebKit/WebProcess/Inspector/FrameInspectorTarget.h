@@ -31,7 +31,12 @@
 #include <memory>
 #include <wtf/Noncopyable.h>
 #include <wtf/TZoneMalloc.h>
+#include <wtf/WeakPtr.h>
 #include <wtf/WeakRef.h>
+
+namespace WebCore {
+class LocalFrame;
+}
 
 namespace WebKit {
 
@@ -57,8 +62,13 @@ public:
     static String toTargetID(WebCore::FrameIdentifier, WebCore::ProcessIdentifier);
 
 private:
+    void connectToCurrentFrame();
+
     WeakRef<WebFrame> m_frame;
     std::unique_ptr<UIProcessForwardingFrontendChannel> m_channel;
+    // The WebCore::LocalFrame that m_channel is connected to. A frame can leave this process and return
+    // with a new LocalFrame, so connectToCurrentFrame() moves m_channel to the current one.
+    WeakPtr<WebCore::LocalFrame> m_inspectedFrame;
 };
 
 } // namespace WebKit

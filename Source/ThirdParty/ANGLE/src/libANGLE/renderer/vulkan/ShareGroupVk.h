@@ -42,7 +42,6 @@ class ShareGroupVk : public ShareGroupImpl
 
     void onContextAdd() override;
 
-    FramebufferCache &getFramebufferCache() { return mFramebufferCache; }
     SamplerCache &getSamplerCache() { return mSamplerCache; }
     SamplerYcbcrConversionCache &getYuvConversionCache() { return mYuvConversionCache; }
 
@@ -53,7 +52,7 @@ class ShareGroupVk : public ShareGroupImpl
     // synchronous update to the caches.
     PipelineLayoutCache &getPipelineLayoutCache() { return mPipelineLayoutCache; }
     DescriptorSetLayoutCache &getDescriptorSetLayoutCache() { return mDescriptorSetLayoutCache; }
-    const egl::ContextMap &getContexts() const { return mState.getContexts(); }
+    const egl::SharedContextMap &getContexts() const { return mState.getContexts(); }
     vk::DescriptorSetArray<vk::MetaDescriptorPool> &getMetaDescriptorPools()
     {
         return mMetaDescriptorPools;
@@ -119,8 +118,6 @@ class ShareGroupVk : public ShareGroupImpl
     // Tracks the total number of frames rendered.
     uint32_t mCurrentFrameCount;
 
-    // VkFramebuffer caches
-    FramebufferCache mFramebufferCache;
 
     // VkSampler and VkSamplerYcbcrConversion caches
     SamplerCache mSamplerCache;

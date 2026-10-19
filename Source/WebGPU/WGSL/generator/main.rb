@@ -379,7 +379,7 @@ module DSL
             when true
                 "validate#{name[0].upcase}#{name[1..]}"
             else
-                entry[:const]
+                entry[:validate]
             end
 
             stages = entry[:stage].kind_of?(Array) ? entry[:stage] : [entry[:stage]]
@@ -459,6 +459,7 @@ module DSL
         ConcreteScalar = Constraint.new(:ConcreteScalar)
         Concrete32BitNumber = Constraint.new(:Concrete32BitNumber)
         SignedNumber = Constraint.new(:SignedNumber)
+        ConcreteNumber = Constraint.new(:ConcreteNumber)
 
         # primitives
         void = PrimitiveType.new(:Void)

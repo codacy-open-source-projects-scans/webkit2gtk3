@@ -36,6 +36,7 @@
 #include <WebCore/ElementInlines.h>
 #include <WebCore/FontAttributes.h>
 #include <WebCore/HTMLElement.h>
+#include <WebCore/HTMLInterchange.h>
 #include <WebCore/HTMLNames.h>
 #include <WebCore/MutableStyleProperties.h>
 #include <WebCore/RenderElement.h>
@@ -57,7 +58,7 @@ namespace WebCore {
 // MARK: Helpers
 
 template<typename Character>
-constexpr std::optional<int> NODELETE consumeNumber(StringParsingBuffer<Character>& input)
+constexpr std::optional<int> LEGACY_NODELETE consumeNumber(StringParsingBuffer<Character>& input)
 {
     static constexpr size_t maximumNumberOfDigits = 3;
 
@@ -75,7 +76,7 @@ constexpr std::optional<int> NODELETE consumeNumber(StringParsingBuffer<Characte
 }
 
 template<typename Character>
-void NODELETE skipToEnd(StringParsingBuffer<Character>& input)
+void LEGACY_NODELETE skipToEnd(StringParsingBuffer<Character>& input)
 {
     input.advanceBy(input.lengthRemaining());
 }
@@ -98,11 +99,21 @@ std::optional<TextList> tryConsumeUnorderedDiscTextList(StringParsingBuffer<Char
 template<typename Character>
 std::optional<TextList> tryConsumeUnorderedDashTextList(StringParsingBuffer<Character>& input)
 {
-    static constexpr std::array marker { WTF::Unicode::enDash, WTF::Unicode::noBreakSpace, WTF::Unicode::noBreakSpace };
+    auto isDashCharacter = [](auto c) {
+        return c == WTF::Unicode::hyphenMinus
+            || c == WTF::Unicode::hyphen
+            || c == WTF::Unicode::emDash
+            || c == WTF::Unicode::enDash;
+    };
 
-    if (WTF::skipExactly(input, WTF::Unicode::hyphenMinus)) {
-        if (input.atEnd())
+    if (!input.atEnd() && isDashCharacter(*input)) {
+        auto dashCharacter = *input;
+        ++input;
+
+        if (input.atEnd()) {
+            std::array marker { static_cast<char16_t>(dashCharacter), WTF::Unicode::noBreakSpace, WTF::Unicode::noBreakSpace };
             return { { Style::ListStyleType { Style::String { WTF::String { std::span { marker } } } }, 0, false } };
+        }
 
         skipToEnd(input);
     }
@@ -169,7 +180,7 @@ static AtomString inlineStyleForListStyleType(const StyledElement& element, Styl
     if (RefPtr existingInlineStyle = element.inlineStyle())
         inlineStyle = existingInlineStyle->mutableCopy();
 
-    inlineStyle->setProperty(CSSPropertyListStyleType, WTF::move(value));
+    inlineStyle->setProperty(CSSPropertyID::ListStyleType, WTF::move(value));
 
     return inlineStyle->asTextAtom(CSS::defaultSerializationContext());
 }
@@ -178,14 +189,14 @@ static AtomString classNameForSmartList(const TextList& textList)
 {
     if (textList.ordered) {
         ASSERT(textList.styleType.isDecimal());
-        return "Apple-decimal-list"_s;
+        return AppleDecimalListClass;
     }
 
     if (textList.styleType.isDisc())
-        return "Apple-disc-list"_s;
+        return AppleDiscListClass;
 
     ASSERT(textList.styleType.isString());
-    return "Apple-dash-list"_s;
+    return AppleDashListClass;
 }
 
 static AtomString startingOrdinalForList(const StyledElement& element, const TextList& textList)

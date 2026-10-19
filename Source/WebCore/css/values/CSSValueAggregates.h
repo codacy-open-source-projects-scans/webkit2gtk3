@@ -34,8 +34,8 @@
 #include <utility>
 #include <wtf/EnumSet.h>
 #include <wtf/FixedVector.h>
-#include <wtf/ListHashSet.h>
 #include <wtf/Markable.h>
+#include <wtf/OrderedHashSet.h>
 #include <wtf/RefCountedFixedVector.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
@@ -263,10 +263,10 @@ struct SpaceSeparatedEnumSet {
     }
 
     template<typename SizedRange, typename Mapper>
-    static SpaceSeparatedEnumSet map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static SpaceSeparatedEnumSet map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
         Container result;
-        for (auto& value : range)
+        for (Ref value : range)
             result.add(mapper(value));
         return result;
     }
@@ -348,10 +348,10 @@ struct CommaSeparatedEnumSet {
     }
 
     template<typename SizedRange, typename Mapper>
-    static CommaSeparatedEnumSet map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static CommaSeparatedEnumSet map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
         Container result;
-        for (auto&& value : range)
+        for (Ref value : range)
             result.add(mapper(value));
         return result;
     }
@@ -411,30 +411,30 @@ struct CommaSeparatedEnumSet {
 template<typename T> inline constexpr auto TreatAsRangeLike<CommaSeparatedEnumSet<T>> = true;
 template<typename T> inline constexpr auto SerializationSeparator<CommaSeparatedEnumSet<T>> = SerializationSeparatorType::Comma;
 
-// Wraps a ListHashSet, semantically marking it as serializing as "space separated".
+// Wraps an OrderedHashSet, semantically marking it as serializing as "space separated".
 template<typename T>
-struct SpaceSeparatedListHashSet {
-    using Container = ListHashSet<T>;
+struct SpaceSeparatedOrderedHashSet {
+    using Container = OrderedHashSet<T>;
     using const_iterator = typename Container::const_iterator;
     using value_type = T;
 
-    constexpr SpaceSeparatedListHashSet() = default;
+    constexpr SpaceSeparatedOrderedHashSet() = default;
 
-    constexpr SpaceSeparatedListHashSet(std::initializer_list<T> initializerList)
+    constexpr SpaceSeparatedOrderedHashSet(std::initializer_list<T> initializerList)
         : value { initializerList }
     {
     }
 
-    constexpr SpaceSeparatedListHashSet(Container&& value)
+    constexpr SpaceSeparatedOrderedHashSet(Container&& value)
         : value { WTF::move(value) }
     {
     }
 
     template<typename SizedRange, typename Mapper>
-    static SpaceSeparatedListHashSet map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static SpaceSeparatedOrderedHashSet map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
         Container result;
-        for (auto&& value : range)
+        for (Ref value : range)
             result.add(mapper(value));
         return result;
     }
@@ -447,38 +447,38 @@ struct SpaceSeparatedListHashSet {
 
     constexpr bool contains(const T& item) const { return value.contains(item); }
 
-    constexpr bool operator==(const SpaceSeparatedListHashSet&) const = default;
+    constexpr bool operator==(const SpaceSeparatedOrderedHashSet&) const = default;
 
     Container value;
 };
-template<typename T> inline constexpr auto TreatAsRangeLike<SpaceSeparatedListHashSet<T>> = true;
-template<typename T> inline constexpr auto SerializationSeparator<SpaceSeparatedListHashSet<T>> = SerializationSeparatorType::Space;
+template<typename T> inline constexpr auto TreatAsRangeLike<SpaceSeparatedOrderedHashSet<T>> = true;
+template<typename T> inline constexpr auto SerializationSeparator<SpaceSeparatedOrderedHashSet<T>> = SerializationSeparatorType::Space;
 
-// Wraps a ListHashSet, semantically marking it as serializing as "comma separated".
+// Wraps an OrderedHashSet, semantically marking it as serializing as "comma separated".
 template<typename T>
-struct CommaSeparatedListHashSet {
-    using Container = ListHashSet<T>;
+struct CommaSeparatedOrderedHashSet {
+    using Container = OrderedHashSet<T>;
     using const_iterator = typename Container::const_iterator;
     using value_type = T;
 
-    constexpr CommaSeparatedListHashSet() = default;
+    constexpr CommaSeparatedOrderedHashSet() = default;
 
-    constexpr CommaSeparatedListHashSet(std::initializer_list<T> initializerList)
+    constexpr CommaSeparatedOrderedHashSet(std::initializer_list<T> initializerList)
         : value { initializerList }
     {
     }
 
-    constexpr CommaSeparatedListHashSet(Container&& value)
+    constexpr CommaSeparatedOrderedHashSet(Container&& value)
         : value { WTF::move(value) }
     {
     }
 
     template<typename SizedRange, typename Mapper>
-    static CommaSeparatedListHashSet map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static CommaSeparatedOrderedHashSet map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
         Container result;
-        for (auto&& value : range)
-            result.add(mapper(value));
+        for (Ref value : range)
+            result.add(mapper(value.get()));
         return result;
     }
 
@@ -490,12 +490,12 @@ struct CommaSeparatedListHashSet {
 
     constexpr bool contains(const T& item) const { return value.contains(item); }
 
-    constexpr bool operator==(const CommaSeparatedListHashSet&) const = default;
+    constexpr bool operator==(const CommaSeparatedOrderedHashSet&) const = default;
 
     Container value;
 };
-template<typename T> inline constexpr auto TreatAsRangeLike<CommaSeparatedListHashSet<T>> = true;
-template<typename T> inline constexpr auto SerializationSeparator<CommaSeparatedListHashSet<T>> = SerializationSeparatorType::Comma;
+template<typename T> inline constexpr auto TreatAsRangeLike<CommaSeparatedOrderedHashSet<T>> = true;
+template<typename T> inline constexpr auto SerializationSeparator<CommaSeparatedOrderedHashSet<T>> = SerializationSeparatorType::Comma;
 
 // Wraps a variable number of elements of a single type, semantically marking them as serializing as "space separated".
 template<typename T, size_t inlineCapacity = 0> struct SpaceSeparatedVector {
@@ -519,9 +519,9 @@ template<typename T, size_t inlineCapacity = 0> struct SpaceSeparatedVector {
     }
 
     template<typename SizedRange, typename Mapper>
-    static SpaceSeparatedVector map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static SpaceSeparatedVector map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
-        return WTF::map<inlineCapacity>(std::forward<SizedRange>(range), std::forward<Mapper>(mapper));
+        return WTF::map<inlineCapacity>(std::forward<SizedRange>(range), mapper);
     }
 
     iterator begin() LIFETIME_BOUND { return value.begin(); }
@@ -541,7 +541,7 @@ template<typename T, size_t inlineCapacity = 0> struct SpaceSeparatedVector {
     bool contains(const auto& x) const { return value.contains(x); }
     bool containsIf(NOESCAPE const Invocable<bool(const value_type&)> auto& f) const { return value.containsIf(f); }
 
-    template<typename F> decltype(auto) map(F&& functor) const { return value.map(std::forward<F>(functor)); }
+    template<typename F> decltype(auto) map(NOESCAPE const F& functor) const { return value.map(functor); }
 
     bool operator==(const SpaceSeparatedVector&) const = default;
 
@@ -573,9 +573,9 @@ template<typename T, size_t inlineCapacity = 0> struct CommaSeparatedVector {
     }
 
     template<typename SizedRange, typename Mapper>
-    static CommaSeparatedVector map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static CommaSeparatedVector map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
-        return WTF::map<inlineCapacity>(std::forward<SizedRange>(range), std::forward<Mapper>(mapper));
+        return WTF::map<inlineCapacity>(std::forward<SizedRange>(range), mapper);
     }
 
     iterator begin() LIFETIME_BOUND { return value.begin(); }
@@ -595,7 +595,7 @@ template<typename T, size_t inlineCapacity = 0> struct CommaSeparatedVector {
     bool contains(const auto& x) const { return value.contains(x); }
     bool containsIf(NOESCAPE const Invocable<bool(const value_type&)> auto& f) const { return value.containsIf(f); }
 
-    template<typename F> decltype(auto) map(F&& functor) const { return value.map(std::forward<F>(functor)); }
+    template<typename F> decltype(auto) map(NOESCAPE const F& functor) const { return value.map(functor); }
 
     bool operator==(const CommaSeparatedVector&) const = default;
 
@@ -632,15 +632,15 @@ template<typename T> struct SpaceSeparatedFixedVector {
     }
 
     template<typename SizedRange, typename Mapper>
-    static SpaceSeparatedFixedVector map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static SpaceSeparatedFixedVector map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
-        return Container::map(std::forward<SizedRange>(range), std::forward<Mapper>(mapper));
+        return Container::map(std::forward<SizedRange>(range), mapper);
     }
 
     template<std::invocable<size_t> Generator>
-    static SpaceSeparatedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE Generator&& generator)
+    static SpaceSeparatedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE const Generator& generator)
     {
-        return Container::createWithSizeFromGenerator(size, std::forward<Generator>(generator));
+        return Container::createWithSizeFromGenerator(size, generator);
     }
 
     iterator begin() LIFETIME_BOUND { return value.begin(); }
@@ -700,15 +700,15 @@ template<typename T> struct CommaSeparatedFixedVector {
     }
 
     template<typename SizedRange, typename Mapper>
-    static CommaSeparatedFixedVector map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static CommaSeparatedFixedVector map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
-        return Container::map(std::forward<SizedRange>(range), std::forward<Mapper>(mapper));
+        return Container::map(std::forward<SizedRange>(range), mapper);
     }
 
     template<std::invocable<size_t> Generator>
-    static CommaSeparatedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE Generator&& generator)
+    static CommaSeparatedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE const Generator& generator)
     {
-        return Container::createWithSizeFromGenerator(size, std::forward<Generator>(generator));
+        return Container::createWithSizeFromGenerator(size, generator);
     }
 
     iterator begin() LIFETIME_BOUND { return value.begin(); }
@@ -766,16 +766,16 @@ template<typename T> struct SpaceSeparatedRefCountedFixedVector {
     }
 
     template<typename SizedRange, typename Mapper>
-    static SpaceSeparatedRefCountedFixedVector map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static SpaceSeparatedRefCountedFixedVector map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
         auto size = range.size();
-        return Container::map(size, std::forward<SizedRange>(range), std::forward<Mapper>(mapper));
+        return Container::map(size, std::forward<SizedRange>(range), mapper);
     }
 
     template<std::invocable<size_t> Generator>
-    static SpaceSeparatedRefCountedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE Generator&& generator)
+    static SpaceSeparatedRefCountedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE const Generator& generator)
     {
-        return Container::createWithSizeFromGenerator(size, std::forward<Generator>(generator));
+        return Container::createWithSizeFromGenerator(size, generator);
     }
 
     iterator begin() LIFETIME_BOUND { return value->begin(); }
@@ -831,16 +831,16 @@ template<typename T> struct CommaSeparatedRefCountedFixedVector {
     }
 
     template<typename SizedRange, typename Mapper>
-    static CommaSeparatedRefCountedFixedVector map(SizedRange&& range, NOESCAPE Mapper&& mapper)
+    static CommaSeparatedRefCountedFixedVector map(SizedRange&& range, NOESCAPE const Mapper& mapper)
     {
         auto size = range.size();
-        return Container::map(size, std::forward<SizedRange>(range), std::forward<Mapper>(mapper));
+        return Container::map(size, std::forward<SizedRange>(range), mapper);
     }
 
     template<std::invocable<size_t> Generator>
-    static CommaSeparatedRefCountedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE Generator&& generator)
+    static CommaSeparatedRefCountedFixedVector createWithSizeFromGenerator(size_t size, NOESCAPE const Generator& generator)
     {
-        return Container::createWithSizeFromGenerator(size, std::forward<Generator>(generator));
+        return Container::createWithSizeFromGenerator(size, generator);
     }
 
     iterator begin() LIFETIME_BOUND { return value->begin(); }
@@ -896,7 +896,7 @@ template<typename T, typename K, typename Traits = MarkableTraits<T>> struct Val
         else if constexpr (std::same_as<U, Value>)   return isValue();
     }
 
-    template<typename... F> constexpr decltype(auto) switchOn(F&&... f) const
+    template<typename... F> constexpr decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -966,7 +966,7 @@ template<typename T> struct ListOrNone {
     bool isList() const { return !m_value.isEmpty(); }
     const List* tryList() const LIFETIME_BOUND { return isList() ? &m_value : nullptr; }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -1198,7 +1198,7 @@ template<typename Derived, typename T, typename K> struct EnumSetOrKeywordBase {
     constexpr bool isEnumSet() const { return !m_value.isEmpty(); }
     constexpr const EnumSet* tryEnumSet() const { return isEnumSet() ? &m_value : nullptr; }
 
-    template<typename... F> constexpr decltype(auto) switchOn(F&&... f) const
+    template<typename... F> constexpr decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -1234,6 +1234,21 @@ template<typename T, size_t N> struct SpaceSeparatedArray {
     }
 
     constexpr bool operator==(const SpaceSeparatedArray<T, N>&) const = default;
+
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return std::ranges::any_of(value, functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return std::ranges::all_of(value, functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return std::ranges::none_of(value, functor);
+    }
 
     std::array<T, N> value;
 };
@@ -1286,6 +1301,21 @@ template<typename T> struct MinimallySerializingSpaceSeparatedPair {
     constexpr void transpose() { WebCore::transpose(value); }
     constexpr MinimallySerializingSpaceSeparatedPair<T> transposed() const { return WebCore::transposed(value); }
 
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return value.anyOf(functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return value.allOf(functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return value.noneOf(functor);
+    }
+
     SpaceSeparatedPair<T> value;
 };
 
@@ -1316,6 +1346,21 @@ template<typename T, size_t N> struct CommaSeparatedArray {
     }
 
     constexpr bool operator==(const CommaSeparatedArray<T, N>&) const = default;
+
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return std::ranges::any_of(value, functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return std::ranges::all_of(value, functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return std::ranges::none_of(value, functor);
+    }
 
     std::array<T, N> value;
 };
@@ -1400,6 +1445,38 @@ template<size_t I, typename... Ts> decltype(auto) get(const CommaSeparatedTuple<
 template<typename... Ts> inline constexpr auto TreatAsTupleLike<CommaSeparatedTuple<Ts...>> = true;
 template<typename... Ts> inline constexpr auto SerializationSeparator<CommaSeparatedTuple<Ts...>> = SerializationSeparatorType::Comma;
 
+// Wraps a variadic list of types, semantically marking them as serializing as "slash separated".
+template<typename... Ts> struct SlashSeparatedTuple {
+    using Tuple = std::tuple<Ts...>;
+
+    constexpr SlashSeparatedTuple(Ts&&... values)
+        : value { std::make_tuple(std::forward<Ts>(values)...) }
+    {
+    }
+
+    constexpr SlashSeparatedTuple(const Ts&... values)
+        : value { std::make_tuple(values...) }
+    {
+    }
+
+    constexpr SlashSeparatedTuple(std::tuple<Ts...>&& tuple)
+        : value { WTF::move(tuple) }
+    {
+    }
+
+    constexpr bool operator==(const SlashSeparatedTuple<Ts...>&) const = default;
+
+    std::tuple<Ts...> value;
+};
+
+template<size_t I, typename... Ts> decltype(auto) get(const SlashSeparatedTuple<Ts...>& tuple)
+{
+    return std::get<I>(tuple.value);
+}
+
+template<typename... Ts> inline constexpr auto TreatAsTupleLike<SlashSeparatedTuple<Ts...>> = true;
+template<typename... Ts> inline constexpr auto SerializationSeparator<SlashSeparatedTuple<Ts...>> = SerializationSeparatorType::Slash;
+
 // Wraps a pair of elements of a single type representing a point, semantically marking them as serializing as "space separated".
 template<typename T> struct SpaceSeparatedPoint {
     using Array = SpaceSeparatedPair<T>;
@@ -1422,6 +1499,21 @@ template<typename T> struct SpaceSeparatedPoint {
 
     constexpr void transpose() { WebCore::transpose(value); }
     constexpr SpaceSeparatedPoint<T> transposed() const { return WebCore::transposed(value); }
+
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return value.anyOf(functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return value.allOf(functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return value.noneOf(functor);
+    }
 
     SpaceSeparatedPair<T> value;
 };
@@ -1456,6 +1548,21 @@ template<typename T> struct SpaceSeparatedSize {
 
     constexpr void transpose() { WebCore::transpose(value); }
     constexpr SpaceSeparatedSize<T> transposed() const { return WebCore::transposed(value); }
+
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return value.anyOf(functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return value.allOf(functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return value.noneOf(functor);
+    }
 
     SpaceSeparatedPair<T> value;
 };
@@ -1496,6 +1603,21 @@ template<typename T> struct MinimallySerializingSpaceSeparatedPoint {
     constexpr void transpose() { WebCore::transpose(value); }
     constexpr MinimallySerializingSpaceSeparatedPoint<T> transposed() const { return WebCore::transposed(value); }
 
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return value.anyOf(functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return value.allOf(functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return value.noneOf(functor);
+    }
+
     SpaceSeparatedPair<T> value;
 };
 
@@ -1535,6 +1657,21 @@ template<typename T> struct MinimallySerializingSpaceSeparatedSize {
 
     constexpr void transpose() { WebCore::transpose(value); }
     constexpr MinimallySerializingSpaceSeparatedSize<T> transposed() const { return WebCore::transposed(value); }
+
+    template<typename F> bool anyOf(NOESCAPE const F& functor) const
+    {
+        return value.anyOf(functor);
+    }
+
+    template<typename F> bool allOf(NOESCAPE const F& functor) const
+    {
+        return value.allOf(functor);
+    }
+
+    template<typename F> bool noneOf(NOESCAPE const F& functor) const
+    {
+        return value.noneOf(functor);
+    }
 
     SpaceSeparatedPair<T> value;
 };
@@ -1814,15 +1951,15 @@ template<typename T> TextStream& operator<<(TextStream& ts, const CommaSeparated
     return ts;
 }
 
-template<typename T> TextStream& operator<<(TextStream& ts, const SpaceSeparatedListHashSet<T>& value)
+template<typename T> TextStream& operator<<(TextStream& ts, const SpaceSeparatedOrderedHashSet<T>& value)
 {
-    logForCSSOnRangeLike(ts, value, SerializationSeparatorString<SpaceSeparatedListHashSet<T>>);
+    logForCSSOnRangeLike(ts, value, SerializationSeparatorString<SpaceSeparatedOrderedHashSet<T>>);
     return ts;
 }
 
-template<typename T> TextStream& operator<<(TextStream& ts, const CommaSeparatedListHashSet<T>& value)
+template<typename T> TextStream& operator<<(TextStream& ts, const CommaSeparatedOrderedHashSet<T>& value)
 {
-    logForCSSOnRangeLike(ts, value, SerializationSeparatorString<CommaSeparatedListHashSet<T>>);
+    logForCSSOnRangeLike(ts, value, SerializationSeparatorString<CommaSeparatedOrderedHashSet<T>>);
     return ts;
 }
 
@@ -1871,6 +2008,12 @@ template<typename... Ts> TextStream& operator<<(TextStream& ts, const SpaceSepar
 template<typename... Ts> TextStream& operator<<(TextStream& ts, const CommaSeparatedTuple<Ts...>& value)
 {
     logForCSSOnTupleLike(ts, value, SerializationSeparatorString<CommaSeparatedTuple<Ts...>>);
+    return ts;
+}
+
+template<typename... Ts> TextStream& operator<<(TextStream& ts, const SlashSeparatedTuple<Ts...>& value)
+{
+    logForCSSOnTupleLike(ts, value, SerializationSeparatorString<SlashSeparatedTuple<Ts...>>);
     return ts;
 }
 
@@ -1969,6 +2112,12 @@ public:
     using type = tuple_element_t<I, tuple<Ts...>>;
 };
 
+template<typename... Ts> class tuple_size<WebCore::SlashSeparatedTuple<Ts...>> : public std::integral_constant<size_t, sizeof...(Ts)> { };
+template<size_t I, typename... Ts> class tuple_element<I, WebCore::SlashSeparatedTuple<Ts...>> {
+public:
+    using type = tuple_element_t<I, tuple<Ts...>>;
+};
+
 template<typename T> class tuple_size<WebCore::MinimallySerializingSpaceSeparatedPair<T>> : public std::integral_constant<size_t, 2> { };
 template<size_t I, typename T> class tuple_element<I, WebCore::MinimallySerializingSpaceSeparatedPair<T>> {
 public:
@@ -2034,10 +2183,10 @@ template<typename T>
 struct supports_text_stream_insertion<WebCore::CommaSeparatedEnumSet<T>> : supports_text_stream_insertion<T> { };
 
 template<typename T>
-struct supports_text_stream_insertion<WebCore::SpaceSeparatedListHashSet<T>> : supports_text_stream_insertion<T> { };
+struct supports_text_stream_insertion<WebCore::SpaceSeparatedOrderedHashSet<T>> : supports_text_stream_insertion<T> { };
 
 template<typename T>
-struct supports_text_stream_insertion<WebCore::CommaSeparatedListHashSet<T>> : supports_text_stream_insertion<T> { };
+struct supports_text_stream_insertion<WebCore::CommaSeparatedOrderedHashSet<T>> : supports_text_stream_insertion<T> { };
 
 template<typename T, size_t inlineCapacity>
 struct supports_text_stream_insertion<WebCore::SpaceSeparatedVector<T, inlineCapacity>> : supports_text_stream_insertion<T> { };

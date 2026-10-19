@@ -30,7 +30,6 @@
 #include "GeometryUtilities.h"
 #include "Path.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
-#include "TransformOperationData.h"
 #include <wtf/TinyLRUCache.h>
 
 namespace WebCore {
@@ -40,7 +39,7 @@ namespace Style {
 
 struct RoundedInsetPathPolicy : public TinyLRUCachePolicy<FloatRoundedRect, WebCore::Path> {
 public:
-    static bool NODELETE isKeyNull(const FloatRoundedRect& rect)
+    static bool LEGACY_NODELETE isKeyNull(const FloatRoundedRect& rect)
     {
         return rect.isEmpty();
     }
@@ -84,10 +83,8 @@ WebCore::Path PathComputation<Inset>::operator()(const Inset& value, const Float
 
 #if ENABLE(THREADED_ANIMATIONS)
 
-AcceleratedEffectInsetFunction Evaluation<InsetFunction, AcceleratedEffectInsetFunction>::operator()(const InsetFunction& value, const TransformOperationData& data, ZoomFactor zoom)
+AcceleratedEffectInsetFunction Evaluation<InsetFunction, AcceleratedEffectInsetFunction>::operator()(const InsetFunction& value, const FloatSize& containingBlockSize, ZoomFactor zoom)
 {
-    auto containingBlockSize = data.motionPathData->offsetRect().rect().size();
-
     return {
         .insets = evaluate<RectEdges<float>>(value->insets, containingBlockSize, zoom),
         .radii = evaluate<CornerRadii>(value->radii, containingBlockSize, zoom),

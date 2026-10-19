@@ -34,7 +34,7 @@ namespace Style {
 class ImageSet final : public MultiImage {
     WTF_MAKE_TZONE_ALLOCATED(ImageSet);
 public:
-    static Ref<ImageSet> create(Vector<ImageWithScale>&&, Vector<size_t>&&);
+    static Ref<ImageSet> LEGACY_NODELETE create(Vector<ImageWithScale>&&, Vector<size_t>&&);
     virtual ~ImageSet();
 
     bool operator==(const Image& other) const;
@@ -45,10 +45,11 @@ public:
 private:
     explicit ImageSet(Vector<ImageWithScale>&&, Vector<size_t>&&);
 
-    Ref<CSSValue> computedStyleValue(const RenderStyle&) const final;
+    Ref<CSSValue> computedStyleValue(const Style::ComputedStyle&) const final;
+    Ref<DeprecatedCSSOMValue> computedStyleDeprecatedCSSOMValue(CSSValuePool&, const Style::ComputedStyle&, CSSStyleDeclaration&) const final;
 
     ImageWithScale bestImageForScaleFactor();
-    void NODELETE updateDeviceScaleFactor(const Document&);
+    void LEGACY_NODELETE updateDeviceScaleFactor(const Document&);
 
     bool m_accessedBestFitImage { false };
     ImageWithScale m_bestFitImage;

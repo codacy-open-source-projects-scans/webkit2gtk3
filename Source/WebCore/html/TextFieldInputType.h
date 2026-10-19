@@ -54,6 +54,9 @@ class TextFieldInputType : public InputType, protected SpinButtonOwner, protecte
 public:
     bool valueMissing(StringView) const final;
 
+    void ref() const override { InputType::ref(); }
+    void deref() const override { InputType::deref(); }
+
 protected:
     explicit TextFieldInputType(Type, HTMLInputElement&);
     virtual ~TextFieldInputType();
@@ -61,12 +64,12 @@ protected:
     void handleKeydownEventForSpinButton(KeyboardEvent&);
     void handleClickEvent(MouseEvent&) final;
 
-    HTMLElement* NODELETE containerElement() const final;
-    HTMLElement* NODELETE innerBlockElement() const final;
+    HTMLElement* LEGACY_NODELETE containerElement() const final;
+    HTMLElement* LEGACY_NODELETE innerBlockElement() const final;
     RefPtr<TextControlInnerTextElement> innerTextElement() const final;
-    HTMLElement* NODELETE innerSpinButtonElement() const final;
-    HTMLElement* NODELETE autoFillButtonElement() const final;
-    HTMLElement* NODELETE dataListButtonElement() const final;
+    HTMLElement* LEGACY_NODELETE innerSpinButtonElement() const final;
+    HTMLElement* LEGACY_NODELETE autoFillButtonElement() const final;
+    HTMLElement* LEGACY_NODELETE dataListButtonElement() const final;
 
     virtual bool needsContainer() const { return false; }
     void createShadowSubtree() override;
@@ -91,10 +94,10 @@ private:
     void handleBeforeTextInsertedEvent(BeforeTextInsertedEvent&) override;
     void forwardEvent(Event&) final;
     bool shouldSubmitImplicitly(Event&) final;
-    RenderPtr<RenderElement> createInputRenderer(RenderStyle&&) override;
+    RenderPtr<RenderElement> createInputRenderer(Style::ComputedStyle&&) override;
     bool shouldUseInputMethod() const override { return true; }
     bool shouldRespectListAttribute() override;
-    HTMLElement* NODELETE placeholderElement() const final;
+    HTMLElement* LEGACY_NODELETE placeholderElement() const final;
     void updatePlaceholderText() final;
     bool appendFormData(DOMFormData&) const final;
     void subtreeHasChanged() final;
@@ -131,7 +134,7 @@ private:
     void showPicker() override;
 
     // DataListSuggestionsClient
-    IntRect elementRectInRootViewCoordinates() const final;
+    IntRect elementRectInMainFrameViewCoordinates() const final;
     Vector<DataListSuggestion> suggestions() final;
     std::optional<FrameIdentifier> rootFrameID() const final;
     void didSelectDataListOption(const String&) final;
@@ -151,7 +154,7 @@ private:
     RefPtr<HTMLElement> m_placeholder;
     RefPtr<SpinButtonElement> m_innerSpinButton;
     RefPtr<HTMLElement> m_capsLockIndicator;
-    RefPtr<HTMLElement> m_autoFillButton;
+    RefPtr<AutoFillButtonElement> m_autoFillButton;
 };
 
 } // namespace WebCore

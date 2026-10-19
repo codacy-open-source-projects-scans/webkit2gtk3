@@ -29,7 +29,6 @@
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
 
 #import "EventNames.h"
-#import "EventTargetInlines.h"
 #import "MouseEventTypes.h"
 
 #import <wtf/MathExtras.h>
@@ -92,9 +91,10 @@ PointerEvent::PointerEvent(
         isCancelable,
         typeIsComposed(type),
         event.timestamp(),
-        WTF::move(view),
+        // Not moved: screenLocationForTouchAtIndex() below reads view, and argument evaluation order is unspecified.
+        view.copyRef(),
         0,
-        event.touchLocationInRootViewAtIndex(index),
+        screenLocationForTouchAtIndex(event, index, view),
         event.touchLocationInRootViewAtIndex(index),
         touchDelta.x(),
         touchDelta.y(),

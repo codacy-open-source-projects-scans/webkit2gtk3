@@ -29,7 +29,6 @@
 #include "LocalFrame.h"
 #include "LocalFrameInlines.h"
 #include "FrameDestructionObserverInlines.h"
-#include "NodeInlines.h"
 #include "RemoteFrame.h"
 #include "RemoteFrameClient.h"
 #include "RenderWidget.h"
@@ -147,10 +146,7 @@ bool HTMLFrameOwnerElement::isProhibitedSelfReference(const URL& completeURL) co
         return false;
     // We allow one level of self-reference because some websites depend on that, but we don't allow more than one.
     bool foundOneSelfReference = false;
-    for (RefPtr<Frame> frame = document().frame(); frame; frame = frame->tree().parent()) {
-        RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
-        if (!localFrame)
-            continue;
+    for (Ref localFrame : inclusiveAncestorFrames<LocalFrame>(document().frame())) {
         // Use creationURL() because url() can be changed via History.replaceState() so it's not reliable.
         if (equalIgnoringFragmentIdentifier(localFrame->document()->creationURL(), completeURL)) {
             if (foundOneSelfReference)

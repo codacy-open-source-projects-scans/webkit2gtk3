@@ -36,10 +36,10 @@ public:
     void add(Ref<CloseWatcher>);
     void remove(CloseWatcher&);
 
-    void NODELETE notifyAboutUserActivation();
-    bool NODELETE canPreventClose();
+    void LEGACY_NODELETE notifyAboutUserActivation();
+    bool LEGACY_NODELETE canPreventClose();
 
-    void escapeKeyHandler(KeyboardEvent&);
+    void processCloseWatchers();
 private:
     Vector<Vector<Ref<CloseWatcher>>> m_groups;
     uint32_t m_allowedNumberOfGroups { 1 };

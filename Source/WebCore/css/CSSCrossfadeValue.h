@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "CSSPrimitiveValue.h"
+#include "CSSCrossfade.h"
 #include "CSSValue.h"
 #include <wtf/Function.h>
 
@@ -38,36 +38,24 @@ class Image;
 
 class CSSCrossfadeValue final : public CSSValue {
 public:
-    static Ref<CSSCrossfadeValue> NODELETE create(Ref<CSSValue>&& fromValueOrNone, Ref<CSSValue>&& toValueOrNone, Ref<CSSPrimitiveValue>&& percentageValue, bool isPrefixed = false);
+    static Ref<CSSCrossfadeValue> create(CSS::CrossfadeFunction&&);
+    static Ref<CSSCrossfadeValue> create(CSS::WebkitCrossfadeFunction&&);
 
     ~CSSCrossfadeValue();
 
     bool equals(const CSSCrossfadeValue&) const;
-    bool equalInputImages(const CSSCrossfadeValue&) const;
 
     String customCSSText(const CSS::SerializationContext&) const;
-    bool isPrefixed() const { return m_isPrefixed; }
 
     RefPtr<Style::Image> createStyleImage(const Style::BuilderState&) const;
 
-    IterationStatus customVisitChildren(NOESCAPE const Function<IterationStatus(CSSValue&)>& func) const
-    {
-        if (func(m_fromValueOrNone.get()) == IterationStatus::Done)
-            return IterationStatus::Done;
-        if (func(m_toValueOrNone.get()) == IterationStatus::Done)
-            return IterationStatus::Done;
-        if (func(m_percentageValue.get()) == IterationStatus::Done)
-            return IterationStatus::Done;
-        return IterationStatus::Continue;
-    }
+    IterationStatus customVisitChildren(NOESCAPE const Function<IterationStatus(CSSValue&)>&) const;
 
 private:
-    CSSCrossfadeValue(Ref<CSSValue>&& fromValueOrNone, Ref<CSSValue>&& toValueOrNone, Ref<CSSPrimitiveValue>&& percentageValue, bool isPrefixed);
+    explicit CSSCrossfadeValue(CSS::CrossfadeFunction&&);
+    explicit CSSCrossfadeValue(CSS::WebkitCrossfadeFunction&&);
 
-    const Ref<CSSValue> m_fromValueOrNone;
-    const Ref<CSSValue> m_toValueOrNone;
-    const Ref<CSSPrimitiveValue> m_percentageValue;
-    bool m_isPrefixed;
+    Variant<CSS::CrossfadeFunction, CSS::WebkitCrossfadeFunction> m_function;
 };
 
 } // namespace WebCore

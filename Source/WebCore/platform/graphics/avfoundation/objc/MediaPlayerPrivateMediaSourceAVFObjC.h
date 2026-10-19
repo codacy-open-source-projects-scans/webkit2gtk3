@@ -39,8 +39,9 @@
 #include <wtf/HashMap.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
+#include <wtf/MonotonicTime.h>
 #include <wtf/NativePromise.h>
-#include <wtf/RefCountedAndCanMakeWeakPtr.h>
+#include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 
@@ -66,13 +67,14 @@ class VideoMediaSampleRenderer;
 class VideoTrackPrivate;
 
 class MediaPlayerPrivateMediaSourceAVFObjC
-    : public RefCountedAndCanMakeWeakPtr<MediaPlayerPrivateMediaSourceAVFObjC>
-    , public MediaPlayerPrivateInterface
+    : public MediaPlayerPrivateInterface
+    , public ThreadSafeRefCounted<MediaPlayerPrivateMediaSourceAVFObjC, WTF::DestructionThread::Main>
+    , public CanMakeWeakPtr<MediaPlayerPrivateMediaSourceAVFObjC>
     , private LoggerHelper
 {
 public:
-    void ref() const final { RefCounted::ref(); }
-    void deref() const final { RefCounted::deref(); }
+    void ref() const final { ThreadSafeRefCounted::ref(); }
+    void deref() const final { ThreadSafeRefCounted::deref(); }
 
     explicit MediaPlayerPrivateMediaSourceAVFObjC(MediaPlayer&);
     virtual ~MediaPlayerPrivateMediaSourceAVFObjC();
@@ -99,14 +101,16 @@ public:
     void setReadyState(MediaPlayer::ReadyState);
     void setNetworkState(MediaPlayer::NetworkState);
 
-    void NODELETE setLoadingProgresssed(bool);
+    void LEGACY_NODELETE setLoadingProgresssed(bool);
     void setHasAvailableVideoFrame(bool);
     bool hasAvailableVideoFrame() const override;
     void durationChanged();
 
     void effectiveRateChanged();
+    void notifyEndOfMediaIfNeeded();
     void setNaturalSize(const FloatSize&);
     void characteristicsFromMediaSourceChanged() final;
+    void seekableRangesFromMediaSourceChanged() final;
 
     MediaTime currentTime() const override;
     MediaTime currentOrPendingSeekTime() const final { return currentTime(); }
@@ -124,7 +128,7 @@ public:
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     void setCDMSession(LegacyCDMSession*) override;
-    RefPtr<CDMSessionAVContentKeySession> cdmSession() const;
+    RefPtr<CDMSessionAVContentKeySession> LEGACY_NODELETE cdmSession() const;
     void keyAdded() final;
 #endif
 
@@ -169,7 +173,7 @@ public:
     const Logger& mediaPlayerLogger() { return logger(); }
 #endif
 
-    bool NODELETE supportsLimitedMatroska() const;
+    bool LEGACY_NODELETE supportsLimitedMatroska() const;
 
 private:
     // MediaPlayerPrivateInterface
@@ -181,7 +185,7 @@ private:
     void cancelLoad() override;
 
     void prepareToPlay() override;
-    PlatformLayer* platformLayer() const override;
+    PlatformLayer* platformLayer() override;
 
     bool supportsPictureInPicture() const override { return true; }
     bool supportsFullscreen() const override { return true; }
@@ -207,13 +211,14 @@ private:
     void setPageIsVisible(bool) final;
     void setViewportVisibility(ViewportVisibility) final;
     void updateRendererVisibility();
+    bool LEGACY_NODELETE shouldTeardownOnVisibilityChange() const;
 
     MediaTime duration() const override;
     MediaTime startTime() const override;
     MediaTime initialTime() const override;
 
-    void seekToTarget(const SeekTarget&) final;
-    bool seeking() const final;
+    Ref<MediaTimePromise> seekToTarget(const SeekTarget&) final;
+    bool LEGACY_NODELETE seeking() const;
     void setRateDouble(double) override;
     double rate() const override;
     double effectiveRate() const override;
@@ -234,7 +239,7 @@ private:
     void paintCurrentFrameInContext(GraphicsContext&, const FloatRect&) override;
     RefPtr<VideoFrame> videoFrameForCurrentTime() final;
     Ref<BitmapImagePromise> bitmapImageForCurrentTime() final;
-    DestinationColorSpace colorSpace() final;
+    ColorSpace colorSpace() final;
 
     bool supportsAcceleratedRendering() const override;
     // called when the rendering system flips the into or out of accelerated rendering mode.
@@ -243,7 +248,7 @@ private:
 
     void setPresentationSize(const IntSize&) final;
 
-    Ref<AudioVideoRenderer> NODELETE audioVideoRenderer() const;
+    Ref<AudioVideoRenderer> LEGACY_NODELETE audioVideoRenderer() const;
 
 
     // NOTE: Because the only way for MSE to recieve data is through an ArrayBuffer provided by
@@ -306,7 +311,7 @@ private:
     void updateStateFromReadyState();
     void mediaSourceHasRetrievedAllData() final;
 
-    bool supportsProgressMonitoring() const final { return false; }
+    bool supportsProgressMonitoring() const final;
 
 #if ENABLE(LINEAR_MEDIA_PLAYER)
     bool supportsLinearMediaPlayer() const final { return true; }
@@ -314,6 +319,7 @@ private:
 
     friend class MediaSourcePrivateAVFObjC;
     void bufferedChanged();
+    void resetStallForTime(const MediaTime&);
     void stall();
     void timeChanged();
 
@@ -332,6 +338,7 @@ private:
 
     // Remote layer support
     WebCore::HostingContext hostingContext() const final;
+    Ref<HostingContextPromise> requestHostingContext() final;
     void setVideoLayerSizeFenced(const WebCore::FloatSize&, WTF::MachSendRightAnnotated&&) final;
     std::optional<MediaPlayerIdentifier> identifier() const final { return m_playerIdentifier; }
 
@@ -351,11 +358,13 @@ private:
 
     // Seeking
     Timer m_seekTimer WTF_GUARDED_BY_CAPABILITY(mainThread);
-    bool m_seeking  WTF_GUARDED_BY_CAPABILITY(mainThread) { false };
     std::optional<SeekTarget> m_pendingSeek WTF_GUARDED_BY_CAPABILITY(mainThread);
     const Ref<NativePromiseRequest> m_waitForTargetRequest WTF_GUARDED_BY_CAPABILITY(mainThread);
     const Ref<NativePromiseRequest> m_rendererPrepareSeekRequest WTF_GUARDED_BY_CAPABILITY(mainThread);
     const Ref<NativePromiseRequest> m_rendererFinishSeekRequest WTF_GUARDED_BY_CAPABILITY(mainThread);
+    const Ref<NativePromiseRequest> m_stallRequest WTF_GUARDED_BY_CAPABILITY(mainThread);
+    std::optional<MediaTimePromise::AutoRejectProducer> m_seekPromise WTF_GUARDED_BY_CAPABILITY(mainThread);
+    bool m_seeking WTF_GUARDED_BY_CAPABILITY(mainThread) { false };
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     ThreadSafeWeakPtr<CDMSessionAVContentKeySession> m_session;
@@ -372,7 +381,6 @@ private:
     bool m_allRenderersHaveAvailableSamples WTF_GUARDED_BY_CAPABILITY(mainThread) { false };
     bool m_pageIsVisible WTF_GUARDED_BY_CAPABILITY(mainThread) { false };
     ViewportVisibility m_viewportVisibility WTF_GUARDED_BY_CAPABILITY(mainThread) { ViewportVisibility::NotVisible };
-    RetainPtr<CVOpenGLTextureRef> m_lastTexture WTF_GUARDED_BY_CAPABILITY(mainThread);
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     RefPtr<MediaPlaybackTarget> m_playbackTarget WTF_GUARDED_BY_CAPABILITY(mainThread);
     bool m_shouldPlayToTarget WTF_GUARDED_BY_CAPABILITY(mainThread) { false };

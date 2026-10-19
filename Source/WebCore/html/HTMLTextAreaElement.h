@@ -37,7 +37,7 @@ class HTMLTextAreaElement final : public HTMLTextFormControlElement {
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(HTMLTextAreaElement);
 public:
     WEBCORE_EXPORT static Ref<HTMLTextAreaElement> create(Document&);
-    static Ref<HTMLTextAreaElement> create(const QualifiedName&, Document&, HTMLFormElement*);
+    static Ref<HTMLTextAreaElement> create(const QualifiedName&, Document&);
 
     unsigned rows() const { return m_rows; }
     WEBCORE_EXPORT void setRows(unsigned);
@@ -61,7 +61,7 @@ public:
     bool dirAutoUsesValue() const final { return true; }
 
 private:
-    HTMLTextAreaElement(Document&, HTMLFormElement*);
+    HTMLTextAreaElement(const QualifiedName&, Document&);
 
     void didAddUserAgentShadowRoot(ShadowRoot&) final;
 
@@ -78,14 +78,14 @@ private:
     void updatePlaceholderText() final;
     bool isEmptyValue() const final { return value()->isEmpty(); }
 
-    bool NODELETE isOptionalFormControl() const final { return !isRequiredFormControl(); }
-    bool NODELETE isRequiredFormControl() const final { return isRequired(); }
+    bool LEGACY_NODELETE isOptionalFormControl() const final { return !isRequiredFormControl(); }
+    bool LEGACY_NODELETE isRequiredFormControl() const final { return isRequired(); }
 
     void defaultEventHandler(Event&) final;
     
     void subtreeHasChanged() final;
 
-    bool NODELETE isEnumeratable() const final { return true; }
+    bool LEGACY_NODELETE isEnumeratable() const final { return true; }
     bool isLabelable() const final { return true; }
 
     bool isInteractiveContent() const final { return true; }
@@ -101,10 +101,11 @@ private:
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;
     bool hasPresentationalHintsForAttribute(const QualifiedName&) const final;
     void collectPresentationalHintsForAttribute(const QualifiedName&, const AtomString&, MutableStyleProperties&) final;
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
+    bool LEGACY_NODELETE supportsBaseAppearance(StyleAppearance) const final;
+    RenderPtr<RenderElement> createElementRenderer(Style::ComputedStyle&&, const RenderTreePosition&) final;
     bool appendFormData(DOMFormData&) final;
     void reset() final;
-    bool NODELETE hasCustomFocusLogic() const final { return true; }
+    bool LEGACY_NODELETE hasCustomFocusLogic() const final { return true; }
     int defaultTabIndex() const final { return 0; }
     bool isMouseFocusable() const final { return isFocusable(); }
     bool isKeyboardFocusable(const FocusEventData&) const final { return isFocusable(); }
@@ -125,7 +126,7 @@ private:
     bool tooLong(StringView valueOverride, NeedsToCheckDirtyFlag) const;
 
     RefPtr<TextControlInnerTextElement> innerTextElementCreatingShadowSubtreeIfNeeded() final;
-    RenderStyle createInnerTextStyle(const RenderStyle&) final;
+    Style::ComputedStyle createInnerTextStyle(const Style::ComputedStyle&) final;
     void copyNonAttributePropertiesFromElement(const Element&) final;
 
     bool willRespondToMouseClickEventsWithEditability(Editability) const final { return !isDisabledFormControl(); }

@@ -41,17 +41,17 @@ public:
     static Ref<WebBackForwardListFrameItem> create(WebBackForwardListItem&, WebBackForwardListFrameItem* parentItem, Ref<FrameState>&&);
     ~WebBackForwardListFrameItem();
 
-    static WebBackForwardListFrameItem* NODELETE itemForID(WebCore::BackForwardItemIdentifier, WebCore::BackForwardFrameItemIdentifier);
+    static WebBackForwardListFrameItem* LEGACY_NODELETE itemForID(WebCore::BackForwardItemIdentifier, WebCore::BackForwardFrameItemIdentifier);
 
     FrameState& frameState() const { return m_frameState; }
-    void setFrameState(Ref<FrameState>&&);
+    void updateFrameStatePayload(Ref<FrameState>&&);
 
     Ref<FrameState> copyFrameState();
     Ref<FrameState> copyFrameStateWithChildren();
 
-    std::optional<WebCore::FrameIdentifier> NODELETE frameID() const;
+    std::optional<WebCore::FrameIdentifier> LEGACY_NODELETE frameID() const;
     WebCore::BackForwardFrameItemIdentifier identifier() const { return m_identifier; }
-    const String& NODELETE url() const LIFETIME_BOUND;
+    const String& LEGACY_NODELETE url() const LIFETIME_BOUND;
 
     WebBackForwardListFrameItem* parent() const { return m_parent; }
     void setParent(WebBackForwardListFrameItem* parent) { m_parent = parent; }
@@ -59,17 +59,19 @@ public:
 
     Ref<WebBackForwardListFrameItem> rootFrame();
     Ref<WebBackForwardListFrameItem> mainFrame();
-    WebBackForwardListFrameItem* NODELETE childItemForFrameID(WebCore::FrameIdentifier);
-    WebBackForwardListFrameItem* NODELETE childItemAtIndex(uint64_t);
+    WebBackForwardListFrameItem* LEGACY_NODELETE childItemForFrameID(WebCore::FrameIdentifier);
+    WebBackForwardListFrameItem* LEGACY_NODELETE childItemForFrameName(const String& frameName);
+    WebBackForwardListFrameItem* LEGACY_NODELETE childItemAtIndex(uint64_t);
+    const Vector<Ref<WebBackForwardListFrameItem>>& children() const { return m_children; }
 
-    WebBackForwardListItem* NODELETE backForwardListItem() const;
+    WebBackForwardListItem* LEGACY_NODELETE backForwardListItem() const;
 
     void setChild(Ref<FrameState>&&);
     void clearChildren() { m_children.clear(); }
 
-    void NODELETE updateFrameID(WebCore::FrameIdentifier);
+    void LEGACY_NODELETE updateFrameID(WebCore::FrameIdentifier);
 
-    void NODELETE setWasRestoredFromSession();
+    void LEGACY_NODELETE setWasRestoredFromSession();
 
     String loggingString();
 
@@ -77,19 +79,21 @@ private:
     WebBackForwardListFrameItem(WebBackForwardListItem&, WebBackForwardListFrameItem* parentItem, Ref<FrameState>&&);
 
     String loggingStringAtIndent(size_t);
+    size_t insertionIndexForChild(std::optional<WebCore::FrameIdentifier>) const;
 
-    static HashMap<std::pair<WebCore::BackForwardFrameItemIdentifier, WebCore::BackForwardItemIdentifier>, WeakRef<WebBackForwardListFrameItem>>& NODELETE allItems();
+    static HashMap<std::pair<WebCore::BackForwardFrameItemIdentifier, WebCore::BackForwardItemIdentifier>, WeakRef<WebBackForwardListFrameItem>>& LEGACY_NODELETE allItems();
 
     WeakPtr<WebBackForwardListItem> m_backForwardListItem;
     const WebCore::BackForwardFrameItemIdentifier m_identifier;
-    Ref<FrameState> m_frameState;
+    const Ref<FrameState> m_frameState;
     WeakPtr<WebBackForwardListFrameItem> m_parent;
     Vector<Ref<WebBackForwardListFrameItem>> m_children;
 
-} SWIFT_SHARED_REFERENCE(refWebBackForwardListFrameItem, derefWebBackForwardListFrameItem);
+} DERIVED_CLASS_SWIFT_SHARED_REFERENCE(refWebBackForwardListFrameItem, derefWebBackForwardListFrameItem);
 
 } // namespace WebKit
 
+#if !ENABLE(SWIFT_BASE_CLASS_ANNOTATIONS)
 inline void refWebBackForwardListFrameItem(WebKit::WebBackForwardListFrameItem* obj)
 {
     obj->ref();
@@ -99,3 +103,4 @@ inline void derefWebBackForwardListFrameItem(WebKit::WebBackForwardListFrameItem
 {
     obj->deref();
 }
+#endif

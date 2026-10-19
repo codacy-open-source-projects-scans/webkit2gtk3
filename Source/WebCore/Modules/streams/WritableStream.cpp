@@ -38,6 +38,8 @@
 #include "StreamPipeOptions.h"
 #include "StreamPipeToUtilities.h"
 #include "StreamTransferUtilities.h"
+#include "WritableStreamDefaultWriter.h"
+#include <JavaScriptCore/CallFrameInlines.h>
 
 namespace WebCore {
 
@@ -78,7 +80,7 @@ ExceptionOr<Ref<InternalWritableStream>> WritableStream::createInternalWritableS
 
 ExceptionOr<Ref<WritableStream>> WritableStream::create(JSC::JSGlobalObject& globalObject, JSC::JSValue underlyingSink, JSC::JSValue strategy)
 {
-    auto result = InternalWritableStream::createFromUnderlyingSink(uncheckedDowncast<JSDOMGlobalObject>(globalObject), underlyingSink, strategy);
+    auto result = InternalWritableStream::createFromUnderlyingSink(downcast<JSDOMGlobalObject>(globalObject), underlyingSink, strategy);
     if (result.hasException())
         return result.releaseException();
 
@@ -176,9 +178,9 @@ JSC::JSValue JSWritableStream::close(JSC::JSGlobalObject& globalObject, JSC::Cal
     return wrapped().internalWritableStream().closeForBindings(globalObject);
 }
 
-JSC::JSValue JSWritableStream::getWriter(JSC::JSGlobalObject& globalObject, JSC::CallFrame&)
+ExceptionOr<Ref<WritableStreamDefaultWriter>> WritableStream::getWriter(JSDOMGlobalObject& globalObject)
 {
-    return wrapped().internalWritableStream().getWriter(globalObject);
+    return WritableStreamDefaultWriter::create(globalObject, *this);
 }
 
 } // namespace WebCore

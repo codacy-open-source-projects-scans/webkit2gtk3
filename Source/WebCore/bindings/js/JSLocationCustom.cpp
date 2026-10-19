@@ -30,6 +30,7 @@
 #include "WebCoreJSClientData.h"
 #include "WebCoreOpaqueRoot.h"
 #include "WebCoreOpaqueRootInlines.h"
+#include <JavaScriptCore/GetterSetter.h>
 #include <JavaScriptCore/JSFunction.h>
 #include <JavaScriptCore/Lookup.h>
 #include <wtf/RuntimeApplicationChecks.h>
@@ -42,7 +43,7 @@ static bool getOwnPropertySlotCommon(JSLocation& thisObject, JSGlobalObject& lex
     VM& vm = lexicalGlobalObject.vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto* window = thisObject.wrapped().window();
+    RefPtr window = thisObject.wrapped().window();
 
     // When accessing Location cross-domain, functions are always the native built-in ones.
     // See JSDOMWindow::getOwnPropertySlotDelegate for additional details.
@@ -121,7 +122,7 @@ bool JSLocation::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Property
     // However, allowing assigning of pieces might inadvertently disclose parts of the original location.
     // So fall through to the access check for those.
     String errorMessage;
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, thisObject->wrapped().window(), errorMessage)) {
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, protect(thisObject->wrapped().window()), errorMessage)) {
         if (propertyName == builtinNames(vm).hrefPublicName()) {
             auto setter = s_info.staticPropHashTable->entry(propertyName)->propertyPutter();
             scope.release();
@@ -141,7 +142,7 @@ bool JSLocation::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, u
     auto* thisObject = uncheckedDowncast<JSLocation>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
 
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), ThrowSecurityError))
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped().window()), ThrowSecurityError))
         return false;
 
     return JSObject::putByIndex(cell, lexicalGlobalObject, index, value, shouldThrow);
@@ -151,7 +152,7 @@ bool JSLocation::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObjec
 {
     JSLocation* thisObject = uncheckedDowncast<JSLocation>(cell);
     // Only allow deleting by frames in the same origin.
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), ThrowSecurityError))
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped().window()), ThrowSecurityError))
         return false;
     return Base::deleteProperty(thisObject, lexicalGlobalObject, propertyName, slot);
 }
@@ -160,7 +161,7 @@ bool JSLocation::deletePropertyByIndex(JSCell* cell, JSGlobalObject* lexicalGlob
 {
     JSLocation* thisObject = uncheckedDowncast<JSLocation>(cell);
     // Only allow deleting by frames in the same origin.
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), ThrowSecurityError))
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped().window()), ThrowSecurityError))
         return false;
     return Base::deletePropertyByIndex(thisObject, lexicalGlobalObject, propertyName);
 }
@@ -168,7 +169,7 @@ bool JSLocation::deletePropertyByIndex(JSCell* cell, JSGlobalObject* lexicalGlob
 void JSLocation::getOwnPropertyNames(JSObject* object, JSGlobalObject* lexicalGlobalObject, PropertyNameArrayBuilder& propertyNames, DontEnumPropertiesMode mode)
 {
     JSLocation* thisObject = uncheckedDowncast<JSLocation>(object);
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), DoNotReportSecurityError)) {
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped().window()), DoNotReportSecurityError)) {
         if (mode == DontEnumPropertiesMode::Include)
             addCrossOriginOwnPropertyNames<CrossOriginObject::Location>(*lexicalGlobalObject, propertyNames);
         return;
@@ -179,7 +180,7 @@ void JSLocation::getOwnPropertyNames(JSObject* object, JSGlobalObject* lexicalGl
 bool JSLocation::defineOwnProperty(JSObject* object, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, const PropertyDescriptor& descriptor, bool throwException)
 {
     JSLocation* thisObject = uncheckedDowncast<JSLocation>(object);
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), ThrowSecurityError))
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped().window()), ThrowSecurityError))
         return false;
 
     return Base::defineOwnProperty(object, lexicalGlobalObject, propertyName, descriptor, throwException);
@@ -188,7 +189,7 @@ bool JSLocation::defineOwnProperty(JSObject* object, JSGlobalObject* lexicalGlob
 JSValue JSLocation::getPrototype(JSObject* object, JSGlobalObject* lexicalGlobalObject)
 {
     JSLocation* thisObject = uncheckedDowncast<JSLocation>(object);
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), DoNotReportSecurityError))
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, protect(thisObject->wrapped().window()), DoNotReportSecurityError))
         return jsNull();
 
     return Base::getPrototype(object, lexicalGlobalObject);
@@ -202,7 +203,8 @@ bool JSLocation::preventExtensions(JSObject*, JSGlobalObject*)
 template<typename Visitor>
 void JSLocation::visitAdditionalChildrenInGCThread(Visitor& visitor)
 {
-    if (auto* ancestorOrigins = wrapped().cachedAncestorOrigins())
+    // Cannot ref on the GC thread.
+    if (SUPPRESS_UNCOUNTED_LOCAL auto* ancestorOrigins = wrapped().cachedAncestorOrigins())
         addWebCoreOpaqueRoot(visitor, WebCoreOpaqueRoot(ancestorOrigins));
 }
 

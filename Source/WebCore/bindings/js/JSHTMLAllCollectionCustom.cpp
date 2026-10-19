@@ -46,7 +46,7 @@ JSC_DEFINE_HOST_FUNCTION(callJSHTMLAllCollection, (JSGlobalObject* lexicalGlobal
     VM& vm = lexicalGlobalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto* castedThis = uncheckedDowncast<JSHTMLAllCollection>(callFrame->jsCallee());
+    auto* castedThis = downcast<JSHTMLAllCollection>(callFrame->jsCallee());
     ASSERT(castedThis);
     auto& impl = castedThis->wrapped();
     if (callFrame->argument(0).isUndefined())
@@ -57,7 +57,7 @@ JSC_DEFINE_HOST_FUNCTION(callJSHTMLAllCollection, (JSGlobalObject* lexicalGlobal
     RELEASE_AND_RETURN(scope, JSValue::encode(toJS<IDLNullable<IDLUnion<IDLInterface<HTMLCollection>, IDLInterface<Element>>>>(*lexicalGlobalObject, *castedThis->realm(), impl.namedOrIndexedItemOrItems(WTF::move(nameOrIndex)))));
 }
 
-CallData NODELETE JSHTMLAllCollection::getCallData(JSCell*)
+CallData LEGACY_NODELETE JSHTMLAllCollection::getCallData(JSCell*)
 {
     CallData callData;
     callData.type = CallData::Type::Native;

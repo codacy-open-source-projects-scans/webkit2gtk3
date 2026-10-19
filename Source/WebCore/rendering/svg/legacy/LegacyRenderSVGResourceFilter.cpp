@@ -45,7 +45,7 @@ namespace WebCore {
 WTF_MAKE_TZONE_ALLOCATED_IMPL(FilterData);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyRenderSVGResourceFilter);
 
-LegacyRenderSVGResourceFilter::LegacyRenderSVGResourceFilter(SVGFilterElement& element, RenderStyle&& style)
+LegacyRenderSVGResourceFilter::LegacyRenderSVGResourceFilter(SVGFilterElement& element, Style::ComputedStyle&& style)
     : LegacyRenderSVGResourceContainer(Type::LegacySVGResourceFilter, element, WTF::move(style))
 {
 }
@@ -74,7 +74,7 @@ void LegacyRenderSVGResourceFilter::removeClientFromCache(RenderElement& client)
     }
 }
 
-auto LegacyRenderSVGResourceFilter::applyResource(RenderElement& renderer, const RenderStyle&, GraphicsContext*& context, OptionSet<RenderSVGResourceMode> resourceMode) -> OptionSet<ApplyResult>
+auto LegacyRenderSVGResourceFilter::applyResource(RenderElement& renderer, const Style::ComputedStyle&, GraphicsContext*& context, OptionSet<RenderSVGResourceMode> resourceMode) -> OptionSet<ApplyResult>
 {
     ASSERT(context);
     ASSERT_UNUSED(resourceMode, !resourceMode);
@@ -126,8 +126,8 @@ auto LegacyRenderSVGResourceFilter::applyResource(RenderElement& renderer, const
     // Determine scale factor for filter. The size of intermediate ImageBuffers shouldn't be bigger than kMaxFilterSize.
     ImageBuffer::sizeNeedsClamping(filterData->sourceImageRect.size(), filterScale);
 
-    auto preferredFilterModes = renderer.page().preferredFilterRenderingModes(*context);
-    auto renderingOptions(renderer.settings().showDebugBorders() ? std::make_optional(FilterRenderingOption::ShowDebugOverlay) : std::nullopt);
+    auto preferredFilterModes = protect(renderer.page())->preferredFilterRenderingModes(*context);
+    auto renderingOptions(protect(renderer.settings())->showDebugBorders() ? std::make_optional(FilterRenderingOption::ShowDebugOverlay) : std::nullopt);
 
     // Create the SVGFilterRenderer object.
     filterData->filter = SVGFilterRenderer::create(contextElement.get(), filterElement, {
@@ -144,12 +144,12 @@ auto LegacyRenderSVGResourceFilter::applyResource(RenderElement& renderer, const
     filterData->filter->clampFilterRegionIfNeeded();
 
 #if USE(CAIRO)
-    auto colorSpace = DestinationColorSpace::SRGB();
+    auto colorSpace = ColorSpace::SRGB();
 #else
-    auto colorSpace = DestinationColorSpace::LinearSRGB();
+    auto colorSpace = ColorSpace::LinearSRGB();
 #endif
 
-    auto& results = filterData->filter->ensureResults([&]() {
+    auto& results = protect(filterData->filter)->ensureResults([&]() {
         return makeUnique<FilterResults>();
     });
 
@@ -219,7 +219,7 @@ void LegacyRenderSVGResourceFilter::postApplyResource(RenderElement& renderer, G
 
     if (filterData.targetSwitcher) {
         filterData.state = FilterData::Built;
-        filterData.targetSwitcher->endDrawSourceImage(*context, DestinationColorSpace::LinearSRGB());
+        filterData.targetSwitcher->endDrawSourceImage(*context, ColorSpace::LinearSRGB());
     }
 
     LOG_WITH_STREAM(Filters, stream << "LegacyRenderSVGResourceFilter " << this << " postApplyResource done\n");
@@ -250,7 +250,7 @@ void LegacyRenderSVGResourceFilter::markFilterForRepaint(FilterEffect& effect)
         // Repaint the image on the screen.
         markClientForInvalidation(objectFilterDataPair.key, RepaintInvalidation);
 
-        filterData->filter->clearEffectResult(effect);
+        protect(filterData->filter)->clearEffectResult(effect);
     }
 }
 

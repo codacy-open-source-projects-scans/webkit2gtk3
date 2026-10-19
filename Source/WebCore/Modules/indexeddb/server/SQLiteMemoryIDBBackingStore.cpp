@@ -32,6 +32,7 @@
 #include "Logging.h"
 #include "SQLiteDatabase.h"
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/TextStream.h>
 
 namespace WebCore {
 namespace IDBServer {
@@ -47,7 +48,7 @@ SQLiteMemoryIDBBackingStore::~SQLiteMemoryIDBBackingStore() = default;
 
 IDBError SQLiteMemoryIDBBackingStore::getOrEstablishDatabaseInfo(IDBDatabaseInfo& info)
 {
-    LOG(IndexedDB, "SQLiteMemoryIDBBackingStore::getOrEstablishDatabaseInfo - database %s (in-memory)", identifier().databaseName().utf8().data());
+    LOG_WITH_STREAM(IndexedDB, stream << "SQLiteMemoryIDBBackingStore::getOrEstablishDatabaseInfo - database "_s << identifier().databaseName() << " (in-memory)"_s);
 
     if (databaseInfo()) {
         info = *databaseInfo();
@@ -127,6 +128,12 @@ IDBError SQLiteMemoryIDBBackingStore::getOrEstablishDatabaseInfo(IDBDatabaseInfo
     // Note: Blobs are not actually supported in ephemeral sessions - see webkit.org/b/156347.
     // The blob rejection happens at the SerializedScriptValue level, so these tables stay empty.
     error = ensureValidBlobTables();
+    if (!error.isNull()) {
+        closeSQLiteDB();
+        return error;
+    }
+
+    error = ensureValidFileSystemHandleRecordsTable();
     if (!error.isNull()) {
         closeSQLiteDB();
         return error;

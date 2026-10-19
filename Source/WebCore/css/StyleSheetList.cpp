@@ -26,7 +26,7 @@
 #include "HTMLNames.h"
 #include "HTMLStyleElement.h"
 #include "ShadowRoot.h"
-#include "StyleScope.h"
+#include "StyleDocumentScope.h"
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -115,7 +115,7 @@ bool StyleSheetList::isSupportedPropertyName(const AtomString& name) const
 Vector<AtomString> StyleSheetList::supportedPropertyNames()
 {
     // FIXME: Should be implemented.
-    return Vector<AtomString>();
+    return { };
 }
 
 } // namespace WebCore

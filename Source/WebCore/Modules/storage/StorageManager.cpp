@@ -76,18 +76,17 @@ static ExceptionOr<ConnectionInfo> connectionInfo(NavigatorBase* navigator, Exce
     if (context->canAccessResource(ScriptExecutionContext::ResourceType::StorageManager) == ScriptExecutionContext::HasResourceAccess::No)
         return Exception { exceptionCodeForNoAccess, "Context not access storage"_s };
 
-    RefPtr origin = context->securityOrigin();
-    ASSERT(origin);
+    ASSERT(context->securityOrigin());
 
     if (RefPtr document = dynamicDowncast<Document>(*context)) {
         if (RefPtr connection = document->storageConnection())
-            return ConnectionInfo { *connection, { document->topOrigin().data(), origin->data() } };
+            return ConnectionInfo { *connection, document->storageClientOrigin() };
 
         return Exception { ExceptionCode::InvalidStateError, "Connection is invalid"_s };
     }
 
     if (RefPtr globalScope = dynamicDowncast<WorkerGlobalScope>(*context))
-        return ConnectionInfo { globalScope->storageConnection(), { globalScope->topOrigin().data(), origin->data() } };
+        return ConnectionInfo { globalScope->storageConnection(), globalScope->storageClientOrigin() };
 
     return Exception { ExceptionCode::NotSupportedError };
 }
@@ -139,14 +138,15 @@ void StorageManager::fileSystemGetDirectory(DOMPromiseDeferred<IDLInterface<File
         if (result.hasException())
             return promise.reject(result.releaseException());
 
-        auto [identifier, connection] = result.releaseReturnValue();
+        auto info = result.releaseReturnValue();
         RefPtr context = weakNavigator ? weakNavigator->scriptExecutionContext() : nullptr;
         if (!context) {
-            connection->closeHandle(identifier);
+            protect(info.connection)->closeHandle(info.identifier);
             return promise.reject(Exception { ExceptionCode::InvalidStateError, "Context has stopped"_s });
         }
 
-        promise.resolve(FileSystemDirectoryHandle::create(*context, { }, identifier, protect(*connection)));
+        Ref handle = FileSystemDirectoryHandle::create(*context, String { emptyString() }, info.globalIdentifier, info.identifier, protect(*info.connection));
+        promise.resolve(handle);
     });
 }
 

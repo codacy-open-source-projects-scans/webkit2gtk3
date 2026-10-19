@@ -6,15 +6,12 @@
 
 // DisplayMtl.mm: Metal implementation of DisplayImpl
 
-#ifdef UNSAFE_BUFFERS_BUILD
-#    pragma allow_unsafe_buffers
-#endif
-
 #include "libANGLE/renderer/metal/DisplayMtl.h"
 #include <sys/param.h>
 
 #include "common/apple_platform_utils.h"
 #include "common/system_utils.h"
+#include "common/unsafe_buffers.h"
 #include "gpu_info_util/SystemInfo.h"
 #include "libANGLE/Context.h"
 #include "libANGLE/Display.h"
@@ -187,7 +184,7 @@ bool DisplayMtl::testDeviceLost()
 #endif
 }
 
-egl::Error DisplayMtl::restoreLostDevice(const egl::Display *display)
+egl::Error DisplayMtl::restoreLostDevice(const egl::ThreadSafeDisplay *display)
 {
 #if ANGLE_METAL_LOSE_CONTEXT_ON_ERROR == ANGLE_ENABLED
     // A Metal device cannot be restored, the entire context would have to be
@@ -246,6 +243,10 @@ angle::ObjCPtr<id<MTLDevice>> DisplayMtl::getMetalDeviceMatchingAttribute(
 {
 #if TARGET_OS_OSX || TARGET_OS_MACCATALYST
     auto deviceList = angle::adoptObjCPtr(MTLCopyAllDevices());
+    if ([deviceList count] == 1)
+    {
+        return deviceList[0];
+    }
 
     EGLAttrib high = attribs.get(EGL_PLATFORM_ANGLE_DEVICE_ID_HIGH_ANGLE, 0);
     EGLAttrib low  = attribs.get(EGL_PLATFORM_ANGLE_DEVICE_ID_LOW_ANGLE, 0);
@@ -347,11 +348,10 @@ egl::Error DisplayMtl::waitNative(const gl::Context *context, EGLint engine)
 
 egl::Error DisplayMtl::waitUntilWorkScheduled()
 {
-    for (auto context : mState.contextMap)
-    {
-        auto contextMtl = GetImplAs<ContextMtl>(context.second);
+    mState.contextMap.forEach([](gl::Context *context) {
+        auto contextMtl = GetImplAs<ContextMtl>(context);
         contextMtl->flushCommandBuffer(mtl::WaitUntilScheduled);
-    }
+    });
     return egl::NoError();
 }
 
@@ -458,7 +458,7 @@ gl::Version DisplayMtl::getMaxConformantESVersion() const
     return std::min(getMaxSupportedESVersion(), gl::Version(3, 0));
 }
 
-EGLSyncImpl *DisplayMtl::createSync()
+EGLSyncImpl *ThreadSafeDisplayMtl::createSync()
 {
     return new EGLSyncMtl();
 }
@@ -478,6 +478,7 @@ egl::Error DisplayMtl::makeCurrent(egl::Display *display,
 
 void DisplayMtl::generateExtensions(egl::DisplayExtensions *outExtensions) const
 {
+    outExtensions->createContextRobustness    = true;
     outExtensions->iosurfaceClientBuffer      = true;
     outExtensions->surfacelessContext         = true;
     outExtensions->noConfigContext            = true;
@@ -522,6 +523,8 @@ void DisplayMtl::initializeFrontendFeatures(angle::FrontendFeatures *features) c
     // The Metal backend's handling of compile and link is thread-safe
     ANGLE_FEATURE_CONDITION(features, compileJobIsThreadSafe, true);
     ANGLE_FEATURE_CONDITION(features, linkJobIsThreadSafe, true);
+
+    ANGLE_FEATURE_CONDITION(features, setNeedInitOnInvalidation, true);
 }
 
 void DisplayMtl::populateFeatureList(angle::FeatureList *features)
@@ -789,23 +792,13 @@ void DisplayMtl::ensureCapsInitialized() const
     mNativeCaps.maxViewportWidth     = mNativeCaps.max2DTextureSize;
     mNativeCaps.maxViewportHeight    = mNativeCaps.max2DTextureSize;
 
-    bool isCatalyst = TARGET_OS_MACCATALYST;
-
-    mMaxColorTargetBits = mtl::kMaxColorTargetBitsApple1To3;
-    if (supportsMacGPUFamily(1) || isCatalyst)
+    if (!mFeatures.limitMaxVisibilityQueryOffset.enabled && supportsAppleGPUFamily(7))
     {
-        mMaxColorTargetBits = mtl::kMaxColorTargetBitsMacAndCatalyst;
+        mMaxVisibilityQueryOffset = 262136;
     }
-    else if (supportsAppleGPUFamily(4))
+    else
     {
-        mMaxColorTargetBits = mtl::kMaxColorTargetBitsApple4Plus;
-    }
-
-    if (mFeatures.limitMaxColorTargetBitsForTesting.enabled)
-    {
-        // Set so we have enough for RGBA8 on every attachment
-        // but not enough for RGBA32UI.
-        mMaxColorTargetBits = mNativeCaps.maxColorAttachments * 32;
+        mMaxVisibilityQueryOffset = 65528;
     }
 
     // MSAA
@@ -916,9 +909,6 @@ void DisplayMtl::ensureCapsInitialized() const
     // Metal doesn't support GL_TEXTURE_COMPARE_MODE=GL_NONE for shadow samplers
     mNativeLimitations.noShadowSamplerCompareModeNone = true;
 
-    // Apple platforms require PVRTC1 textures to be squares.
-    mNativeLimitations.squarePvrtc1 = true;
-
     if (mFeatures.disableProgrammableBlending.enabled || !supportsAppleGPUFamily(1))
     {
         const MTLReadWriteTextureTier readWriteTextureTier = [mMetalDevice readWriteTextureSupport];
@@ -962,6 +952,7 @@ void DisplayMtl::initializeExtensions() const
     mNativeExtensions.copyCompressedTextureCHROMIUM = false;
     mNativeExtensions.textureMirrorClampToEdgeEXT   = true;
     mNativeExtensions.depthClampEXT                 = true;
+    mNativeExtensions.rgbxInternalFormatANGLE       = mFeatures.hasTextureSwizzle.enabled;
 
     // EXT_debug_marker is not implemented yet, but the entry points must be exposed for the
     // Metal backend to be used in Chrome (http://anglebug.com/42263519)
@@ -1065,6 +1056,8 @@ void DisplayMtl::initializeExtensions() const
 
     mNativeExtensions.packReverseRowOrderANGLE = true;
 
+    mNativeExtensions.framebufferFlipYMESA = true;
+
     if (mFeatures.hasEvents.enabled)
     {
         // MTLSharedEvent is only available since Metal 2.1
@@ -1094,6 +1087,9 @@ void DisplayMtl::initializeExtensions() const
     // GL_EXT_blend_func_extended
     mNativeExtensions.blendFuncExtendedEXT = true;
     mNativeCaps.maxDualSourceDrawBuffers   = 1;
+
+    // GL_ANGLE_trim_memory
+    mNativeExtensions.trimMemoryANGLE = true;
 
     // GL_ANGLE_shader_pixel_local_storage.
     if (!mFeatures.disableProgrammableBlending.enabled && supportsAppleGPUFamily(1))
@@ -1206,7 +1202,6 @@ void DisplayMtl::initializeTextureCaps() const
     // Disable all depth buffer and stencil buffer readback extensions until we need them
     mNativeExtensions.readDepthNV         = false;
     mNativeExtensions.readStencilNV       = false;
-    mNativeExtensions.depthBufferFloat2NV = false;
 }
 
 void DisplayMtl::initializeFeatures()
@@ -1223,6 +1218,11 @@ void DisplayMtl::initializeFeatures()
     }
 
     ANGLE_FEATURE_CONDITION((&mFeatures), allowGenMultipleMipsPerPass, true);
+
+    // TODO(anglebug.com/537661068): using visibility query offset > 65528 causes bugs in the Apple
+    // Silicon driver.
+    ANGLE_FEATURE_CONDITION((&mFeatures), limitMaxVisibilityQueryOffset, true);
+
     ANGLE_FEATURE_CONDITION((&mFeatures), forceBufferGPUStorage, false);
     ANGLE_FEATURE_CONDITION((&mFeatures), hasExplicitMemBarrier, (isOSX || isCatalyst) && !isARM);
     ANGLE_FEATURE_CONDITION((&mFeatures), hasDepthAutoResolve, supportsEitherGPUFamily(3, 2));
@@ -1273,8 +1273,11 @@ void DisplayMtl::initializeFeatures()
                             isSimulator || !supportsAppleGPUFamily(1));
 
     ANGLE_FEATURE_CONDITION((&mFeatures), writeHelperSampleMask, supportsAppleGPUFamily(1));
+    ANGLE_FEATURE_CONDITION((&mFeatures), purgeableBufferPool, false);
 
     ANGLE_FEATURE_CONDITION((&mFeatures), multisampleColorFormatShaderReadWorkaround, isAMD());
+    // At least for Radeon 5500M. See rdar://178796612.
+    ANGLE_FEATURE_CONDITION((&mFeatures), clearMsaaRg16UnormWithDrawWorkaround, isAMD());
     ANGLE_FEATURE_CONDITION((&mFeatures), copyIOSurfaceToNonIOSurfaceForReadOptimization,
                             isIntel() || isAMD());
     ANGLE_FEATURE_CONDITION((&mFeatures), copyTextureToBufferForReadOptimization, isAMD());
@@ -1454,7 +1457,7 @@ bool DisplayMtl::isAMDBronzeDriver() const
 
     for (size_t i = 0; i < ArraySize(kMTLBronzeDeviceNames); ++i)
     {
-        if ([[mMetalDevice name] hasSuffix:kMTLBronzeDeviceNames[i]])
+        if (ANGLE_UNSAFE_TODO([[mMetalDevice name] hasSuffix:kMTLBronzeDeviceNames[i]]))
         {
             mIsAMDBronze = true;
             break;

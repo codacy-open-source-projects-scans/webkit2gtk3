@@ -710,8 +710,6 @@ const char *GetEntryPointName(EntryPoint ep)
             return "glCopyTexture3DANGLE";
         case EntryPoint::GLCopyTextureCHROMIUM:
             return "glCopyTextureCHROMIUM";
-        case EntryPoint::GLCoverageModulationCHROMIUM:
-            return "glCoverageModulationCHROMIUM";
         case EntryPoint::GLCreateMemoryObjectsEXT:
             return "glCreateMemoryObjectsEXT";
         case EntryPoint::GLCreateProgram:
@@ -1408,8 +1406,6 @@ const char *GetEntryPointName(EntryPoint ep)
             return "glInvalidateFramebuffer";
         case EntryPoint::GLInvalidateSubFramebuffer:
             return "glInvalidateSubFramebuffer";
-        case EntryPoint::GLInvalidateTextureANGLE:
-            return "glInvalidateTextureANGLE";
         case EntryPoint::GLIsBuffer:
             return "glIsBuffer";
         case EntryPoint::GLIsEnabled:
@@ -1926,8 +1922,6 @@ const char *GetEntryPointName(EntryPoint ep)
             return "glTexGenxvOES";
         case EntryPoint::GLTexImage2D:
             return "glTexImage2D";
-        case EntryPoint::GLTexImage2DExternalANGLE:
-            return "glTexImage2DExternalANGLE";
         case EntryPoint::GLTexImage2DRobustANGLE:
             return "glTexImage2DRobustANGLE";
         case EntryPoint::GLTexImage3D:
@@ -2018,6 +2012,8 @@ const char *GetEntryPointName(EntryPoint ep)
             return "glTranslatef";
         case EntryPoint::GLTranslatex:
             return "glTranslatex";
+        case EntryPoint::GLTrimMemoryANGLE:
+            return "glTrimMemoryANGLE";
         case EntryPoint::GLUniform1f:
             return "glUniform1f";
         case EntryPoint::GLUniform1fv:

@@ -31,14 +31,14 @@
 #include "DOMFormData.h"
 #include "ElementInlines.h"
 #include "EventNames.h"
-#include "EventTargetInlines.h"
 #include "HTMLFormElement.h"
 #include "HTMLNames.h"
 #include "HTMLSelectElement.h"
 #include "KeyboardEvent.h"
 #include "RenderButton.h"
-#include "RenderStyle+GettersInlines.h"
 #include "Settings.h"
+#include "StyleAppearance.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include <wtf/SetForScope.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -57,22 +57,22 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(HTMLButtonElement);
 
 using namespace HTMLNames;
 
-inline HTMLButtonElement::HTMLButtonElement(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
-    : HTMLFormControlElement(tagName, document, form)
+inline HTMLButtonElement::HTMLButtonElement(const QualifiedName& tagName, Document& document)
+    : HTMLFormControlElement(tagName, document)
     , m_type(Type::Submit)
     , m_isActivatedSubmit(false)
 {
     ASSERT(hasTagName(buttonTag));
 }
 
-Ref<HTMLButtonElement> HTMLButtonElement::create(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
+Ref<HTMLButtonElement> HTMLButtonElement::create(const QualifiedName& tagName, Document& document)
 {
-    return adoptRef(*new HTMLButtonElement(tagName, document, form));
+    return adoptRef(*new HTMLButtonElement(tagName, document));
 }
 
 Ref<HTMLButtonElement> HTMLButtonElement::create(Document& document)
 {
-    return adoptRef(*new HTMLButtonElement(buttonTag, document, nullptr));
+    return adoptRef(*new HTMLButtonElement(buttonTag, document));
 }
 
 Node::NeedsPostConnectionSteps HTMLButtonElement::insertionSteps(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
@@ -88,7 +88,12 @@ void HTMLButtonElement::removingSteps(RemovalType removalType, ContainerNode& ol
     computeType(attributeWithoutSynchronization(HTMLNames::typeAttr));
 }
 
-RenderPtr<RenderElement> HTMLButtonElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition& position)
+bool HTMLButtonElement::supportsBaseAppearance(StyleAppearance appearance) const
+{
+    return appearance == StyleAppearance::Base;
+}
+
+RenderPtr<RenderElement> HTMLButtonElement::createElementRenderer(Style::ComputedStyle&& style, const RenderTreePosition& position)
 {
     // https://html.spec.whatwg.org/multipage/rendering.html#button-layout
     if (style.display().isFlexibleOrGridFormattingContextBox())
@@ -131,21 +136,23 @@ void HTMLButtonElement::attributeChanged(const QualifiedName& name, const AtomSt
 {
     if (name == typeAttr)
         computeType(newValue);
-    else if ((name == commandAttr || name == commandforAttr) && document().settings().commandAttributesEnabled())
+    else if (name == commandAttr || name == commandforAttr)
         computeType(attributeWithoutSynchronization(HTMLNames::typeAttr));
     else
         HTMLFormControlElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
 }
 
+void HTMLButtonElement::childrenChanged(const ChildChange& change)
+{
+    HTMLFormControlElement::childrenChanged(change);
+
+    if (RefPtr select = dynamicDowncast<HTMLSelectElement>(parentNode()); select && select->buttonElement() == this)
+        select->buttonElementChildrenChanged();
+}
+
 RefPtr<Element> HTMLButtonElement::commandForElement() const
 {
-    auto canInvoke = [](const HTMLFormControlElement& element) -> bool {
-        if (!element.document().settings().commandAttributesEnabled())
-            return false;
-        return is<HTMLButtonElement>(element);
-    };
-
-    if (!canInvoke(*this))
+    if (isDisabledFormControl())
         return nullptr;
 
     return elementForAttributeInternal(commandforAttr);
@@ -312,7 +319,7 @@ void HTMLButtonElement::defaultEventHandler(Event& event)
         handlePopoverTargetAction(protect(event.target()).get());
     }
 
-    if (RefPtr keyboardEvent = dynamicDowncast<KeyboardEvent>(event)) {
+    if (RefPtr keyboardEvent = dynamicDowncast<KeyboardEvent>(event); keyboardEvent && document().focusedElement() == this) {
         if (keyboardEvent->type() == eventNames.keydownEvent && keyboardEvent->keyIdentifier() == "U+0020"_s) {
             setActive(true);
             // No setDefaultHandled() - IE dispatches a keypress in this case.
@@ -344,6 +351,11 @@ void HTMLButtonElement::defaultEventHandler(Event& event)
 bool HTMLButtonElement::willRespondToMouseClickEventsWithEditability(Editability) const
 {
     return !isDisabledFormControl();
+}
+
+bool HTMLButtonElement::hasActivationBehavior() const
+{
+    return true;
 }
 
 bool HTMLButtonElement::isSuccessfulSubmitButton() const
@@ -411,7 +423,7 @@ void HTMLButtonElement::computeType(const AtomString& typeAttrValue)
         m_type = Type::Button;
     else if (equalLettersIgnoringASCIICase(typeAttrValue, "submit"_s))
         m_type = Type::Submit;
-    else if (document().settings().commandAttributesEnabled() && (hasAttributeWithoutSynchronization(HTMLNames::commandAttr) || hasAttributeWithoutSynchronization(HTMLNames::commandforAttr)))
+    else if (hasAttributeWithoutSynchronization(HTMLNames::commandAttr) || hasAttributeWithoutSynchronization(HTMLNames::commandforAttr))
         m_type = Type::Button;
     else if (document().settings().htmlEnhancedSelectEnabled() && is<HTMLSelectElement>(parentNode()))
         m_type = Type::Button;

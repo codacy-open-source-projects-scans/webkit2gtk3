@@ -73,12 +73,13 @@
 #import <wtf/darwin/DispatchExtras.h>
 #import <wtf/text/MakeString.h>
 #import <wtf/text/StringHash.h>
+#import <wtf/text/UTF8CStringView.h>
 #import <wtf/text/WTFString.h>
 
 static NSString *serviceWorkerRegistrationFilename = @"ServiceWorkerRegistrations-8.sqlite3";
 static bool serviceWorkerGlobalObjectIsAvailable;
 
-static String expectedMessage;
+static String serviceWorkerExpectedMessage;
 static String retrievedString;
 
 @interface SWMessageHandler : NSObject <WKScriptMessageHandler>
@@ -104,10 +105,10 @@ static String retrievedString;
 @end
 
 @interface SWMessageHandlerForRestoreFromDiskTest : NSObject <WKScriptMessageHandler> {
-    NSString *_expectedMessage;
+    NSString *_serviceWorkerExpectedMessage;
 }
-- (instancetype)initWithExpectedMessage:(NSString *)expectedMessage;
-- (void)resetExpectedMessage:(NSString *)expectedMessage;
+- (instancetype)initWithExpectedMessage:(NSString *)serviceWorkerExpectedMessage;
+- (void)resetExpectedMessage:(NSString *)serviceWorkerExpectedMessage;
 @end
 
 @interface SWMessageHandlerWithExpectedMessage : NSObject <WKScriptMessageHandler>
@@ -116,31 +117,31 @@ static String retrievedString;
 @implementation SWMessageHandlerWithExpectedMessage
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message
 {
-    EXPECT_WK_STREQ(message.body, expectedMessage);
+    EXPECT_WK_STREQ(message.body, serviceWorkerExpectedMessage);
     done = true;
 }
 @end
 
 @implementation SWMessageHandlerForRestoreFromDiskTest
 
-- (instancetype)initWithExpectedMessage:(NSString *)expectedMessage
+- (instancetype)initWithExpectedMessage:(NSString *)serviceWorkerExpectedMessage
 {
     if (!(self = [super init]))
         return nil;
 
-    _expectedMessage = expectedMessage;
+    _serviceWorkerExpectedMessage = serviceWorkerExpectedMessage;
 
     return self;
 }
 
-- (void)resetExpectedMessage:(NSString *)expectedMessage
+- (void)resetExpectedMessage:(NSString *)serviceWorkerExpectedMessage
 {
-    _expectedMessage = expectedMessage;
+    _serviceWorkerExpectedMessage = serviceWorkerExpectedMessage;
 }
 
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message
 {
-    EXPECT_WK_STREQ(message.body, _expectedMessage);
+    EXPECT_WK_STREQ(message.body, _serviceWorkerExpectedMessage);
     done = true;
 }
 @end
@@ -213,7 +214,7 @@ doTest();
 </script>
 )SWRESOURCE"_s;
 
-static constexpr auto mainBytes = R"SWRESOURCE(
+static constexpr auto serviceWorkerMainBytes = R"SWRESOURCE(
 <script>
 
 function log(msg)
@@ -240,22 +241,10 @@ navigator.serviceWorker.register('/sw.js').then(function(reg) {
 </script>
 )SWRESOURCE"_s;
 
-static constexpr auto scriptBytes = R"SWRESOURCE(
+static constexpr auto serviceWorkerScriptBytes = R"SWRESOURCE(
 
 self.addEventListener("message", (event) => {
     event.source.postMessage("ServiceWorker received: " + event.data);
-});
-
-)SWRESOURCE"_s;
-
-static constexpr auto scriptWithEvalBytes = R"SWRESOURCE(
-
-self.addEventListener("message", (event) => {
-    if (event.data == "Hello from the web page") {
-        event.source.postMessage("ServiceWorker received: " + event.data);
-        return;
-    }
-    event.source.postMessage("Evaluation result: " + eval(event.data));
 });
 
 )SWRESOURCE"_s;
@@ -481,7 +470,7 @@ navigator.serviceWorker.getRegistrations().then(function(registrations) {
 </script>
 )SWRESOURCE"_s;
 
-static constexpr auto mainBytesForSessionIDTest = R"SWRESOURCE(
+static constexpr auto serviceWorkerMainBytesForSessionIDTest = R"SWRESOURCE(
 <script>
 
 function log(msg)
@@ -511,7 +500,7 @@ navigator.serviceWorker.register('/sw.js').then(function(reg) {
 </script>
 )SWRESOURCE"_s;
 
-static constexpr auto scriptBytesForSessionIDTest = R"SWRESOURCE(
+static constexpr auto serviceWorkerScriptBytesForSessionIDTest = R"SWRESOURCE(
 
 var wasActivated = false;
 
@@ -543,8 +532,8 @@ static void setViewDataStore(WKWebViewConfiguration* viewConfiguration, ShouldRu
 static void runBasicSWTest(ShouldRunServiceWorkersOnMainThread shouldRunServiceWorkersOnMainThread)
 {
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
@@ -561,6 +550,9 @@ static void runBasicSWTest(ShouldRunServiceWorkersOnMainThread shouldRunServiceW
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[configuration websiteDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
@@ -620,23 +612,23 @@ TEST(ServiceWorkers, BasicWithMainThreadSW)
 
 @interface SWUserAgentMessageHandler : NSObject <WKScriptMessageHandler> {
 @public
-    NSString *expectedMessage;
+    NSString *serviceWorkerExpectedMessage;
 }
-- (instancetype)initWithExpectedMessage:(NSString *)expectedMessage;
+- (instancetype)initWithExpectedMessage:(NSString *)serviceWorkerExpectedMessage;
 @end
 
 @implementation SWUserAgentMessageHandler
 
-- (instancetype)initWithExpectedMessage:(NSString *)_expectedMessage
+- (instancetype)initWithExpectedMessage:(NSString *)_serviceWorkerExpectedMessage
 {
     self = [super init];
-    expectedMessage = _expectedMessage;
+    serviceWorkerExpectedMessage = _serviceWorkerExpectedMessage;
     return self;
 }
 
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message
 {
-    EXPECT_WK_STREQ(expectedMessage, [message body]);
+    EXPECT_WK_STREQ(serviceWorkerExpectedMessage, [message body]);
     done = true;
 }
 @end
@@ -660,13 +652,16 @@ TEST(ServiceWorkers, UserAgentOverride)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWUserAgentMessageHandler alloc] initWithExpectedMessage:@"Message from worker: Foo Custom UserAgent"]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
         { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, userAgentSWBytes } },
     });
 
@@ -713,6 +708,9 @@ TEST(ServiceWorkers, RestoreFromDisk)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandlerForRestoreFromDiskTest> messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"PASS: Registration was successful and service worker was activated"]);
@@ -721,7 +719,7 @@ TEST(ServiceWorkers, RestoreFromDisk)
     TestWebKitAPI::HTTPServer server({
         { "/first.html"_s, { mainRegisteringWorkerBytes } },
         { "/second.html"_s, { mainRegisteringAlreadyExistingWorkerBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -747,6 +745,96 @@ TEST(ServiceWorkers, RestoreFromDisk)
     TestWebKitAPI::Util::run(&done);
     done = false;
 }
+
+#if PLATFORM(MAC)
+// Regression test for a NetworkProcess crash in SWRegistrationDatabase when the per-origin
+// SW registration database file exists on disk but its Records table is empty. The buggy
+// code called deleteAllFiles() while a SQLiteStatementAutoResetScope / CheckedPtr<SQLiteStatement>
+// was still live on the stack, leaving the cached statement as a zombie and crashing the
+// process with a PAC IB trap when the scope destructor ran on function return.
+TEST(ServiceWorkers, ImportRegistrationsForOriginWithEmptyDatabase)
+{
+    [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
+
+    NSURL *generalStorageDirectory = [NSURL fileURLWithPath:[@"~/Library/WebKit/com.apple.WebKit.TestWebKitAPI/ImportRegistrationsWithEmptyDB" stringByExpandingTildeInPath] isDirectory:YES];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    [fileManager removeItemAtURL:generalStorageDirectory error:nil];
+
+    TestWebKitAPI::HTTPServer server({
+        { "/first.html"_s, { mainRegisteringWorkerBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
+    });
+
+    // Phase 1: register a service worker so the per-origin registration database is written to disk.
+    @autoreleasepool {
+        RetainPtr dataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
+        dataStoreConfiguration.get().generalStorageDirectory = generalStorageDirectory;
+        RetainPtr dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:dataStoreConfiguration.get()]);
+        [dataStore _setResourceLoadStatisticsEnabled:NO];
+
+        RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+        configuration.get().websiteDataStore = dataStore.get();
+        RetainPtr<SWMessageHandlerForRestoreFromDiskTest> messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"PASS: Registration was successful and service worker was activated"]);
+        [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
+
+        RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+        done = false;
+        [webView loadRequest:server.request("/first.html"_s)];
+        TestWebKitAPI::Util::run(&done);
+
+        // Give the service worker a moment to be persisted before terminating the network process.
+        TestWebKitAPI::Util::runFor(0.25_s);
+
+        [webView _close];
+        [dataStore _terminateNetworkProcess];
+    }
+    TestWebKitAPI::Util::runFor(0.25_s);
+
+    // Locate the SW registration database file.
+    RetainPtr<NSURL> dbFileURL;
+    NSDirectoryEnumerator *enumerator = [fileManager enumeratorAtURL:generalStorageDirectory includingPropertiesForKeys:nil options:0 errorHandler:nil];
+    for (NSURL *url in enumerator) {
+        if ([url.lastPathComponent isEqualToString:serviceWorkerRegistrationFilename]) {
+            dbFileURL = url;
+            break;
+        }
+    }
+    ASSERT_TRUE(!!dbFileURL);
+
+    // Empty the Records table, leaving a valid but record-less database file on disk.
+    // This mimics the state the crashing device ended up in and exercises the
+    // `result.isEmpty() && recordsCount() == 0 -> deleteAllFiles()` path.
+    RetainPtr task = adoptNS([[NSTask alloc] init]);
+    task.get().launchPath = @"/usr/bin/sqlite3";
+    task.get().arguments = @[dbFileURL.get().path, @"DELETE FROM Records;"];
+    [task.get() launch];
+    [task.get() waitUntilExit];
+    EXPECT_EQ([task.get() terminationStatus], 0);
+    // Also clean up any WAL sidecars so sqlite re-reads from the main file.
+    [fileManager removeItemAtURL:[dbFileURL.get() URLByAppendingPathExtension:@"-wal"] error:nil];
+    [fileManager removeItemAtURL:[dbFileURL.get() URLByAppendingPathExtension:@"-shm"] error:nil];
+
+    // Phase 2: reopen the data store and navigate to the same origin. SWServer start-up runs
+    // importOrigins() on the empty DB, and the subsequent navigation runs
+    // importRegistrations(topOrigin) on it. Both paths used to crash.
+    @autoreleasepool {
+        RetainPtr dataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
+        dataStoreConfiguration.get().generalStorageDirectory = generalStorageDirectory;
+        RetainPtr dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:dataStoreConfiguration.get()]);
+        [dataStore _setResourceLoadStatisticsEnabled:NO];
+
+        RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+        configuration.get().websiteDataStore = dataStore.get();
+        RetainPtr<SWMessageHandlerForRestoreFromDiskTest> messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"PASS: Registration was successful and service worker was activated"]);
+        [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
+
+        RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+        done = false;
+        [webView loadRequest:server.request("/first.html"_s)];
+        TestWebKitAPI::Util::run(&done);
+    }
+}
+#endif // PLATFORM(MAC)
 
 // This test verifies that the lazy script loading path in SWServerJobQueue::scriptFetchFinished()
 // works correctly. When service worker registrations are restored from disk, scripts are not loaded
@@ -774,6 +862,9 @@ TEST(ServiceWorkers, UpdateCheckAfterRestoreFromDisk)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandlerForRestoreFromDiskTest> messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"PASS: Registration was successful and service worker was activated"]);
@@ -782,7 +873,7 @@ TEST(ServiceWorkers, UpdateCheckAfterRestoreFromDisk)
     TestWebKitAPI::HTTPServer server({
         { "/scope/first.html"_s, { mainRegisteringWorkerInScopeBytes } },
         { "/second.html"_s, { mainUpdatingRestoredWorkerBytes } },
-        { "/scope/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/scope/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -835,6 +926,9 @@ TEST(ServiceWorkers, CheckRegistrationWithoutMainScript)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandlerForRestoreFromDiskTest> messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"PASS: Registration was successful and service worker was activated"]);
@@ -843,7 +937,7 @@ TEST(ServiceWorkers, CheckRegistrationWithoutMainScript)
     TestWebKitAPI::HTTPServer server({
         { "/scope/first.html"_s, { mainRegisteringWorkerInScopeBytes } },
         { "/scope/second.html"_s, { mainUpdatingRestoredWorkerBytes } },
-        { "/scope/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/scope/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -915,6 +1009,9 @@ TEST(ServiceWorkers, CheckRegistrationWithoutImportedScript)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandlerForRestoreFromDiskTest> messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"PASS: Registration was successful and service worker was activated"]);
@@ -924,7 +1021,7 @@ TEST(ServiceWorkers, CheckRegistrationWithoutImportedScript)
         { "/scope/first.html"_s, { mainRegisteringWorkerInScopeBytes } },
         { "/scope/second.html"_s, { mainUpdatingRestoredWorkerBytes } },
         { "/scope/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, "importScripts('/scope/importedScript.js');"_s } },
-        { "/scope/importedScript.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/scope/importedScript.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -969,7 +1066,7 @@ TEST(ServiceWorkers, CheckRegistrationWithoutImportedScript)
                 NSNumber *fileSizeNumber;
                 if (![fileURL getResourceValue:&fileSizeNumber forKey:NSURLFileSizeKey error:NULL])
                     continue;
-                if ([fileSizeNumber unsignedLongLongValue] == scriptBytes.length())
+                if ([fileSizeNumber unsignedLongLongValue] == serviceWorkerScriptBytes.length())
                     [[NSFileManager defaultManager] removeItemAtURL:fileURL error:nil];
             }
         }
@@ -994,7 +1091,7 @@ TEST(ServiceWorkers, CheckRegistrationWithoutImportedScript)
     TestWebKitAPI::Util::run(&done);
 }
 
-static constexpr auto scriptBytesWithFetchSupport = R"SWRESOURCE(
+static constexpr auto serviceWorkerScriptBytesWithFetchSupport = R"SWRESOURCE(
 
 self.addEventListener("message", (event) => {
     if (event.data = 'do-fetch') {
@@ -1061,7 +1158,7 @@ TEST(ServiceWorkers, ThirdPartyRestoredFromDisk)
         { "/index.html"_s, { "<script>onload = () => { webkit.messageHandlers.sw.postMessage('LOADED'); }</script>"_s } },
         { "/thirdPartyIframeWithSW.html"_s, { mainRegisteringWorkerBytes } },
         { "/thirdPartyIframeWithSW2.html"_s, { mainRegisteringAlreadyExistingWorkerRequestFetchBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytesWithFetchSupport } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytesWithFetchSupport } },
         { "/foo.txt"_s, { "FOO"_s } }
     });
 
@@ -1078,6 +1175,9 @@ TEST(ServiceWorkers, ThirdPartyRestoredFromDisk)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [dataStore _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     configuration.get().websiteDataStore = dataStore.get();
@@ -1164,6 +1264,9 @@ TEST(ServiceWorkers, CacheStorageRestoreFromDisk)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     TestWebKitAPI::HTTPServer server({
         { "/"_s, { mainCacheStorageBytes } }
     });
@@ -1207,6 +1310,9 @@ TEST(ServiceWorkers, FetchAfterRestoreFromDisk)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr<WKWebViewConfiguration> configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
@@ -1253,6 +1359,9 @@ TEST(ServiceWorkers, InterceptFirstLoadAfterRestoreFromDisk)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr<WKWebViewConfiguration> configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandlerWithExpectedMessage> messageHandler = adoptNS([[SWMessageHandlerWithExpectedMessage alloc] init]);
@@ -1265,7 +1374,7 @@ TEST(ServiceWorkers, InterceptFirstLoadAfterRestoreFromDisk)
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
-    expectedMessage = "Service Worker activated"_s;
+    serviceWorkerExpectedMessage = "Service Worker activated"_s;
     [webView loadRequest:server.request("/main.html"_s)];
 
     TestWebKitAPI::Util::run(&done);
@@ -1282,7 +1391,7 @@ TEST(ServiceWorkers, InterceptFirstLoadAfterRestoreFromDisk)
 
     webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
-    expectedMessage = "Intercepted by worker"_s;
+    serviceWorkerExpectedMessage = "Intercepted by worker"_s;
     [webView loadRequest:server.request("/main.html"_s)];
 
     TestWebKitAPI::Util::run(&done);
@@ -1304,6 +1413,9 @@ TEST(ServiceWorkers, MainThreadSWInterceptsLoad)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [dataStore _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr messageHandler = adoptNS([[SWMessageHandlerWithExpectedMessage alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
@@ -1314,7 +1426,7 @@ TEST(ServiceWorkers, MainThreadSWInterceptsLoad)
 
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
-    expectedMessage = "Service Worker activated"_s;
+    serviceWorkerExpectedMessage = "Service Worker activated"_s;
     [webView loadRequest:server.request("/main.html"_s)];
 
     TestWebKitAPI::Util::run(&done);
@@ -1332,7 +1444,7 @@ TEST(ServiceWorkers, MainThreadSWInterceptsLoad)
 
     webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
-    expectedMessage = "Intercepted by worker"_s;
+    serviceWorkerExpectedMessage = "Intercepted by worker"_s;
     [webView loadRequest:server.request("/main.html"_s)];
 
     TestWebKitAPI::Util::run(&done);
@@ -1350,6 +1462,9 @@ TEST(ServiceWorkers, WaitForPolicyDelegate)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr<WKWebViewConfiguration> configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandlerWithExpectedMessage> messageHandler = adoptNS([[SWMessageHandlerWithExpectedMessage alloc] init]);
@@ -1363,7 +1478,7 @@ TEST(ServiceWorkers, WaitForPolicyDelegate)
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
     // Register a service worker and activate it.
-    expectedMessage = "Service Worker activated"_s;
+    serviceWorkerExpectedMessage = "Service Worker activated"_s;
     [webView loadRequest:server.request("/main.html"_s)];
 
     TestWebKitAPI::Util::run(&done);
@@ -1381,7 +1496,7 @@ TEST(ServiceWorkers, WaitForPolicyDelegate)
     webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
     // Verify service worker is intercepting load.
-    expectedMessage = "Intercepted by worker"_s;
+    serviceWorkerExpectedMessage = "Intercepted by worker"_s;
     [webView loadRequest:server.request("/main.html"_s)];
 
     TestWebKitAPI::Util::run(&done);
@@ -1457,6 +1572,9 @@ TEST(ServiceWorkers, SWProcessConnectionCreation)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[configuration websiteDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     [[configuration websiteDataStore] fetchDataRecordsOfTypes:[NSSet setWithObject:WKWebsiteDataTypeServiceWorkerRegistrations] completionHandler:^(NSArray<WKWebsiteDataRecord *> *websiteDataRecords) {
         EXPECT_EQ(0u, [websiteDataRecords count]);
 
@@ -1472,8 +1590,8 @@ TEST(ServiceWorkers, SWProcessConnectionCreation)
 
     TestWebKitAPI::HTTPServer server({
         { "/first.html"_s, { regularPageWithConnectionBytes } },
-        { "/second.html"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/second.html"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
         { "/third.html"_s, { regularPageWithConnectionBytes } },
         { "/fourth.html"_s, { regularPageWithConnectionBytes } },
     });
@@ -1520,7 +1638,7 @@ TEST(ServiceWorkers, SWProcessConnectionCreation)
     TestWebKitAPI::Util::run(&done);
 }
 
-static constexpr auto mainBytesWithScope = R"SWRESOURCE(
+static constexpr auto serviceWorkerMainBytesWithScope = R"SWRESOURCE(
 <script>
 
 function log(msg)
@@ -1562,6 +1680,9 @@ TEST(ServiceWorkers, ServiceWorkerProcessCreation)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[configuration websiteDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     [[configuration websiteDataStore] fetchDataRecordsOfTypes:[NSSet setWithObject:WKWebsiteDataTypeServiceWorkerRegistrations] completionHandler:^(NSArray<WKWebsiteDataRecord *> *websiteDataRecords) {
 
         done = true;
@@ -1575,10 +1696,10 @@ TEST(ServiceWorkers, ServiceWorkerProcessCreation)
     [[configuration userContentController] addScriptMessageHandler:regularPageMessageHandler.get() name:@"regularPage"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/first.html"_s, { mainBytesWithScope } },
+        { "/first.html"_s, { serviceWorkerMainBytesWithScope } },
         { "/second.html"_s, { regularPageWithConnectionBytes } },
-        { "/third.html"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/third.html"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -1619,6 +1740,9 @@ TEST(ServiceWorkers, ServiceWorkerProcessCreation)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[configuration websiteDataStore] _setResourceLoadStatisticsEnabled:NO];
 }
 
 static constexpr auto readCacheBytes = R"SWRESOURCE(
@@ -1738,6 +1862,9 @@ TEST(ServiceWorkers, ServiceWorkerCacheAccessEphemeralSession)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
     
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
@@ -1821,6 +1948,9 @@ TEST(ServiceWorkers, DifferentSessionsUseDifferentRegistrations)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
     
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     setConfigurationInjectedBundlePath(configuration.get());
@@ -1881,14 +2011,15 @@ TEST(ServiceWorkers, ServiceWorkerAndCacheStorageDefaultDirectories)
     [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [configuration _setAllowTestOnlyIPC:YES];
     setConfigurationInjectedBundlePath(configuration.get());
 
     RetainPtr<DirectoryPageMessageHandler> directoryPageMessageHandler = adoptNS([[DirectoryPageMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:directoryPageMessageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/first.html"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/first.html"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
         { "/second.html"_s, { regularPageGrabbingCacheStorageDirectory } },
     });
 
@@ -1916,6 +2047,9 @@ TEST(ServiceWorkers, ServiceWorkerAndCacheStorageDefaultDirectories)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[configuration websiteDataStore] _setResourceLoadStatisticsEnabled:NO];
 }
 
 TEST(ServiceWorkers, ServiceWorkerAndCacheStorageSpecificDirectories)
@@ -1923,6 +2057,7 @@ TEST(ServiceWorkers, ServiceWorkerAndCacheStorageSpecificDirectories)
     [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [configuration _setAllowTestOnlyIPC:YES];
     setConfigurationInjectedBundlePath(configuration.get());
     RetainPtr dataStoreConfiguration = adoptNS([_WKWebsiteDataStoreConfiguration new]);
     NSString* tempDirectory = @"/var/tmp";
@@ -1935,8 +2070,8 @@ TEST(ServiceWorkers, ServiceWorkerAndCacheStorageSpecificDirectories)
     [[configuration userContentController] addScriptMessageHandler:directoryPageMessageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/first.html"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/first.html"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
         { "/second.html"_s, { regularPageGrabbingCacheStorageDirectory } },
     });
 
@@ -1965,6 +2100,9 @@ TEST(ServiceWorkers, ServiceWorkerAndCacheStorageSpecificDirectories)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[configuration websiteDataStore] _setResourceLoadStatisticsEnabled:NO];
 }
 
 #endif // WK_HAVE_C_SPI
@@ -1992,11 +2130,11 @@ TEST(ServiceWorkers, NonDefaultSessionID)
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytesForSessionIDTest } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytesForSessionIDTest } },
+        { "/"_s, { serviceWorkerMainBytesForSessionIDTest } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytesForSessionIDTest } },
     });
 
-    expectedMessage = "PASS: activation successful"_s;
+    serviceWorkerExpectedMessage = "PASS: activation successful"_s;
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
     [webView loadRequest:server.request()];
@@ -2049,6 +2187,9 @@ TEST(ServiceWorkers, ProcessPerSite)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [dataStore _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr<WKWebViewConfiguration> configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     configuration.get().websiteDataStore = dataStore.get();
 
@@ -2056,12 +2197,12 @@ TEST(ServiceWorkers, ProcessPerSite)
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server1({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
     TestWebKitAPI::HTTPServer server2({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     WKProcessPool *processPool = configuration.get().processPool;
@@ -2126,18 +2267,21 @@ TEST(ServiceWorkers, ParallelProcessLaunch)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server1({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
     TestWebKitAPI::HTTPServer server2({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     auto *processPool = configuration.get().processPool;
@@ -2163,14 +2307,17 @@ static size_t launchServiceWorkerProcess(bool useSeparateServiceWorkerProcess, b
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { {{ "Content-Type"_s, "application/javascript"_s }}, scriptBytes } }
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } }
     });
 
     auto *processPool = configuration.get().processPool;
@@ -2280,6 +2427,9 @@ TEST(ServiceWorkers, LockdownModeInSharedWorkerProcess)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWMessageHandlerForRestoreFromDiskTest alloc] initWithExpectedMessage:@"Message from worker: SharedWorker received: Hello from the web page"]);
@@ -2349,6 +2499,48 @@ TEST(ServiceWorkers, LockdownModeInSharedWorkerProcess)
     runJSCheck("!!self.LockManager"_s); // WebLockManager API.
 }
 
+TEST(ServiceWorkers, SharedWorkerReusesProcessAfterCOOPProcessSwap)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/no-coop.html"_s, { "<body>Hello world!</body>"_s } },
+        { "/coop.html"_s, { {{ "Cross-Origin-Opener-Policy"_s, "same-origin"_s }}, "<script>const worker = new SharedWorker('sharedWorker.js'); worker.port.start();</script>"_s } },
+        { "/sharedWorker.js"_s, { {{ "Content-Type"_s, "application/javascript"_s }}, "onconnect = e => { e.ports[0].start(); };"_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Https);
+
+    RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)]);
+    RetainPtr navigationDelegate = adoptNS([[TestNavigationDelegate alloc] init]);
+    [navigationDelegate allowAnyTLSCertificate];
+    [webView setNavigationDelegate:navigationDelegate.get()];
+
+    // First page is loaded without COOP.
+    [webView loadRequest:server.request("/no-coop.html"_s)];
+    [navigationDelegate waitForDidFinishNavigation];
+    auto sourcePID = [webView _webProcessIdentifier];
+
+    // Second page is loaded with COOP, which triggers a BCG switch. This page also creates a
+    // SharedWorker.
+    [webView loadRequest:server.request("/coop.html"_s)];
+    [navigationDelegate waitForDidFinishNavigation];
+    auto coopPID = [webView _webProcessIdentifier];
+
+    // The BCG switch should result in a new process.
+    EXPECT_NE(sourcePID, coopPID);
+
+    // The SharedWorker should run in the same process as the second page.
+    EXPECT_TRUE(waitUntilEvaluatesToTrue([&]() -> bool {
+        bool foundSharedWorkerProcess = false;
+        bool sharedWorkerInPageProcess = false;
+        for (_WKWebContentProcessInfo *info in [WKProcessPool _webContentProcessInfoForTesting]) {
+            if (!info.runningSharedWorkers)
+                continue;
+            foundSharedWorkerProcess = true;
+            if (info.pid == coopPID)
+                sharedWorkerInPageProcess = true;
+        }
+        return foundSharedWorkerProcess && sharedWorkerInPageProcess;
+    }));
+}
+
 enum class UseSeparateServiceWorkerProcess : bool { No, Yes };
 void testSuspendServiceWorkerProcessBasedOnClientProcesses(UseSeparateServiceWorkerProcess useSeparateServiceWorkerProcess)
 {
@@ -2370,8 +2562,8 @@ void testSuspendServiceWorkerProcessBasedOnClientProcesses(UseSeparateServiceWor
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     auto *processPool = configuration.get().processPool;
@@ -2486,14 +2678,14 @@ TEST(ServiceWorkers, SuspendAndTerminateWorker)
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     auto *processPool = configuration.get().processPool;
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
-    expectedMessage = "Message from worker: ServiceWorker received: Hello from the web page"_s;
+    serviceWorkerExpectedMessage = "Message from worker: ServiceWorker received: Hello from the web page"_s;
     [webView loadRequest:server.request()];
     // Wait until ServiceWorker is launched.
     TestWebKitAPI::Util::run(&done);
@@ -2537,7 +2729,7 @@ TEST(ServiceWorkers, SuspendAndTerminateWorker)
     EXPECT_TRUE(serviceWorkersAllTerminated);
 
     // Let's verify the WKWebView did not crash and has the same PID as before.
-    expectedMessage = "OK"_s;
+    serviceWorkerExpectedMessage = "OK"_s;
     [webView evaluateJavaScript:@"log('OK')" completionHandler: nil];
     TestWebKitAPI::Util::run(&done);
     done = false;
@@ -2557,11 +2749,14 @@ TEST(ServiceWorkers, ThrottleCrash)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr messageHandler = adoptNS([[SWMessageHandler alloc] init]);
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { {{ "Content-Type"_s, "application/javascript"_s }}, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr navigationDelegate = adoptNS([[TestNavigationDelegate alloc] init]);
@@ -2623,14 +2818,17 @@ TEST(ServiceWorkers, LoadData)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr<WKWebViewConfiguration> configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr<SWMessageHandler> messageHandler = adoptNS([[SWMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -2648,7 +2846,7 @@ TEST(ServiceWorkers, LoadData)
     done = false;
 
     // Now try a data load.
-    NSData *data = [NSData dataWithBytes:mainBytes length:strlen(mainBytes)];
+    NSData *data = [NSData dataWithBytes:serviceWorkerMainBytes length:strlen(serviceWorkerMainBytes)];
     [webView loadData:data MIMEType:@"text/html" characterEncodingName:@"UTF-8" baseURL:server.request().URL];
 
     TestWebKitAPI::Util::run(&done);
@@ -2670,7 +2868,7 @@ TEST(ServiceWorkers, RestoreFromDiskNonDefaultStore)
 
     TestWebKitAPI::HTTPServer server({
         { "/first.html"_s, { mainRegisteringWorkerBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
         { "/second.html"_s, { mainRegisteringAlreadyExistingWorkerBytes } },
     });
 
@@ -2735,15 +2933,18 @@ TEST(ServiceWorkers, SuspendNetworkProcess)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [websiteDataStore _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr<WKWebViewConfiguration> configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     [configuration setWebsiteDataStore:websiteDataStore.get()];
     RetainPtr<SWMessageHandler> messageHandler = adoptNS([[SWMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/first.html"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
-        { "/second.html"_s, { mainBytes } },
+        { "/first.html"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
+        { "/second.html"_s, { serviceWorkerMainBytes } },
     });
 
     RetainPtr<WKWebView> webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -2821,6 +3022,9 @@ TEST(ServiceWorkers, V2DatabaseUpgrade)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     NSURL *swPath = [NSURL fileURLWithPath:[@"~/Library/Caches/com.apple.WebKit.TestWebKitAPI/WebKit/ServiceWorkers/" stringByExpandingTildeInPath]];
     [[NSFileManager defaultManager] removeItemAtURL:swPath error:nil];
     EXPECT_FALSE([[NSFileManager defaultManager] fileExistsAtPath:swPath.path]);
@@ -2867,14 +3071,17 @@ TEST(ServiceWorkers, ProcessPerSession)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server1({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     WKProcessPool *processPool = configuration.get().processPool;
@@ -2889,8 +3096,8 @@ TEST(ServiceWorkers, ProcessPerSession)
     configuration.get().websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
 
     TestWebKitAPI::HTTPServer server2({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr webView2 = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -2935,6 +3142,9 @@ TEST(ServiceWorkers, ContentRuleList)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWMessageHandlerWithExpectedMessage alloc] init]);
@@ -2944,7 +3154,7 @@ TEST(ServiceWorkers, ContentRuleList)
     using namespace TestWebKitAPI;
     HTTPServer server([] (Connection connection) {
         connection.receiveHTTPRequest([=](Vector<char>&&) {
-            connection.send(HTTPResponse({ { "Content-Type"_s, "text/html"_s } }, mainBytes).serialize(), [=] {
+            connection.send(HTTPResponse({ { "Content-Type"_s, "text/html"_s } }, serviceWorkerMainBytes).serialize(), [=] {
                 connection.receiveHTTPRequest([=](Vector<char>&&) {
                     connection.send(HTTPResponse({ { "Content-Type"_s, "application/javascript"_s } }, contentRuleListWorkerScript).serialize(), [=] {
                         connection.receiveHTTPRequest([=](Vector<char>&& lastRequest) {
@@ -2957,7 +3167,7 @@ TEST(ServiceWorkers, ContentRuleList)
         });
     });
 
-    expectedMessage = @"Message from worker: PASS - blocked first request, allowed second";
+    serviceWorkerExpectedMessage = @"Message from worker: PASS - blocked first request, allowed second";
 
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
     [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%d/", server.port()]]]];
@@ -3155,6 +3365,66 @@ TEST(ServiceWorkers, ChangeOfServerCertificate)
     }
 }
 
+TEST(ServiceWorkers, ServerTrustWithoutNetworkLoadInFrame)
+{
+    using namespace TestWebKitAPI;
+
+    __block bool removedAnyExistingData = false;
+    [[WKWebsiteDataStore defaultDataStore] removeDataOfTypes:[WKWebsiteDataStore allWebsiteDataTypes] modifiedSince:[NSDate distantPast] completionHandler:^() {
+        removedAnyExistingData = true;
+    }];
+    Util::run(&removedAnyExistingData);
+
+    static constexpr auto main =
+    "<script>"
+    "try {"
+    "    navigator.serviceWorker.register('/sw.js').then(function(reg) {"
+    "        if (reg.active) {"
+    "            alert('worker unexpectedly already active');"
+    "            return;"
+    "        }"
+    "        worker = reg.installing;"
+    "        worker.addEventListener('statechange', function() {"
+    "            if (worker.state == 'activated')"
+    "                alert('successfully registered');"
+    "        });"
+    "    }).catch(function(error) {"
+    "        alert('Registration failed with: ' + error);"
+    "    });"
+    "} catch(e) {"
+    "    alert('Exception: ' + e);"
+    "}"
+    "</script>"_s;
+    static constexpr auto js = "self.addEventListener('fetch', (event) => { event.respondWith(new Response(new Blob(['<script>alert(\"synthetic response\")</script>'], {type: 'text/html'}))); })"_s;
+
+    HTTPServer server({
+        { "/"_s, { main } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, js } },
+    }, HTTPServer::Protocol::Https);
+
+    RetainPtr delegate = adoptNS([TestNavigationDelegate new]);
+    [delegate setDidReceiveAuthenticationChallenge:^(WKWebView *, NSURLAuthenticationChallenge *challenge, void (^callback)(NSURLSessionAuthChallengeDisposition, NSURLCredential *)) {
+        EXPECT_WK_STREQ(challenge.protectionSpace.authenticationMethod, NSURLAuthenticationMethodServerTrust);
+        callback(NSURLSessionAuthChallengeUseCredential, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
+    }];
+
+    RetainPtr request = server.request();
+    RetainPtr registeringWebView = adoptNS([WKWebView new]);
+    registeringWebView.get().navigationDelegate = delegate.get();
+    [registeringWebView loadRequest:request.get()];
+    EXPECT_WK_STREQ([registeringWebView _test_waitForAlert], "successfully registered");
+    EXPECT_TRUE(isTestServerTrust(registeringWebView.get().serverTrust));
+
+    server.cancel();
+
+    RetainPtr webView = adoptNS([WKWebView new]);
+    webView.get().navigationDelegate = delegate.get();
+    [webView loadRequest:request.get()];
+    EXPECT_WK_STREQ([webView _test_waitForAlert], "synthetic response");
+
+    EXPECT_TRUE(isTestServerTrust(webView.get().serverTrust));
+}
+
 TEST(ServiceWorkers, ClearDOMCacheAlsoIncludesServiceWorkerRegistrations)
 {
     [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
@@ -3166,14 +3436,17 @@ TEST(ServiceWorkers, ClearDOMCacheAlsoIncludesServiceWorkerRegistrations)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr messageHandler = adoptNS([[SWMessageHandler alloc] init]);
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -3228,8 +3501,8 @@ TEST(ServiceWorkers, CustomDataStorePathsVersusCompletionHandlers)
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     TestWebKitAPI::HTTPServer server({
-        { "/"_s, { mainBytes } },
-        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, scriptBytes } },
+        { "/"_s, { serviceWorkerMainBytes } },
+        { "/sw.js"_s, { { { "Content-Type"_s, "application/javascript"_s } }, serviceWorkerScriptBytes } },
     });
 
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
@@ -3290,6 +3563,9 @@ TEST(ServiceWorkers, WebProcessCache)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr processPoolConfiguration = adoptNS([[_WKProcessPoolConfiguration alloc] init]);
     processPoolConfiguration.get().processSwapsOnNavigation = YES;
@@ -3365,7 +3641,7 @@ static bool didStartURLSchemeTaskForImportedScript = false;
     HashMap<String, RetainPtr<NSData>> _dataMappings;
 }
 - (instancetype)initWithBytes:(const char*)bytes;
-- (void)addMappingFromURLString:(NSString *)urlString toData:(const char*)data;
+- (void)addMappingFromURLString:(NSString *)urlString toData:(UTF8CStringView)data;
 @end
 
 @implementation ServiceWorkerSchemeHandler
@@ -3377,9 +3653,9 @@ static bool didStartURLSchemeTaskForImportedScript = false;
     return self;
 }
 
-- (void)addMappingFromURLString:(NSString *)urlString toData:(const char*)data
+- (void)addMappingFromURLString:(NSString *)urlString toData:(UTF8CStringView)data
 {
-    _dataMappings.set(urlString, [NSData dataWithBytes:(void*)data length:strlen(data)]);
+    _dataMappings.set(urlString, toNSData(byteCast<uint8_t>(data.span())));
 }
 
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id <WKURLSchemeTask>)task
@@ -3447,11 +3723,14 @@ TEST(ServiceWorker, ExtensionServiceWorker)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr schemeHandler = adoptNS([ServiceWorkerSchemeHandler new]);
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/other.html" toData:"foo"];
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:"importScripts('sw-ext://ABC/importedScript.js');"];
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/bar.xml" toData:"bar"];
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/importedScript.js" toData:"fetch('sw-ext://ABC/bar.xml');"];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/other.html" toData:"foo"_s];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:"importScripts('sw-ext://ABC/importedScript.js');"_s];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/bar.xml" toData:"bar"_s];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/importedScript.js" toData:"fetch('sw-ext://ABC/bar.xml');"_s];
 
     WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
 
@@ -3528,12 +3807,15 @@ TEST(ServiceWorker, ExtensionServiceWorkerDisableCORS)
     Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     bool madeHTTPGetRequest = false;
     bool madeHTTPOptionsRequest = false;
     String filenameRequestedOverHTTP;
     HTTPServer server([&] (Connection connection) {
         connection.receiveHTTPRequest([&, connection](Vector<char>&& bytes) mutable {
-            String requestString(bytes.span());
+            String requestString = String::fromLatin1(bytes.span());
             if (requestString.startsWithIgnoringASCIICase("OPTIONS"_s)) {
                 madeHTTPOptionsRequest = true;
                 connection.send(
@@ -3555,7 +3837,7 @@ TEST(ServiceWorker, ExtensionServiceWorkerDisableCORS)
     auto testJS = makeString("fetch('http://127.0.0.1:"_s, server.port(), "/bar.xml', { headers: { 'Custom-Header': 'CustomHeaderValue' } });"_s);
 
     RetainPtr schemeHandler = adoptNS([ServiceWorkerSchemeHandler new]);
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:testJS.utf8().data()];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:testJS.utf8()];
 
     WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
     [webViewConfiguration setURLSchemeHandler:schemeHandler.get() forURLScheme:@"sw-ext"];
@@ -3581,7 +3863,7 @@ TEST(ServiceWorker, ExtensionServiceWorkerDisableCORS)
 
     // It should load bar.xml.
     Util::run(&madeHTTPGetRequest);
-    EXPECT_STREQ(filenameRequestedOverHTTP.utf8().data(), "/bar.xml");
+    EXPECT_EQ(filenameRequestedOverHTTP, "/bar.xml"_s);
 
     // It shouldn't have done a CORS preflight.
     EXPECT_FALSE(madeHTTPOptionsRequest);
@@ -3598,10 +3880,13 @@ TEST(ServiceWorker, ExtensionServiceWorkerWithModules)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr schemeHandler = adoptNS([ServiceWorkerSchemeHandler new]);
 
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/exports.js" toData:"const x = 805; export { x };"];
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:"import { x } from './exports.js'; x;"];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/exports.js" toData:"const x = 805; export { x };"_s];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:"import { x } from './exports.js'; x;"_s];
 
     WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
     webViewConfiguration.websiteDataStore = [adoptNS([WKWebViewConfiguration new]) websiteDataStore];
@@ -3623,6 +3908,65 @@ TEST(ServiceWorker, ExtensionServiceWorkerWithModules)
     TestWebKitAPI::Util::run(&done);
 }
 
+TEST(ServiceWorker, ExtensionServiceWorkerNotPersistedToDisk)
+{
+    [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
+
+    RetainPtr swPath = [NSURL fileURLWithPath:[@"~/Library/Caches/com.apple.WebKit.TestWebKitAPI/WebKit/ExtensionSWNotPersisted/" stringByExpandingTildeInPath]];
+    [[NSFileManager defaultManager] removeItemAtURL:swPath.get() error:nil];
+    [[NSFileManager defaultManager] createDirectoryAtURL:swPath.get() withIntermediateDirectories:YES attributes:nil error:nil];
+
+    RetainPtr websiteDataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
+    websiteDataStoreConfiguration.get().unifiedOriginStorageLevel = _WKUnifiedOriginStorageLevelBasic;
+    websiteDataStoreConfiguration.get()._serviceWorkerRegistrationDirectory = swPath.get();
+    RetainPtr dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:websiteDataStoreConfiguration.get()]);
+
+    RetainPtr schemeHandler = adoptNS([ServiceWorkerSchemeHandler new]);
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/other.html" toData:"foo"_s];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/sw.js" toData:"// Extension service worker"_s];
+
+    WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
+
+    RetainPtr otherViewConfiguration = adoptNS([WKWebViewConfiguration new]);
+    otherViewConfiguration.get().processPool = webViewConfiguration.processPool;
+    [otherViewConfiguration setWebsiteDataStore:dataStore.get()];
+    [otherViewConfiguration setURLSchemeHandler:schemeHandler.get() forURLScheme:@"sw-ext"];
+    RetainPtr otherWebView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:otherViewConfiguration.get()]);
+    [otherWebView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"sw-ext://ABC/other.html"]]];
+    [otherWebView _test_waitForDidFinishNavigation];
+
+    webViewConfiguration.websiteDataStore = dataStore.get();
+    ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+    webViewConfiguration._relatedWebView = otherWebView.get();
+    ALLOW_DEPRECATED_DECLARATIONS_END
+    [webViewConfiguration setURLSchemeHandler:schemeHandler.get() forURLScheme:@"sw-ext"];
+    RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:webViewConfiguration]);
+
+    done = false;
+    didStartURLSchemeTask = false;
+    [webView _loadServiceWorker:[NSURL URLWithString:@"sw-ext://ABC/sw.js"] usingModules:NO completionHandler:^(BOOL success) {
+        EXPECT_TRUE(success);
+        EXPECT_TRUE(didStartURLSchemeTask);
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+
+    // Wait for the service worker to finish activating.
+    while (!webViewConfiguration.processPool._serviceWorkerProcessCount)
+        TestWebKitAPI::Util::spinRunLoop(10);
+    TestWebKitAPI::Util::runFor(0.5_s);
+
+    // Flush service worker registrations to disk.
+    done = false;
+    [dataStore _storeServiceWorkerRegistrations:^{
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+
+    // Extension service workers should not be persisted to disk.
+    EXPECT_FALSE([[NSFileManager defaultManager] fileExistsAtPath:[swPath URLByAppendingPathComponent:serviceWorkerRegistrationFilename].path]);
+}
+
 TEST(ServiceWorker, ExtensionServiceWorkerFailureBadScript)
 {
     [WKWebsiteDataStore _allowWebsiteDataRecordsForAllOrigins];
@@ -3634,8 +3978,11 @@ TEST(ServiceWorker, ExtensionServiceWorkerFailureBadScript)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr schemeHandler = adoptNS([ServiceWorkerSchemeHandler new]);
-    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/bad-sw.js" toData:"1 = 1;"];
+    [schemeHandler addMappingFromURLString:@"sw-ext://ABC/bad-sw.js" toData:"1 = 1;"_s];
 
     WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
     [webViewConfiguration setURLSchemeHandler:schemeHandler.get() forURLScheme:@"sw-ext"];
@@ -3667,6 +4014,9 @@ TEST(ServiceWorker, ExtensionServiceWorkerFailureBadURL)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:webViewConfiguration]);
 
@@ -3693,6 +4043,9 @@ TEST(ServiceWorker, ExtensionServiceWorkerFailureViewClosed)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
     RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:webViewConfiguration]);
 
@@ -3718,6 +4071,9 @@ TEST(ServiceWorker, ExtensionServiceWorkerFailureViewDestroyed)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     @autoreleasepool {
         WKWebViewConfiguration *webViewConfiguration = [WKWebViewConfiguration _test_configurationWithTestPlugInClassName:@"ServiceWorkerPagePlugIn"];
@@ -3767,6 +4123,9 @@ TEST(ServiceWorker, RemovalOfSameRegistrableDomainButDifferentOrigin)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     [[WKWebsiteDataStore defaultDataStore] _terminateNetworkProcess];
 
@@ -3881,6 +4240,9 @@ TEST(ServiceWorkers, CacheStorageNetworkProcessCrash)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     configuration.get().websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
 
@@ -3976,6 +4338,9 @@ TEST(ServiceWorker, ServiceWorkerWindowClientFocus)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     auto preferences = [configuration preferences];
 
@@ -4010,7 +4375,7 @@ TEST(ServiceWorker, ServiceWorkerWindowClientFocus)
 #endif
 
     done = false;
-    expectedMessage = "focused"_s;
+    serviceWorkerExpectedMessage = "focused"_s;
     [webView1 evaluateJavaScript:@"focusClient()" completionHandler: nil];
     TestWebKitAPI::Util::run(&done);
 #if PLATFORM(MAC)
@@ -4023,18 +4388,18 @@ TEST(ServiceWorker, ServiceWorkerWindowClientFocus)
 
     // FIXME: We should be able to run these tests in iOS once pages are actually visible.
     done = false;
-    expectedMessage = "PASS"_s;
+    serviceWorkerExpectedMessage = "PASS"_s;
     [webView1 evaluateJavaScript:@"checkFocusValue(true, 'webView1')" completionHandler:nil];
     TestWebKitAPI::Util::run(&done);
 
     done = false;
-    expectedMessage = "PASS"_s;
+    serviceWorkerExpectedMessage = "PASS"_s;
     [webView2 evaluateJavaScript:@"checkFocusValue(false, 'webView2')" completionHandler:nil];
     TestWebKitAPI::Util::run(&done);
 #endif
 
     done = false;
-    expectedMessage = "focused"_s;
+    serviceWorkerExpectedMessage = "focused"_s;
     [webView2 evaluateJavaScript:@"focusClient()" completionHandler: nil];
     TestWebKitAPI::Util::run(&done);
 #if PLATFORM(MAC)
@@ -4046,7 +4411,7 @@ TEST(ServiceWorker, ServiceWorkerWindowClientFocus)
 
     // FIXME: We should be able to run these tests in iOS once pages are actually visible.
     done = false;
-    expectedMessage = "PASS"_s;
+    serviceWorkerExpectedMessage = "PASS"_s;
     [webView2 evaluateJavaScript:@"checkFocusValue(true, 'webView2')" completionHandler:nil];
     TestWebKitAPI::Util::run(&done);
 #endif
@@ -4062,6 +4427,9 @@ TEST(ServiceWorker, ServiceWorkerWindowClientFocusRequiresUserGesture)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     auto preferences = [configuration preferences];
@@ -4085,7 +4453,7 @@ TEST(ServiceWorker, ServiceWorkerWindowClientFocusRequiresUserGesture)
     EXPECT_WK_STREQ([webView _test_waitForAlert], "successfully registered");
 
     done = false;
-    expectedMessage = "not focused"_s;
+    serviceWorkerExpectedMessage = "not focused"_s;
     [webView evaluateJavaScript:@"focusClient()" completionHandler: nil];
     TestWebKitAPI::Util::run(&done);
 }
@@ -4144,6 +4512,9 @@ TEST(ServiceWorker, openWindowWithoutDelegate)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     auto preferences = [configuration preferences];
 
@@ -4166,7 +4537,7 @@ TEST(ServiceWorker, openWindowWithoutDelegate)
     EXPECT_WK_STREQ([webView _test_waitForAlert], "successfully registered");
 
     done = false;
-    expectedMessage = "opened without client"_s;
+    serviceWorkerExpectedMessage = "opened without client"_s;
     [webView evaluateJavaScript:@"openWindowClient()" completionHandler: nil];
     TestWebKitAPI::Util::run(&done);
 }
@@ -4292,6 +4663,9 @@ TEST(ServiceWorker, WindowClientNavigate)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     for (_WKFeature *feature in [WKPreferences _features]) {
         if ([feature.key isEqualToString:@"CrossOriginOpenerPolicyEnabled"])
@@ -4362,6 +4736,9 @@ TEST(ServiceWorker, WindowClientNavigateCrossOrigin)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     RetainPtr webView1 = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 300) configuration:configuration.get() addToWindow:YES]);
@@ -4426,6 +4803,9 @@ TEST(ServiceWorker, OpenWindowWebsiteDataStoreDelegate)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
     auto preferences = [configuration preferences];
@@ -4476,6 +4856,9 @@ TEST(ServiceWorker, OpenWindowCOOP)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
@@ -4598,6 +4981,9 @@ TEST(ServiceWorker, FocusNotYetLoadedClient)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
 
@@ -4734,6 +5120,9 @@ TEST(ServiceWorkers, ServiceWorkerStorageTiming)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr messageHandler = adoptNS([[SWMessageHandlerWithExpectedMessage alloc] init]);
 
     TestWebKitAPI::HTTPServer server({
@@ -4746,18 +5135,18 @@ TEST(ServiceWorkers, ServiceWorkerStorageTiming)
     [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"sw"];
 
     done = false;
-    expectedMessage = "Message from worker: V1"_s;
+    serviceWorkerExpectedMessage = "Message from worker: V1"_s;
     RetainPtr webView1 = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get() addToWindow: YES]);
     [webView1 loadRequest:server.request()];
     TestWebKitAPI::Util::run(&done);
 
-    HashMap<String, String> sourceHeaders;
-    sourceHeaders.add("Cache-Control"_s, "no-cache"_s);
-    sourceHeaders.add("Content-Type"_s, "application/javascript"_s);
+    Vector<WTF::KeyValuePair<String, String>> sourceHeaders;
+    sourceHeaders.append({ "Cache-Control"_s, "no-cache"_s });
+    sourceHeaders.append({ "Content-Type"_s, "application/javascript"_s });
     server.setResponse("/sw.js"_s, TestWebKitAPI::HTTPResponse { WTF::move(sourceHeaders), serviceWorkerStorageTimingScriptBytesV2 });
 
     done = false;
-    expectedMessage = "Message from worker: V1"_s;
+    serviceWorkerExpectedMessage = "Message from worker: V1"_s;
     RetainPtr webView2 = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
     [webView2 loadRequest:server.request()];
     TestWebKitAPI::Util::run(&done);
@@ -4773,7 +5162,7 @@ TEST(ServiceWorkers, ServiceWorkerStorageTiming)
     [[webView1 configuration].websiteDataStore _terminateNetworkProcess];
 
     done = false;
-    expectedMessage = "Message from worker: V2"_s;
+    serviceWorkerExpectedMessage = "Message from worker: V2"_s;
     RetainPtr webView3 = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
     [webView3 loadRequest:server.request()];
     TestWebKitAPI::Util::run(&done);
@@ -4831,9 +5220,14 @@ TEST(ServiceWorker, ServiceWorkerProcessSwapWithNoDelay)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr dataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
     [dataStoreConfiguration setServiceWorkerProcessTerminationDelayEnabled:NO];
     RetainPtr dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:dataStoreConfiguration.get()]);
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [dataStore _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     setConfigurationInjectedBundlePath(configuration.get());
@@ -4966,7 +5360,11 @@ TEST(ServiceWorkers, ServiceWorkerCacheReference)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [configuration _setAllowTestOnlyIPC:YES];
 
     auto context = adoptWK(TestWebKitAPI::Util::createContextForInjectedBundleTest("InternalsInjectedBundleTest"));
     [configuration setProcessPool:(WKProcessPool *)context.get()];
@@ -5108,6 +5506,9 @@ TEST(ServiceWorker, ServiceWorkerIdleOnMemoryPressure)
     TestWebKitAPI::Util::run(&done);
     done = false;
 
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
+
     RetainPtr dataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
     [dataStoreConfiguration setServiceWorkerProcessTerminationDelayEnabled:NO];
     RetainPtr dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:dataStoreConfiguration.get()]);
@@ -5247,6 +5648,9 @@ TEST(ServiceWorker, ServiceWorkerReadableStreamDownloadCancel)
     }];
     TestWebKitAPI::Util::run(&done);
     done = false;
+
+    // Disable ITP so it doesn't inadvertently delete our service worker registrations.
+    [[WKWebsiteDataStore defaultDataStore] _setResourceLoadStatisticsEnabled:NO];
 
     RetainPtr dataStoreConfiguration = adoptNS([[_WKWebsiteDataStoreConfiguration alloc] init]);
     [dataStoreConfiguration setServiceWorkerProcessTerminationDelayEnabled:NO];

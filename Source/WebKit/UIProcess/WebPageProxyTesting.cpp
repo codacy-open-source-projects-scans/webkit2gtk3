@@ -26,15 +26,17 @@
 #include "config.h"
 #include "WebPageProxyTesting.h"
 
+#include "BrowsingContextGroup.h"
 #include "Connection.h"
 #include "MessageSenderInlines.h"
 #include "NetworkProcessMessages.h"
-#include "NetworkProcessProxy.h"
 #include "WebBackForwardList.h"
 #include "WebFrameProxy.h"
 #include "WebPageMessages.h"
 #include "WebPageProxy.h"
 #include "WebPageTestingMessages.h"
+#include "WebProcessMessages.h"
+#include "WebProcessPool.h"
 #include "WebProcessProxy.h"
 #include <WebCore/IntPoint.h>
 #include <wtf/CallbackAggregator.h>
@@ -87,6 +89,42 @@ void WebPageProxyTesting::isLayerTreeFrozen(CompletionHandler<void(bool)>&& comp
     sendWithAsyncReply(Messages::WebPageTesting::IsLayerTreeFrozen(), WTF::move(completionHandler));
 }
 
+void WebPageProxyTesting::numberOfLiveDocuments(CompletionHandler<void(uint64_t)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::WebPageTesting::NumberOfLiveDocuments(), WTF::move(completionHandler));
+}
+
+void WebPageProxyTesting::setDisplayForTesting(uint32_t displayID, unsigned nominalFramesPerSecond)
+{
+    m_displayNominalFramesPerSecondOverride = nominalFramesPerSecond;
+    protect(page())->windowScreenDidChange(displayID);
+}
+
+void WebPageProxyTesting::preferredRenderingUpdateIntervalsInMilliseconds(CompletionHandler<void(Vector<double>&&)>&& completionHandler)
+{
+    class IntervalAggregator : public RefCounted<IntervalAggregator> {
+    public:
+        static Ref<IntervalAggregator> create(CompletionHandler<void(Vector<double>&&)>&& completionHandler) { return adoptRef(*new IntervalAggregator(WTF::move(completionHandler))); }
+        void add(double interval) { m_intervals.append(interval); }
+        ~IntervalAggregator()
+        {
+            m_completionHandler(WTF::move(m_intervals));
+        }
+    private:
+        explicit IntervalAggregator(CompletionHandler<void(Vector<double>&&)>&& completionHandler)
+            : m_completionHandler(WTF::move(completionHandler)) { }
+        CompletionHandler<void(Vector<double>&&)> m_completionHandler;
+        Vector<double> m_intervals;
+    };
+
+    Ref aggregator = IntervalAggregator::create(WTF::move(completionHandler));
+    protect(page())->forEachWebContentProcess([&](auto& webProcess, auto pageID) {
+        webProcess.sendWithAsyncReply(Messages::WebPageTesting::PreferredRenderingUpdateIntervalInMilliseconds(), [aggregator](double interval) {
+            aggregator->add(interval);
+        }, pageID);
+    });
+}
+
 void WebPageProxyTesting::setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&& completionHandler)
 {
     protect(protect(protect(page())->websiteDataStore())->networkProcess())->setCrossSiteLoadWithLinkDecorationForTesting(protect(page())->sessionID(), WebCore::RegistrableDomain { fromURL }, WebCore::RegistrableDomain { toURL }, wasFiltered, WTF::move(completionHandler));
@@ -109,6 +147,15 @@ bool WebPageProxyTesting::isEditingCommandEnabled(const String& commandName)
     auto [result] = sendResult.takeReply();
     return result;
 }
+
+#if PLATFORM(IOS_FAMILY)
+void WebPageProxyTesting::screenIsBeingCaptured(FrameIdentifier frameID, CompletionHandler<void(bool)>&& completionHandler)
+{
+    Ref page = m_page.get();
+    Ref process = page->processContainingFrame(frameID);
+    process->sendWithAsyncReply(Messages::WebPageTesting::ScreenIsBeingCaptured(), WTF::move(completionHandler), page->webPageIDInProcess(process.get()));
+}
+#endif
 
 void WebPageProxyTesting::dumpPrivateClickMeasurement(CompletionHandler<void(const String&)>&& completionHandler)
 {
@@ -193,13 +240,13 @@ void WebPageProxyTesting::startMonitoringWheelEventsForTesting(CompletionHandler
     sendWithAsyncReply(Messages::WebPageTesting::StartMonitoringWheelEventsForTesting(), WTF::move(completionHandler));
 }
 
-void WebPageProxyTesting::waitForWheelEventsToCompleteForTesting(CompletionHandler<void()>&& completionHandler)
+void WebPageProxyTesting::waitForWheelEventsToCompleteForTesting(bool expectMomentumEnd, CompletionHandler<void()>&& completionHandler)
 {
     if (!page().hasRunningProcess()) {
         completionHandler();
         return;
     }
-    sendWithAsyncReply(Messages::WebPageTesting::WaitForWheelEventsToCompleteForTesting(), WTF::move(completionHandler));
+    sendWithAsyncReply(Messages::WebPageTesting::WaitForWheelEventsToCompleteForTesting(expectMomentumEnd), WTF::move(completionHandler));
 }
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
@@ -221,14 +268,17 @@ void WebPageProxyTesting::setObscuredContentInsets(float top, float right, float
 
 void WebPageProxyTesting::resetStateBetweenTests()
 {
-    protect(page().legacyMainFrameProcess())->resetState();
+    Ref page = m_page;
+    page->legacyMainFrameProcess().resetState();
 
-    if (auto* mainFrame = m_page->mainFrame())
+    if (auto* mainFrame = page->mainFrame())
         mainFrame->disownOpener();
 
-    protect(page())->forEachWebContentProcess([&](auto& webProcess, auto pageID) {
+    page->forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         webProcess.send(Messages::WebPageTesting::ResetStateBetweenTests(), pageID);
     });
+
+    protect(page->browsingContextGroup())->clearBrowsingContextGroupForTesting();
 }
 
 void WebPageProxyTesting::clearBackForwardList(CompletionHandler<void()>&& completionHandler)
@@ -256,6 +306,26 @@ void WebPageProxyTesting::displayAndTrackRepaints(CompletionHandler<void()>&& co
     protect(page())->forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         webProcess.sendWithAsyncReply(Messages::WebPageTesting::DisplayAndTrackRepaints(), [callbackAggregator] { }, pageID);
     });
+}
+
+void WebPageProxyTesting::storageAreaMapCount(CompletionHandler<void(uint64_t)>&& completionHandler)
+{
+    Ref processPool = page().legacyMainFrameProcess().processPool();
+
+    struct TotalCount : RefCounted<TotalCount> {
+        uint64_t value { 0 };
+    };
+    Ref totalCount = adoptRef(*new TotalCount);
+    Ref callbackAggregator = CallbackAggregator::create([totalCount, completionHandler = WTF::move(completionHandler)]() mutable {
+        completionHandler(totalCount->value);
+    });
+    for (auto& process : processPool->processes()) {
+        if (!process->pageCount())
+            continue;
+        process->sendWithAsyncReply(Messages::WebProcess::GetStorageAreaMapCountForTesting(), [totalCount, callbackAggregator](uint64_t count) {
+            totalCount->value += count;
+        });
+    }
 }
 
 } // namespace WebKit

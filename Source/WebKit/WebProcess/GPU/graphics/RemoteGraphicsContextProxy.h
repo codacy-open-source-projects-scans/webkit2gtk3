@@ -50,8 +50,8 @@ class SharedVideoFrameWriter;
 class RemoteGraphicsContextProxy : public WebCore::DisplayList::Recorder {
     WTF_MAKE_TZONE_ALLOCATED(RemoteGraphicsContextProxy);
 public:
-    RemoteGraphicsContextProxy(const WebCore::DestinationColorSpace&, WebCore::RenderingMode, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, RemoteRenderingBackendProxy&);
-    RemoteGraphicsContextProxy(const WebCore::DestinationColorSpace&, WebCore::ContentsFormat, WebCore::RenderingMode, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, RemoteGraphicsContextIdentifier, RemoteRenderingBackendProxy&);
+    RemoteGraphicsContextProxy(const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, const WebCore::ColorSpace&, WebCore::RenderingMode, RemoteRenderingBackendProxy&);
+    RemoteGraphicsContextProxy(const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, const WebCore::ColorSpace&, WebCore::ContentsFormat, WebCore::RenderingMode, RemoteGraphicsContextIdentifier, RemoteRenderingBackendProxy&);
     ~RemoteGraphicsContextProxy();
     RemoteGraphicsContextIdentifier identifier() const { return m_identifier; }
 
@@ -68,8 +68,22 @@ public:
     // Returns true if there has been potential draws since last call.
     bool consumeHasDrawn();
 
+    // Single-line strokes are coalesced into a batch message that is written
+    // into the IPC stream lazily, so the buffered strokes sit *in front of* the
+    // stream. They must be sent into the stream before any other command is
+    // written to it (otherwise they would be reordered behind it) and before
+    // any path that observes the buffer's pixels. Drawing commands call this
+    // alongside appendStateChangeItemIfNecessary(); senders that do not go
+    // through that path (transforms, line-style setters, clips, save/restore,
+    // read-backs) call it explicitly.
+    void sendPendingDrawsIfNecessary()
+    {
+        if (!m_pendingLineStrokes.isEmpty()) [[unlikely]]
+            sendPendingDraws();
+    }
+
 protected:
-    RemoteGraphicsContextProxy(const WebCore::DestinationColorSpace&, std::optional<WebCore::ContentsFormat>, WebCore::RenderingMode, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, DrawGlyphsMode, RemoteGraphicsContextIdentifier, RemoteRenderingBackendProxy&);
+    RemoteGraphicsContextProxy(const WebCore::GraphicsContextState&, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, const WebCore::ColorSpace&, DrawGlyphsMode, std::optional<WebCore::ContentsFormat>, WebCore::RenderingMode, RemoteGraphicsContextIdentifier, RemoteRenderingBackendProxy&);
 
     template<typename T> void send(T&& message);
 
@@ -79,6 +93,7 @@ private:
     bool knownToHaveFloatBasedBacking() const final;
 
     WebCore::RenderingMode renderingMode() const final;
+    std::optional<WebCore::RenderingMethod> renderingMethod() const final { return std::nullopt; }
 
     void save(WebCore::GraphicsContextState::Purpose) final;
     void restore(WebCore::GraphicsContextState::Purpose) final;
@@ -126,7 +141,7 @@ private:
     void fillRectWithRoundedHole(const WebCore::FloatRect&, const WebCore::FloatRoundedRect&, const WebCore::Color&) final;
     void fillEllipse(const WebCore::FloatRect&) final;
 #if ENABLE(VIDEO)
-    void drawVideoFrame(const WebCore::VideoFrame&, const WebCore::FloatRect& distination, WebCore::ImageOrientation, bool shouldDiscardAlpha) final;
+    void drawVideoFrame(const WebCore::VideoFrame&, const WebCore::FloatRect& distination, WebCore::ShouldDiscardAlpha, WebCore::ImagePaintingOptions) final;
 #endif
     void strokePath(const WebCore::Path&) final;
     void strokeRect(const WebCore::FloatRect&, float) final;
@@ -134,7 +149,7 @@ private:
     void clearRect(const WebCore::FloatRect&) final;
     void drawControlPart(WebCore::ControlPart&, const WebCore::FloatRoundedRect& borderRect, float deviceScaleFactor, const WebCore::ControlStyle&) final;
     void drawGlyphs(const WebCore::Font&, std::span<const WebCore::GlyphBufferGlyph>, std::span<const WebCore::GlyphBufferAdvance>, const WebCore::FloatPoint& localAnchor, WebCore::FontSmoothingMode) final;
-    void drawGlyphsImmediate(const WebCore::Font&, std::span<const WebCore::GlyphBufferGlyph>, std::span<const WebCore::GlyphBufferAdvance>, const WebCore::FloatPoint& localAnchor, WebCore::FontSmoothingMode) final;
+    void drawGlyphsImmediate(const WebCore::FontBase&, std::span<const WebCore::GlyphBufferGlyph>, std::span<const WebCore::GlyphBufferAdvance>, const WebCore::FloatPoint& localAnchor, WebCore::FontSmoothingMode) final;
 
 #if USE(CG)
     void applyStrokePattern() final;
@@ -150,7 +165,7 @@ private:
     [[nodiscard]] bool recordResourceUse(WebCore::ImageBuffer&);
     std::optional<RemotePathImplIdentifier> recordResourceUse(const WebCore::PathImpl&);
     bool recordResourceUse(const WebCore::SourceImage&);
-    bool recordResourceUse(WebCore::Font&);
+    bool recordResourceUse(WebCore::FontBase&);
     std::optional<RemoteGradientIdentifier> recordResourceUse(WebCore::Gradient&);
     bool recordResourceUse(WebCore::Filter&);
     std::optional<RemoteDisplayListIdentifier> recordResourceUse(const WebCore::DisplayList::DisplayList&);
@@ -161,15 +176,25 @@ protected:
 
 private:
     struct InlineStrokeData {
-        std::optional<WebCore::PackedColor::RGBA> color;
-        std::optional<float> thickness;
+        WebCore::PackedColor::RGBA color;
+        float thickness;
     };
-    // Synchronizes draw state and returns stroke state that needs to be sent inline with the stroke command.
-    InlineStrokeData appendStateChangeItemForInlineStrokeIfNecessary();
+    // If the only pending state changes are stroke color/thickness and the
+    // stroke brush is a packed color, marks those changes applied and returns
+    // the current stroke color/thickness to stamp on a buffered line. Otherwise
+    // returns std::nullopt and the caller must flush pending draws and emit
+    // state through appendStateChangeItemIfNecessary().
+    std::optional<InlineStrokeData> inlineStrokeStateIfBatchable();
 
-    RefPtr<WebCore::ImageBuffer> createImageBuffer(const WebCore::FloatSize&, float resolutionScale, const WebCore::DestinationColorSpace&, std::optional<WebCore::RenderingMode>, std::optional<WebCore::RenderingMethod>, WebCore::ImageBufferFormat) const final;
-    RefPtr<WebCore::ImageBuffer> createAlignedImageBuffer(const WebCore::FloatSize&, const WebCore::DestinationColorSpace&, std::optional<WebCore::RenderingMethod>) const final;
-    RefPtr<WebCore::ImageBuffer> createAlignedImageBuffer(const WebCore::FloatRect&, const WebCore::DestinationColorSpace&, std::optional<WebCore::RenderingMethod>) const final;
+    void bufferLine(const WebCore::PathDataLine&, const InlineStrokeData&);
+    void sendPendingDraws();
+
+    static constexpr size_t maxPendingLineStrokes = 64;
+    Vector<WebCore::PathDataLineColorThickness> m_pendingLineStrokes;
+
+    RefPtr<WebCore::ImageBuffer> createImageBuffer(const WebCore::FloatSize&, float resolutionScale, const WebCore::ColorSpace&, std::optional<WebCore::RenderingMode>, std::optional<WebCore::RenderingMethod>, WebCore::ImageBufferFormat) const final;
+    RefPtr<WebCore::ImageBuffer> createAlignedImageBuffer(const WebCore::FloatSize&, const WebCore::ColorSpace&, std::optional<WebCore::RenderingMethod>) const final;
+    RefPtr<WebCore::ImageBuffer> createAlignedImageBuffer(const WebCore::FloatRect&, const WebCore::ColorSpace&, std::optional<WebCore::RenderingMethod>) const final;
 
 #if HAVE(SUPPORT_HDR_DISPLAY)
     void setMaxEDRHeadroom(std::optional<float> headroom) final { m_maxEDRHeadroom = headroom; }
@@ -199,6 +224,7 @@ private:
 
 inline bool RemoteGraphicsContextProxy::consumeHasDrawn()
 {
+    sendPendingDrawsIfNecessary();
     return std::exchange(m_hasDrawn, false);
 }
 

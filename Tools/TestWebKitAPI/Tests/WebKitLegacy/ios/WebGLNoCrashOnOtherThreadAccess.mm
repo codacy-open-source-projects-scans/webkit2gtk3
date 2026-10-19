@@ -35,7 +35,7 @@
 #import <stdlib.h>
 #import <wtf/RetainPtr.h>
 
-#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
+#if PLATFORM(MACCATALYST)
 #import <OpenGL/OpenGL.h>
 #elif PLATFORM(IOS) || PLATFORM(VISION)
 #import <OpenGLES/EAGL.h>
@@ -45,8 +45,8 @@ namespace {
 bool didFinishLoad;
 bool didFinishTest;
 
-#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
-class SetContextCGL {
+#if PLATFORM(MACCATALYST)
+struct SetContextCGL {
     SetContextCGL()
     {
         // TODO: implement properly. Skipped due to complicated instantiation.
@@ -59,7 +59,7 @@ class SetContextCGL {
     }
 };
 #else
-class SetContextCGL {
+struct SetContextCGL {
 
 };
 #endif

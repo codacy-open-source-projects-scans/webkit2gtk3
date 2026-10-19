@@ -30,6 +30,7 @@
 #import "Helpers/Test.h"
 #import "TestInputDelegate.h"
 #import "Helpers/cocoa/TestNavigationDelegate.h"
+#import "Helpers/cocoa/TestScriptMessageHandler.h"
 #import "Helpers/cocoa/TestUIDelegate.h"
 #import "Helpers/cocoa/TestWKWebView.h"
 #import "UIKitSPIForTesting.h"
@@ -37,6 +38,7 @@
 #import <WebKit/WKContentWorld.h>
 #import <WebKit/WKContentWorldConfiguration.h>
 #import <WebKit/WKContentWorldPrivate.h>
+#import <WebKit/WKDOMNodeSnapshot.h>
 #import <WebKit/WKProcessPoolPrivate.h>
 #import <WebKit/WKScriptMessage.h>
 #import <WebKit/WKScriptMessageHandlerWithReply.h>
@@ -44,6 +46,8 @@
 #import <WebKit/WKUserScript.h>
 #import <WebKit/WKUserScriptPrivate.h>
 #import <WebKit/WKWebViewConfigurationPrivate.h>
+#import <WebKit/WKWebViewPrivate.h>
+#import <WebKit/WKWebsiteDataStorePrivate.h>
 #import <WebKit/WebKit.h>
 #import <WebKit/_WKContentWorldConfiguration.h>
 #import <WebKit/_WKFrameTreeNode.h>
@@ -702,7 +706,7 @@ TEST(WKUserContentController, UserStyleSheetAffectingOnlySpecificWebViewRemovalA
     expectScriptEvaluatesToColor(webView.get(), backgroundColorScript, blueInRGB);
 }
 
-static RetainPtr<_WKProcessPoolConfiguration> psonProcessPoolConfiguration()
+static RetainPtr<_WKProcessPoolConfiguration> userContentControllerPSONProcessPoolConfiguration()
 {
     RetainPtr processPoolConfiguration = adoptNS([[_WKProcessPoolConfiguration alloc] init]);
     processPoolConfiguration.get().processSwapsOnNavigation = YES;
@@ -713,7 +717,7 @@ static RetainPtr<_WKProcessPoolConfiguration> psonProcessPoolConfiguration()
 
 TEST(WKUserContentController, UserStyleSheetAffectingOnlySpecificWebViewRemovalAfterNavigationPSON)
 {
-    auto processPoolConfiguration = psonProcessPoolConfiguration();
+    auto processPoolConfiguration = userContentControllerPSONProcessPoolConfiguration();
     RetainPtr processPool = adoptNS([[WKProcessPool alloc] _initWithConfiguration:processPoolConfiguration.get()]);
 
     RetainPtr webViewConfiguration = adoptNS([[WKWebViewConfiguration alloc] init]);
@@ -1367,6 +1371,36 @@ TEST(WKUserContentController, BeforeFocusEvent)
     EXPECT_WK_STREQ([webView _test_waitForAlert], "focus-pass");
 }
 
+TEST(WKUserContentController, AutofillScriptingMarksSiteAsIsolated)
+{
+    RetainPtr webView = adoptNS([TestWKWebView new]);
+    RetainPtr configuration = adoptNS([WKContentWorldConfiguration new]);
+    configuration.get().autofillScriptingEnabled = YES;
+    RetainPtr autofillWorld = [WKContentWorld worldWithConfiguration:configuration.get()];
+
+    NSURL *url = [NSURL URLWithString:@"https://example.com/"];
+    [webView synchronouslyLoadHTMLString:@"<input id='password' type='password'>" baseURL:url];
+
+    WKWebsiteDataStore *dataStore = [webView configuration].websiteDataStore;
+
+    // Loading the page has already marked the site with Signal::FirstPartyVisit, so check for the
+    // autofill signal rather than mere membership.
+    constexpr NSUInteger autofillSignal = 1 << 0; // IsolatedSiteStore::Signal::Autofill.
+    EXPECT_FALSE([[dataStore _isolatedSiteSignalsForTesting:url] unsignedIntegerValue] & autofillSignal);
+
+    __block bool doneEvaluatingScript = false;
+    [webView evaluateJavaScript:@"document.getElementById('password').value = 'famos'; document.getElementById('password').autofilled = true" inFrame:nil inContentWorld:autofillWorld.get() completionHandler:^(id, NSError *) {
+        doneEvaluatingScript = true;
+    }];
+    TestWebKitAPI::Util::run(&doneEvaluatingScript);
+
+    EXPECT_WK_STREQ("famos", [webView stringByEvaluatingJavaScript:@"document.getElementById('password').value"]);
+
+    EXPECT_TRUE(TestWebKitAPI::Util::waitFor(^{
+        return (bool)([[dataStore _isolatedSiteSignalsForTesting:url] unsignedIntegerValue] & autofillSignal);
+    }));
+}
+
 #endif // PLATFORM(MAC)
 
 TEST(WKUserContentController, BeforeBlurEvent)
@@ -1391,6 +1425,10 @@ TEST(WKUserContentController, BeforeBlurEvent)
         "shadowRoot.querySelector('#text1').focus();"
         "</script>"];
 
+#if PLATFORM(IOS_FAMILY)
+    [webView focusInWindow];
+    [webView waitForNextPresentationUpdate];
+#endif
     [webView evaluateJavaScript:@"shadowRoot.querySelector('#text2').focus()" completionHandler:nil];
     EXPECT_WK_STREQ([webView _test_waitForAlert], "blur-pass");
 }
@@ -2006,4 +2044,86 @@ TEST(WKUserContentController, EvaluateLargeJavaScriptStringInAutoFillWorld)
     // Check that script still works after caching.
     result = [webView objectByEvaluatingJavaScript:largeScript inFrame:nil inContentWorld:autofillWorld.get()];
     EXPECT_EQ([result intValue], 2);
+}
+
+@interface SerializedNodeReplyHandler : NSObject <WKScriptMessageHandlerWithReply>
+@property (nonatomic, strong) WKContentWorld *world;
+@end
+
+@implementation SerializedNodeReplyHandler
+
+- (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message replyHandler:(void (^)(id, NSString *errorMessage))replyHandler
+{
+    WKWebView *webView = message.webView;
+    [webView evaluateJavaScript:@"window.webkit.createNodeSnapshot(document.createElement('div'))" inFrame:nil inContentWorld:self.world completionHandler:^(id result, NSError *error) {
+        EXPECT_NULL(error);
+        EXPECT_TRUE([result isKindOfClass:WKDOMNodeSnapshot.class]);
+        replyHandler(result, nil);
+    }];
+}
+
+@end
+
+TEST(WKUserContentController, MessageHandlerReplyWithSerializedNode)
+{
+    RetainPtr worldConfiguration = adoptNS([WKContentWorldConfiguration new]);
+    worldConfiguration.get().nodeSnapshotCreationEnabled = YES;
+    RetainPtr world = [WKContentWorld worldWithConfiguration:worldConfiguration.get()];
+
+    RetainPtr handler = adoptNS([SerializedNodeReplyHandler new]);
+    handler.get().world = world.get();
+
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [[configuration userContentController] addScriptMessageHandlerWithReply:handler.get() contentWorld:world.get() name:@"testHandler"];
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+    [webView synchronouslyLoadHTMLString:@"<body>test</body>"];
+
+    __block bool done = false;
+    [webView callAsyncJavaScript:@"let node = await window.webkit.messageHandlers.testHandler.postMessage('serialize'); return node.nodeName" arguments:nil inFrame:nil inContentWorld:world.get() completionHandler:^(id result, NSError *error) {
+        EXPECT_NULL(error);
+        EXPECT_WK_STREQ(result, "DIV");
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+}
+
+TEST(WKUserContentController, MessageHandlerInjectsWebKitNamespace)
+{
+    RetainPtr handler = adoptNS([ScriptMessageHandler new]);
+    RetainPtr configuration = adoptNS([WKWebViewConfiguration new]);
+    [[configuration userContentController] addScriptMessageHandler:handler.get() name:@"testHandler"];
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+    [webView synchronouslyLoadHTMLString:@"<body>test</body>"];
+
+    EXPECT_TRUE([[webView objectByEvaluatingJavaScript:@"!!window.webkit.messageHandlers.testHandler"] boolValue]);
+
+    // The other WebKitNamespace attributes shouldn't be accessible.
+    EXPECT_FALSE([[webView objectByEvaluatingJavaScript:@"window.webkit.evaluateScript"] boolValue]);
+    EXPECT_FALSE([[webView objectByEvaluatingJavaScript:@"window.webkit.createJSHandle"] boolValue]);
+    EXPECT_FALSE([[webView objectByEvaluatingJavaScript:@"window.webkit.createNodeSnapshot"] boolValue]);
+}
+
+TEST(WKUserContentController, PostMessageDuringPageClose)
+{
+    constexpr NSUInteger messageCount = 50;
+
+    RetainPtr handler = adoptNS([TestScriptMessageHandler new]);
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [[configuration userContentController] addScriptMessageHandler:handler.get() name:@"handler"];
+
+    RetainPtr webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
+
+    RetainPtr html = [NSString stringWithFormat:@"<script>for (let i = 0; i < %lu; i++) window.webkit.messageHandlers.handler.postMessage(i);</script>", static_cast<unsigned long>(messageCount)];
+    [webView loadHTMLString:html.get() baseURL:nil];
+
+    // Close the page on the first message, then confirm the remaining in-flight messages
+    // are still delivered without terminating the WebContent process.
+    for (NSUInteger i = 0; i < messageCount; i++) {
+        WKScriptMessage *message = [handler waitForMessage];
+        EXPECT_EQ([(NSNumber *)message.body unsignedIntegerValue], i);
+        if (!i)
+            [webView _close];
+    }
 }

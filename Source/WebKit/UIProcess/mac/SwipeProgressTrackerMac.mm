@@ -28,6 +28,7 @@
 
 #if PLATFORM(MAC)
 
+#import "APIPageConfiguration.h"
 #import "DisplayLink.h"
 #import "DrawingAreaProxy.h"
 #import "ViewGestureController.h"
@@ -57,6 +58,8 @@ static double easeOutCubic(double t)
 SwipeProgressTracker::SwipeProgressTracker(WebPageProxy& webPageProxy, ViewGestureController& viewGestureController)
     : m_viewGestureController(viewGestureController)
     , m_webPageProxy(webPageProxy)
+    , m_pageIdentifier(webPageProxy.identifier())
+    , m_processPool(webPageProxy.configuration().processPool())
 {
 }
 
@@ -101,8 +104,8 @@ double SwipeProgressTracker::totalSwipeDistance() const
     if (m_viewGestureController->hasCustomSwipeViews())
         return m_viewGestureController->customSwipeViewsWidth();
 
-    RefPtr page = m_webPageProxy.get();
-    if (!page || !page->drawingArea())
+    Ref page = m_webPageProxy;
+    if (!page->drawingArea())
         return 0;
 
     return page->drawingArea()->size().width();
@@ -117,7 +120,7 @@ bool SwipeProgressTracker::handleEvent(PlatformScrollEvent event)
         return false;
 
     case State::Pending:
-        viewGestureController->beginSwipeGesture(m_targetItem.get(), m_direction);
+        viewGestureController->beginSwipeGesture(protect(m_targetItem), m_direction);
         m_state = State::Swiping;
         break;
 
@@ -155,7 +158,7 @@ bool SwipeProgressTracker::handleEvent(PlatformScrollEvent event)
     double minProgress = !swipingLeft ? -1 : 0;
     m_progress = std::clamp(m_progress, minProgress, maxProgress);
 
-    viewGestureController->handleSwipeGesture(m_targetItem.get(), m_progress, m_direction);
+    viewGestureController->handleSwipeGesture(protect(m_targetItem), m_progress, m_direction);
     return true;
 }
 
@@ -211,7 +214,7 @@ void SwipeProgressTracker::animationTimerFired()
 
     m_progress = m_animationStartProgress + (m_animationEndProgress - m_animationStartProgress) * easeOutCubic(animationProgress);
 
-    protect(m_viewGestureController)->handleSwipeGesture(m_targetItem.get(), m_progress, m_direction);
+    protect(m_viewGestureController)->handleSwipeGesture(protect(m_targetItem), m_progress, m_direction);
 
     if (now >= m_animationEndTime)
         endAnimation();
@@ -221,17 +224,13 @@ void SwipeProgressTracker::endAnimation()
 {
     stopDisplayLinkObserver();
     m_state = State::Done;
-    protect(m_viewGestureController)->endSwipeGesture(m_targetItem.get(), m_cancelled);
+    protect(m_viewGestureController)->endSwipeGesture(protect(m_targetItem), m_cancelled);
 }
 
 void SwipeProgressTracker::displayLinkFired(WebCore::PlatformDisplayID, WebCore::DisplayUpdate, bool, bool)
 {
-    RefPtr page = m_webPageProxy.get();
-    if (!page)
-        return;
-
-    RunLoop::mainSingleton().dispatch([pageID = page->identifier()]() {
-        RefPtr controller = ViewGestureController::controllerForPage(pageID);
+    RunLoop::mainSingleton().dispatch([pageIdentifier = m_pageIdentifier] {
+        RefPtr controller = ViewGestureController::controllerForPage(pageIdentifier);
         if (controller && controller->swipeProgressTracker())
             protect(*controller->swipeProgressTracker())->animationTimerFired();
     });
@@ -239,10 +238,7 @@ void SwipeProgressTracker::displayLinkFired(WebCore::PlatformDisplayID, WebCore:
 
 void SwipeProgressTracker::startDisplayLinkObserver()
 {
-    RefPtr page = m_webPageProxy.get();
-    if (!page)
-        return;
-
+    Ref page = m_webPageProxy;
     m_displayLinkObserverID = DisplayLinkObserverID::generate();
     auto displayID = page->displayID().value_or(0);
     page->configuration().processPool().displayLinks().startDisplayLink(*this, *m_displayLinkObserverID, displayID, WebCore::FullSpeedFramesPerSecond);
@@ -253,14 +249,9 @@ void SwipeProgressTracker::stopDisplayLinkObserver()
     if (!m_displayLinkObserverID)
         return;
 
-    RefPtr page = m_webPageProxy.get();
-    if (!page) {
-        m_displayLinkObserverID = std::nullopt;
-        return;
-    }
+    if (RefPtr processPool = m_processPool.get())
+        processPool->displayLinks().stopDisplayLinks(*this);
 
-    auto displayID = page->displayID().value_or(0);
-    page->configuration().processPool().displayLinks().stopDisplayLink(*this, *m_displayLinkObserverID, displayID);
     m_displayLinkObserverID = std::nullopt;
 }
 

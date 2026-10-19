@@ -34,13 +34,12 @@
 #include "FrameDestructionObserverInlines.h"
 #include "LocalFrameInlines.h"
 #include "NodeDocument.h"
-#include "NodeInlines.h"
 #include "Pasteboard.h"
 #include "markup.h"
 
 namespace WebCore {
 
-// FIXME: These values are straight out of DragControllerMac, so probably have
+// FIXME: These values are straight out of DragControllerCocoa, so probably have
 // little correlation with Gdk standards...
 const int DragController::MaxOriginalImageArea = 1500 * 1500;
 const int DragController::DragIconRightInset = 7;

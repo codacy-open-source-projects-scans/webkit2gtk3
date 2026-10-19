@@ -72,6 +72,7 @@ public:
 
     bool fetchFrameMetaDataAtIndex(size_t, SubsamplingLevel, const DecodingOptions&, ImageFrame&) const final;
 
+    std::optional<GainMap> frameGainMapAtIndex(size_t, const DecodingOptions&) final;
     PlatformImagePtr createFrameImageAtIndex(size_t, SubsamplingLevel = SubsamplingLevel::Default, const DecodingOptions& = DecodingOptions(DecodingMode::Synchronous)) final;
 
     void setData(const FragmentedSharedBuffer&, bool allDataReceived) final;
@@ -101,7 +102,7 @@ private:
     std::atomic<bool> m_isXBitmapImage { false };
     mutable EncodedDataStatus m_encodedDataStatus { EncodedDataStatus::Unknown };
     String m_uti;
-    RetainPtr<CGImageSourceRef> m_nativeDecoder;
+    const RetainPtr<CGImageSourceRef> m_nativeDecoder;
 };
 
 } // namespace WebCore

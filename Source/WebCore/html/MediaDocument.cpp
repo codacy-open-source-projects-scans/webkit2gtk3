@@ -127,7 +127,7 @@ void MediaDocumentParser::createDocumentStructure()
         return;
 
     frame->loader().activeDocumentLoader()->setMainResourceDataBufferingPolicy(DataBufferingPolicy::DoNotBufferData);
-    frame->loader().setOutgoingReferrer(document->completeURL(m_outgoingReferrer));
+    frame->loader().setOutgoingReferrer(document->encodingParseURL(m_outgoingReferrer));
 }
 
 void MediaDocumentParser::appendBytes(DocumentWriter&, std::span<const uint8_t>)
@@ -155,7 +155,7 @@ Ref<DocumentParser> MediaDocument::createParser()
     return MediaDocumentParser::create(*this);
 }
 
-static inline HTMLVideoElement* NODELETE descendantVideoElement(ContainerNode& node)
+static inline HTMLVideoElement* LEGACY_NODELETE descendantVideoElement(ContainerNode& node)
 {
     if (auto* video = dynamicDowncast<HTMLVideoElement>(node))
         return video;

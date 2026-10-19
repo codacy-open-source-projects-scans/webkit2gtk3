@@ -26,10 +26,8 @@
 #pragma once
 
 #include <WebCore/FontTaggedSettings.h>
-#include <optional>
-#include <vector>
-#include <wtf/Hasher.h>
 #include <wtf/Markable.h>
+#include <wtf/text/WTFString.h>
 
 namespace WTF {
 class TextStream;
@@ -183,7 +181,7 @@ struct FontVariantAlternatesValues {
     String annotation;
     bool historicalForms = false;
 
-    friend void NODELETE add(Hasher&, const FontVariantAlternatesValues&);
+    friend void LEGACY_NODELETE add(Hasher&, const FontVariantAlternatesValues&);
 
     bool operator==(const FontVariantAlternatesValues&) const = default;
 
@@ -251,7 +249,7 @@ public:
         return { };
     }
 
-    friend void add(Hasher&, const FontVariantAlternates&);
+    friend void LEGACY_NODELETE add(Hasher&, const FontVariantAlternates&);
 
 private:
     Markable<Values> m_values;

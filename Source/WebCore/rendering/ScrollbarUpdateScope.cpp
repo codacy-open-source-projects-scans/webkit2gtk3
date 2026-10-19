@@ -35,10 +35,10 @@
 
 namespace WebCore {
 
-ScrollbarUpdateScope::ScrollbarUpdateScope(RenderLayerScrollableArea& scrollableArea, ScrollPosition originalScrollPosition, OptionSet<ScrollbarChange> scrollbarChanges, HasHorizontalOverflow hasHorizontalOverflow, HasVerticalOverflow hasVerticalOverflow)
+ScrollbarUpdateScope::ScrollbarUpdateScope(RenderLayerScrollableArea& scrollableArea, ScrollPosition originalScrollPosition, EnumSet<ScrollbarOrientation> autoScrollbarChanges, HasHorizontalOverflow hasHorizontalOverflow, HasVerticalOverflow hasVerticalOverflow)
     : m_renderLayerScrollableArea(scrollableArea)
     , m_originalScrollPosition(originalScrollPosition)
-    , m_scrollbarChanges(scrollbarChanges)
+    , m_autoScrollbarChanges(autoScrollbarChanges)
     , m_hasHorizontalOverflow(hasHorizontalOverflow)
     , m_hasVerticalOverflow(hasVerticalOverflow)
 {
@@ -51,9 +51,9 @@ ScrollbarUpdateScope::~ScrollbarUpdateScope()
 
     // Set up the range.
     if (RefPtr hBar = m_renderLayerScrollableArea->m_hBar)
-        hBar->setProportion(roundToInt(box->clientWidth()), m_renderLayerScrollableArea->m_scrollWidth);
+        hBar->setProportion(roundToInt(box->paddingBoxWidth()), m_renderLayerScrollableArea->m_scrollWidth);
     if (RefPtr vBar = m_renderLayerScrollableArea->m_vBar)
-        vBar->setProportion(roundToInt(box->clientHeight()), m_renderLayerScrollableArea->m_scrollHeight);
+        vBar->setProportion(roundToInt(box->paddingBoxHeight()), m_renderLayerScrollableArea->m_scrollHeight);
 
     m_renderLayerScrollableArea->updateScrollbarSteps();
 
@@ -75,8 +75,10 @@ ScrollbarUpdateScope::~ScrollbarUpdateScope()
     LOG_WITH_STREAM(Scrolling, stream << "RenderLayerScrollableArea [" << m_renderLayerScrollableArea->scrollingNodeID() << "] updateScrollInfoAfterLayout - new scroll width " << m_renderLayerScrollableArea->m_scrollWidth << " scroll height " << m_renderLayerScrollableArea->m_scrollHeight
         << " rubber banding " << m_renderLayerScrollableArea->isRubberBandInProgress() << " user scrolling " << m_renderLayerScrollableArea->isUserScrollInProgress() << " scroll position updated from " << m_originalScrollPosition << " to " << m_renderLayerScrollableArea->scrollPosition());
 
-    if (m_originalScrollPosition != m_renderLayerScrollableArea->scrollPosition())
-        m_renderLayerScrollableArea->scrollToPositionWithoutAnimation(IntPoint(m_renderLayerScrollableArea->scrollPosition()));
+    if (m_originalScrollPosition != m_renderLayerScrollableArea->scrollPosition()) {
+        // FIXME: Remove suppression once rdar://189998444 is fixed.
+        SUPPRESS_MEMORY_UNSAFE_CAST m_renderLayerScrollableArea->scrollToPositionWithoutAnimation(IntPoint(m_renderLayerScrollableArea->scrollPosition()));
+    }
 
     if (m_renderLayerScrollableArea->m_layer.isComposited()) {
         m_renderLayerScrollableArea->m_layer.setNeedsCompositingGeometryUpdate();
@@ -88,7 +90,7 @@ ScrollbarUpdateScope::~ScrollbarUpdateScope()
 
     m_renderLayerScrollableArea->resnapAfterLayout();
 
-    InspectorInstrumentation::didAddOrRemoveScrollbars(m_renderLayerScrollableArea->m_layer.renderer());
+    InspectorInstrumentation::didAddOrRemoveScrollbars(protect(m_renderLayerScrollableArea->m_layer.renderer()));
 }
 
 } // namespace WebCore

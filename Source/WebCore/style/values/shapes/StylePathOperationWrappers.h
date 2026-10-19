@@ -50,7 +50,7 @@ struct RayPath {
     ALWAYS_INLINE const RayFunction& ray() const { return operation->ray(); }
     ALWAYS_INLINE CSSBoxType referenceBox() const { return operation->referenceBox(); }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -83,7 +83,7 @@ struct ReferencePath {
     ALWAYS_INLINE const std::optional<WebCore::Path>& path() const { return operation->path(); }
     ALWAYS_INLINE CSSBoxType referenceBox() const { return operation->referenceBox(); }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -114,7 +114,7 @@ struct BasicShapePath {
     ALWAYS_INLINE const BasicShape& shape() const { return operation->shape(); }
     ALWAYS_INLINE CSSBoxType referenceBox() const { return operation->referenceBox(); }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
 
@@ -144,7 +144,7 @@ struct BoxPath {
 
     ALWAYS_INLINE CSSBoxType referenceBox() const { return operation->referenceBox(); }
 
-    template<typename... F> decltype(auto) switchOn(F&&... f) const
+    template<typename... F> decltype(auto) switchOn(NOESCAPE F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
         return visitor(referenceBox());
@@ -193,15 +193,15 @@ inline std::optional<WebCore::Path> tryPath(const BoxPath& boxPath, const Transf
 template<> struct CSSValueConversion<RefPtr<PathOperation>> { RefPtr<PathOperation> operator()(BuilderState&, const CSSValue&, SupportRayPathOperation); };
 
 // `RayPath` is special-cased to return a `CSSRayValue`.
-template<> struct CSSValueCreation<RayPath> { Ref<CSSValue> operator()(CSSValuePool&, const RenderStyle&, const RayPath&); };
+template<> struct CSSValueCreation<RayPath> { Ref<CSSValue> operator()(CSSValuePool&, const Style::ComputedStyle&, const RayPath&); };
 
 // `BasicShapePath` is special-cased to handle non-standard `PathConversion` argument.
-template<> struct CSSValueCreation<BasicShapePath> { Ref<CSSValue> operator()(CSSValuePool&, const RenderStyle&, const BasicShapePath&, PathConversion = PathConversion::None); };
+template<> struct CSSValueCreation<BasicShapePath> { Ref<CSSValue> operator()(CSSValuePool&, const Style::ComputedStyle&, const BasicShapePath&, PathConversion = PathConversion::None); };
 
 // MARK: - Serialization
 
 // `BasicShapePath` is special-cased to handle non-standard `PathConversion` argument.
-template<> struct Serialize<BasicShapePath> { void operator()(StringBuilder&, const CSS::SerializationContext&, const RenderStyle&, const BasicShapePath&, PathConversion = PathConversion::None); };
+template<> struct Serialize<BasicShapePath> { void operator()(StringBuilder&, const CSS::SerializationContext&, const Style::ComputedStyle&, const BasicShapePath&, PathConversion = PathConversion::None); };
 
 // MARK: - Evaluation
 
@@ -209,8 +209,8 @@ template<> struct Serialize<BasicShapePath> { void operator()(StringBuilder&, co
 
 template<> struct Evaluation<RayPath, AcceleratedEffectRayPath> { AcceleratedEffectRayPath operator()(const RayPath&, const TransformOperationData& data, ZoomFactor); };
 template<> struct Evaluation<ReferencePath, AcceleratedEffectReferencePath> { AcceleratedEffectReferencePath operator()(const ReferencePath&, const TransformOperationData&, ZoomFactor); };
-template<> struct Evaluation<BasicShapePath, AcceleratedEffectBasicShapePath> { AcceleratedEffectBasicShapePath operator()(const BasicShapePath&, const TransformOperationData&, ZoomFactor); };
-template<> struct Evaluation<BoxPath, AcceleratedEffectBoxPath> { AcceleratedEffectBoxPath operator()(const BoxPath&, const TransformOperationData&, ZoomFactor); };
+template<> struct Evaluation<BasicShapePath, AcceleratedEffectBasicShapePath> { AcceleratedEffectBasicShapePath operator()(const BasicShapePath&, const FloatRect&, ZoomFactor); };
+template<> struct Evaluation<BoxPath, AcceleratedEffectBoxPath> { AcceleratedEffectBoxPath LEGACY_NODELETE operator()(const BoxPath&, const TransformOperationData&, ZoomFactor); };
 
 #endif
 

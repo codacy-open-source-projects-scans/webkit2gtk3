@@ -116,11 +116,11 @@ public:
 
     static inline bool isRecognizedTag(const AtomString& tagName)
     {
-        return tagName == iTag
-            || tagName == bTag
-            || tagName == uTag
-            || tagName == rubyTag
-            || tagName == rtTag;
+        return iTag->hasLocalName(tagName)
+            || bTag->hasLocalName(tagName)
+            || uTag->hasLocalName(tagName)
+            || rubyTag->hasLocalName(tagName)
+            || rtTag->hasLocalName(tagName);
     }
 
     static bool collectTimeStamp(const String&, MediaTime&);
@@ -147,7 +147,7 @@ public:
 private:
     void parse();
     void flushPendingCue();
-    bool NODELETE hasRequiredFileIdentifier(const String&);
+    bool LEGACY_NODELETE hasRequiredFileIdentifier(const String&);
     ParseState collectCueId(const String&);
     ParseState collectTimingsAndSettings(const String&);
     ParseState collectCueText(const String&);

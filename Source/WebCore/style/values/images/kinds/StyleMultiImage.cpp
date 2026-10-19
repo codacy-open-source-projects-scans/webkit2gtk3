@@ -69,13 +69,13 @@ void MultiImage::load(CachedResourceLoader& loader, const ResourceLoaderOptions&
 
     m_isPending = false;
 
-    auto bestFitImage = selectBestFitImage(*loader.document());
+    auto bestFitImage = selectBestFitImage(protect(*loader.document()));
 
     ASSERT(is<CachedImage>(bestFitImage.image) || is<GeneratedImage>(bestFitImage.image));
 
     if (is<GeneratedImage>(bestFitImage.image)) {
         m_selectedImage = bestFitImage.image;
-        m_selectedImage->load(loader, options);
+        protect(m_selectedImage)->load(loader, options);
         return;
     }
 
@@ -85,8 +85,8 @@ void MultiImage::load(CachedResourceLoader& loader, const ResourceLoaderOptions&
         else
             m_selectedImage = CachedImage::copyOverridingScaleFactor(*styleCachedImage, bestFitImage.scaleFactor.value);
 
-        if (m_selectedImage->isPending())
-            m_selectedImage->load(loader, options);
+        if (protect(m_selectedImage)->isPending())
+            protect(m_selectedImage)->load(loader, options);
         return;
     }
 }
@@ -95,110 +95,182 @@ WebCore::CachedImage* MultiImage::cachedImage() const
 {
     if (!m_selectedImage)
         return nullptr;
-    return m_selectedImage->cachedImage();
+    return protect(m_selectedImage)->cachedImage();
 }
 
 WrappedImagePtr MultiImage::data() const
 {
     if (!m_selectedImage)
         return nullptr;
-    return m_selectedImage->data();
+    return protect(m_selectedImage)->data();
 }
 
-bool MultiImage::canRender(const RenderElement* renderer, float multiplier) const
+bool MultiImage::canRender(const RenderElement* renderer) const
 {
-    return m_selectedImage && m_selectedImage->canRender(renderer, multiplier);
+    return m_selectedImage && protect(m_selectedImage)->canRender(renderer);
 }
 
 bool MultiImage::isLoaded(const RenderElement* renderer) const
 {
-    return m_selectedImage && m_selectedImage->isLoaded(renderer);
+    return m_selectedImage && protect(m_selectedImage)->isLoaded(renderer);
 }
 
 bool MultiImage::errorOccurred() const
 {
-    return m_selectedImage && m_selectedImage->errorOccurred();
+    return m_selectedImage && protect(m_selectedImage)->errorOccurred();
 }
 
-FloatSize MultiImage::imageSize(const RenderElement* renderer, float multiplier, WebCore::CachedImage::SizeType sizeType) const
+bool MultiImage::hasDecodedImage() const
+{
+    return m_selectedImage && protect(m_selectedImage)->hasDecodedImage();
+}
+
+NaturalDimensions MultiImage::naturalDimensions(const RenderElement& renderer, const ImageSizingContext& context) const
+{
+    if (!m_selectedImage)
+        return NaturalDimensions::none();
+    return protect(m_selectedImage)->naturalDimensions(renderer, context);
+}
+
+ImageDrawingExtras MultiImage::drawingExtrasForRenderer(const RenderElement& renderer) const
 {
     if (!m_selectedImage)
         return { };
-    return m_selectedImage->imageSize(renderer, multiplier, sizeType);
-}
-
-bool MultiImage::imageHasRelativeWidth() const
-{
-    return m_selectedImage && m_selectedImage->imageHasRelativeWidth();
-}
-
-bool MultiImage::imageHasRelativeHeight() const
-{
-    return m_selectedImage && m_selectedImage->imageHasRelativeHeight();
-}
-
-void MultiImage::computeIntrinsicDimensions(const RenderElement* element, float& intrinsicWidth, float& intrinsicHeight, FloatSize& intrinsicRatio)
-{
-    if (!m_selectedImage)
-        return;
-    m_selectedImage->computeIntrinsicDimensions(element, intrinsicWidth, intrinsicHeight, intrinsicRatio);
-}
-
-bool MultiImage::usesImageContainerSize() const
-{
-    return m_selectedImage && m_selectedImage->usesImageContainerSize();
-}
-
-void MultiImage::setContainerContextForRenderer(const RenderElement& renderer, const FloatSize& containerSize, float containerZoom, const WTF::URL& url)
-{
-    if (!m_selectedImage)
-        return;
-    m_selectedImage->setContainerContextForRenderer(renderer, containerSize, containerZoom, url);
+    return protect(m_selectedImage)->drawingExtrasForRenderer(renderer);
 }
 
 void MultiImage::addClient(RenderElement& renderer)
 {
     if (!m_selectedImage)
         return;
-    m_selectedImage->addClient(renderer);
+    protect(m_selectedImage)->addClient(renderer);
 }
 
 void MultiImage::removeClient(RenderElement& renderer)
 {
     if (!m_selectedImage)
         return;
-    m_selectedImage->removeClient(renderer);
+    protect(m_selectedImage)->removeClient(renderer);
 }
 
 bool MultiImage::hasClient(RenderElement& renderer) const
 {
     if (!m_selectedImage)
         return false;
-    return m_selectedImage->hasClient(renderer);
+    return protect(m_selectedImage)->hasClient(renderer);
 }
 
-RefPtr<WebCore::Image> MultiImage::image(const RenderElement* renderer, const FloatSize& size, const GraphicsContext& destinationContext, bool isForFirstLine) const
+ImageDrawResult MultiImage::draw(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const FloatRect& destination, const FloatRect& source, ImagePaintingOptions options, bool isForFirstLine) const
 {
     if (!m_selectedImage)
-        return nullptr;
-    return m_selectedImage->image(renderer, size, destinationContext, isForFirstLine);
+        return ImageDrawResult::DidNothing;
+    return protect(m_selectedImage)->draw(context, renderer, concreteObjectSize, destination, source, options, isForFirstLine);
+}
+
+ImageDrawResult MultiImage::drawAsPattern(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const FloatRect& destination, const FloatRect& tile, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options, bool isForFirstLine) const
+{
+    if (!m_selectedImage)
+        return ImageDrawResult::DidNothing;
+    return protect(m_selectedImage)->drawAsPattern(context, renderer, concreteObjectSize, destination, tile, patternTransform, phase, spacing, options, isForFirstLine);
+}
+
+ImageDrawResult MultiImage::drawTiled(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const FloatRect& destination, const FloatPoint& phase, const FloatSize& tileSize, const FloatSize& spacing, ImagePaintingOptions options, bool isForFirstLine) const
+{
+    if (!m_selectedImage)
+        return ImageDrawResult::DidNothing;
+    return protect(m_selectedImage)->drawTiled(context, renderer, concreteObjectSize, destination, phase, tileSize, spacing, options, isForFirstLine);
+}
+
+ImageDrawResult MultiImage::drawNinePiece(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const NinePieceGeometry& geometry, ImagePaintingOptions options) const
+{
+    if (!m_selectedImage)
+        return ImageDrawResult::DidNothing;
+    return protect(m_selectedImage)->drawNinePiece(context, renderer, concreteObjectSize, geometry, options);
 }
 
 bool MultiImage::currentFrameIsComplete(const RenderElement* renderer) const
 {
-    return m_selectedImage && m_selectedImage->currentFrameIsComplete(renderer);
+    return m_selectedImage && protect(m_selectedImage)->currentFrameIsComplete(renderer);
 }
 
 float MultiImage::imageScaleFactor() const
 {
     if (!m_selectedImage)
         return 1;
-    return m_selectedImage->imageScaleFactor();
+    return protect(m_selectedImage)->imageScaleFactor();
 }
 
 bool MultiImage::knownToBeOpaque(const RenderElement& renderer) const
 {
-    return m_selectedImage && m_selectedImage->knownToBeOpaque(renderer);
+    return m_selectedImage && protect(m_selectedImage)->knownToBeOpaque(renderer);
+}
+
+bool MultiImage::canDraw(const RenderElement& renderer) const
+{
+    return m_selectedImage && protect(m_selectedImage)->canDraw(renderer);
+}
+
+bool MultiImage::canDrawAtSize(const RenderElement& renderer, const FloatSize& size) const
+{
+    return m_selectedImage && protect(m_selectedImage)->canDrawAtSize(renderer, size);
+}
+
+RefPtr<NativeImage> MultiImage::nativeImage(const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, float resolutionScale, ImagePaintingOptions options) const
+{
+    return m_selectedImage ? protect(m_selectedImage)->nativeImage(renderer, concreteObjectSize, resolutionScale, options) : nullptr;
+}
+
+std::optional<IntPoint> MultiImage::hotSpot() const
+{
+    return m_selectedImage ? protect(m_selectedImage)->hotSpot() : std::nullopt;
+}
+
+bool MultiImage::drawsSVGImage() const
+{
+    return m_selectedImage && protect(m_selectedImage)->drawsSVGImage();
+}
+
+WTF::String MultiImage::accessibilityDescription() const
+{
+    if (!m_selectedImage)
+        return { };
+    return protect(m_selectedImage)->accessibilityDescription();
+}
+
+bool MultiImage::isAnimated() const
+{
+    return m_selectedImage && protect(m_selectedImage)->isAnimated();
+}
+
+void MultiImage::stopAnimation()
+{
+    if (m_selectedImage)
+        protect(m_selectedImage)->stopAnimation();
+}
+
+void MultiImage::resetAnimation()
+{
+    if (m_selectedImage)
+        protect(m_selectedImage)->resetAnimation();
+}
+
+DecodingMode MultiImage::decodingModeForImageDraw(const RenderBoxModelObject& renderer, const PaintInfo& paintInfo) const
+{
+    if (!m_selectedImage)
+        return Image::decodingModeForImageDraw(renderer, paintInfo);
+    return protect(m_selectedImage)->decodingModeForImageDraw(renderer, paintInfo);
+}
+
+InterpolationQuality MultiImage::interpolationQualityForImageDraw(GraphicsContext& context, const RenderElement& renderer, ConcreteObjectSize concreteObjectSize, const void* layer, const LayoutSize& size) const
+{
+    if (!m_selectedImage)
+        return Image::interpolationQualityForImageDraw(context, renderer, concreteObjectSize, layer, size);
+    return protect(m_selectedImage)->interpolationQualityForImageDraw(context, renderer, concreteObjectSize, layer, size);
+}
+
+bool MultiImage::containsCurrentColor() const
+{
+    return m_selectedImage && protect(m_selectedImage)->containsCurrentColor();
 }
 
 } // namespace Style

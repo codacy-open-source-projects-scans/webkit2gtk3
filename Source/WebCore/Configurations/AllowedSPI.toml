@@ -10,6 +10,38 @@ selectors = [
     { name = "initWithUUID:andRemotePid:andContextId:", class = "?" },
 ]
 
+[[temporary-usage]]
+request = "rdar://181067589"
+cleanup = "rdar://181067932"
+symbols = [
+    "kCMTextMarkupAttribute_PreventLineWrapping",
+]
+
+[[temporary-usage]]
+request = "rdar://185191711"
+cleanup = "rdar://185191934"
+symbols = [
+    "CGImageBlockCreate",
+    "CGImageBlockRelease",
+    "CGImageBlockSetCreate",
+    "CGImageCreateWithImageProvider",
+    "CGImageProviderCreate",
+    "CGImageProviderGetSize",
+    "kCGImageBlockMarkAsReadOnlyRequest",
+    "kCGImageBlockSingletonRequest",
+    "kCGImagePropertyIOSurface",
+    "kCGImageProviderBitmapInfo",
+]
+
+[[temporary-usage]]
+request = "rdar://186571377"
+cleanup = "rdar://186571467"
+symbols = [
+    "kIOSurfaceAlphaChannelMode",
+    "kIOSurfaceAlphaChannelMode_PremultipliedAlpha",
+    "kIOSurfaceAlphaChannelMode_StraightAlpha",
+]
+
 [[not-web-essential]]
 request = "rdar://157890384"
 classes = ["MTMaterialLayer"]
@@ -73,7 +105,14 @@ cleanup = "rdar://161241477"
 symbols = [
     "CTFontGetUIFontType",
 ]
-requires-sdk = ["iOS <= 26.*"]
+requires-sdk = ["iOS <= 26.4"]
+
+[[staging]]
+cleanup = "rdar://188823158"
+selectors = [
+    { name = "issuingRegionCode", class = "PKPaymentMethod" },
+]
+requires = ["HAVE_PASSKIT_ISSUING_REGION_CODE"]
 
 [[temporary-usage]]
 request = "rdar://168834967"
@@ -93,6 +132,24 @@ symbols = [
 cleanup = "rdar://171200085"
 symbols = [
     "MACaptionAppearanceCopyPreviewText",
+]
+
+[[temporary-usage]]
+request = "rdar://175714562"
+cleanup = "rdar://175714562"
+symbols = [
+    "CGImageApplyHDRGainMap",
+    "CGImageSourceCopyAuxiliaryDataInfoAtIndexWithOptions",
+    "CGImageCreateFromIOSurface",
+    "CGImageCreatePixelBufferAttributesForHDRTarget",
+    "CGImageGetHDRGainMapHeadroom",
+    "kCGImageAuxiliaryDataInfoPixelBuffer",
+    "kCGImageAuxiliaryDataRepresentation",
+    "kCGImageAuxiliaryDataRepresentationPixelBuffer",
+    "kCGFlexRangeAlternateColorSpace",
+    "kCGTargetColorSpace",
+    "kCGTargetHeadroom",
+    "kCGTargetPixelFormat",
 ]
 
 [[not-web-essential]]
@@ -126,19 +183,20 @@ selectors = [
 requires = ["HAVE_WEBCONTENTRESTRICTIONS_TRANSITIVE_TRUST"]
 
 [[temporary-usage]]
+request = "rdar://168696619"
+cleanup = "rdar://169487203"
+classes = ["WCRBrowserEngineClient"]
+selectors = [
+    { name = "askToBrowseURL:referrerURL:withCompletion:", class = "WCRBrowserEngineClient" },
+]
+requires = ["HAVE_WEBCONTENTRESTRICTIONS_ASK_TO", "WTF_PLATFORM_MAC"]
+
+[[temporary-usage]]
 requires = [ "HAVE_CGPATTERN_CREATE_WITH_IMAGE_TRANSFORM_STEP" ]
 request = "rdar://170092229"
 cleanup = "rdar://170092414"
 symbols = [
     "CGPatternCreateWithImageTransformStep",
-]
-
-[[temporary-usage]]
-request = "rdar://165789536"
-cleanup = "rdar://173046822"
-classes = [
-    "_WTTextEffectManager",
-    "_WTTextPreview",
 ]
 
 [[temporary-usage]]
